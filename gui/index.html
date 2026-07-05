@@ -1884,12 +1884,34 @@ const UI = {
 
   /* ---- P&L & journal ---- */
   async renderDesk(){
-    document.getElementById('dNet').textContent='+$3,980';
-    document.getElementById('dNetNote').textContent='gross +$4,382 − costs $402 (YTD run-rate)';
-    document.getElementById('dCosts').textContent='$2,412';
-    document.getElementById('dAlpha').innerHTML='<span class="up">+1.4pp</span>';
-    document.getElementById('dReal').textContent='+$2,140';
-    document.getElementById('dWash').textContent='⚠ 1 potential wash sale: QQQ (Jun 12/Jun 30)';
+    // KPIs — REAL from Alpaca history when connected; labeled demo otherwise
+    let liveKpis=false;
+    if(QD.on){
+      try{
+        const pd=await(await fetch('/api/pnl/daily')).json();
+        const vals=Object.values(pd).filter(v=>v!==null&&v!==undefined);
+        const gross=vals.reduce((a2,b2)=>a2+b2,0);
+        const days=Math.max(vals.length,1);
+        const costs=401.90/21*days;   // monthly run-rate pro-rated to trading days observed
+        const fmt=v=>(v<0?'−':'+')+'$'+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0});
+        document.getElementById('dNet').textContent=fmt(gross-costs);
+        document.getElementById('dNet').className='val '+(gross-costs>=0?'up':'down');
+        document.getElementById('dNetNote').textContent=`REAL: gross ${fmt(gross)} − costs $${costs.toFixed(0)} over ${days} trading day${days>1?'s':''}`;
+        document.getElementById('dCosts').textContent='$'+costs.toFixed(0);
+        document.getElementById('dAlpha').innerHTML=days>=21?'<span class="up">computing…</span>':'<span class="mut">— needs ≥1mo history</span>';
+        document.getElementById('dReal').textContent=fmt(gross);
+        document.getElementById('dWash').textContent=vals.some(v=>v!==0)?'wash-sale scan runs on closing trades':'no closing trades yet — nothing taxable';
+        liveKpis=true;
+      }catch(e){}
+    }
+    if(!liveKpis){
+      document.getElementById('dNet').textContent='+$3,980';
+      document.getElementById('dNetNote').textContent='DEMO — connect backend for real numbers';
+      document.getElementById('dCosts').textContent='$2,412';
+      document.getElementById('dAlpha').innerHTML='<span class="mut">DEMO</span>';
+      document.getElementById('dReal').textContent='+$2,140';
+      document.getElementById('dWash').textContent='DEMO — example wash-sale flag';
+    }
     // calendar — REAL Alpaca portfolio history when connected
     let pnl=null, realCal=false;
     if(QD.on){ try{ const r=await fetch('/api/pnl/daily'); if(r.ok){pnl=await r.json(); realCal=true;} }catch(e){} }
@@ -1913,6 +1935,9 @@ const UI = {
     // benchmark
     const me=CH.equity(120,7,0.0009,0.006), spy=CH.equity(120,3,0.00075,0.010);
     CH.multi('benchChart',[{pts:me.eq,color:'#2fbf71'},{pts:spy.eq,color:'#8b93a7',dash:[4,4]}]);
+    const bl=document.querySelector('#s-desk .legend');
+    if(bl)bl.innerHTML=liveKpis?'<span class="warn">DEMO shape — real benchmark chart activates after ~1 month of paper history</span>'
+      :'<span><span class="dot g"></span>Platform (net of costs)</span><span><span class="dot" style="background:var(--muted)"></span>SPY buy &amp; hold</span>';
     // notes + costs
     document.getElementById('noteList').innerHTML=API.notes.map(n=>
       `<div class="hb"><div class="hn"><b class="mono" style="font-size:11px">${n.d}</b> · <span class="mut">${n.s}</span><div style="margin-top:3px">${n.txt}</div></div>
@@ -2515,6 +2540,9 @@ QD.sync=async function(){
 QD.updState=async function(){
   try{
     const d=await(await fetch('/api/state')).json();
+    if(QD.guiM&&d.gui_mtime&&d.gui_mtime!==QD.guiM&&!QD.staleWarned){QD.staleWarned=true;
+      UI.toast('⚠ A newer version of this GUI exists — press Cmd+Shift+R to reload','err');}
+    QD.guiM=QD.guiM||d.gui_mtime;
     const usd=v=>(v<0?'−':'')+'$'+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:2});
     const set=(id,txt,cls)=>{const e=document.getElementById(id); if(e){e.textContent=txt; if(cls!==undefined)e.className='val '+cls;}};
     const live=d.source==='alpaca-paper';

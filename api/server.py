@@ -242,7 +242,8 @@ class Handler(BaseHTTPRequestHandler):
         out = {"mode": store.get_kv("mode", "paper"),
                "halted": store.get_kv("halted") == "1",
                "equity": 104382.19, "day_pnl": 1204.55, "total_pnl": 4382.19,
-               "max_dd": -3.42, "open_risk": 18240, "source": "demo-seed"}
+               "max_dd": -3.42, "open_risk": 18240, "source": "demo-seed",
+               "gui_mtime": int(os.path.getmtime(os.path.join(GUI_DIR, "index.html")))}
         if alpaca.configured():
             try:
                 a = alpaca.account()
