@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import alpaca  # noqa: E402
 import backtest  # noqa: E402
+import community  # noqa: E402
 import llm  # noqa: E402
 import logic  # noqa: E402
 import micro  # noqa: E402
@@ -47,11 +48,34 @@ LIB_DIR = os.path.normpath(os.path.join(HERE, "..", "library", "strategies"))
 PORT = int(os.environ.get("QD_PORT", "8700"))
 
 store = Store()
+community.ensure_seed_admin(store)
 
 
 # --------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
     server_version = "QuantDesk/0.2"
+
+    # ---------- session ----------
+    def _token(self):
+        c = self.headers.get("Cookie", "")
+        for part in c.split(";"):
+            k, _, v = part.strip().partition("=")
+            if k == "qds":
+                return v
+        return None
+
+    def _user(self):
+        return community.whoami(store, self._token())
+
+    def _auth_gate(self, path):
+        """When QD_MULTIUSER=1: everything under /api needs a session except login."""
+        if not community.enabled():
+            return None
+        if path in ("/api/auth/login", "/api/me") or not path.startswith("/api"):
+            return None
+        if self._user() is None:
+            return self._err(401, "login required")
+        return None
 
     # ---------- plumbing ----------
     def log_message(self, fmt, *args):  # quiet; no secrets ever logged
@@ -87,8 +111,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._static("index.html")
         if path.startswith("/gui/"):
             return self._static(path[5:])
+        if self._auth_gate(path) is not None:
+            return
 
         r = {
+            "/api/me": lambda: self._send(200, self._user() or {"anon": True,
+                "multiuser": community.enabled()}),
+            "/api/leaderboard": lambda: self._send(200, community.standings(store)),
+            "/api/community/users": self.g_users,
+            "/api/community/public": lambda: self._send(200, [
+                {k: i.get(k) for k in ("id", "name", "owner", "hyp", "kill", "copied_from", "stage")}
+                for i in store.list_docs("ideas") if i.get("public")]),
+            "/api/community/investments": lambda: self._send(200, [
+                i for i in store.list_docs("investments")
+                if not community.enabled() or i["user"] == (self._user() or {}).get("u")
+                or (self._user() or {}).get("role") == "admin"]),
             "/api/bootstrap": self.g_bootstrap,
             "/api/state": self.g_state,
             "/api/venues": lambda: self._send(200, self._venues()),
@@ -142,8 +179,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
+        if self._auth_gate(path) is not None:
+            return
         body = self._body()
         routes = {
+            "/api/auth/login": lambda: self.p_login(body),
+            "/api/auth/password": lambda: self.p_password(body),
+            "/api/community/users": lambda: self.p_create_user(body),
+            "/api/community/publish": lambda: self.p_publish(body),
+            "/api/community/invest": lambda: self.p_invest(body),
+            "/api/community/copy": lambda: self.p_copy(body),
+            "/api/community/finalize": lambda: self.p_finalize(),
+            "/api/chat": lambda: self.p_chat(body),
             "/api/ideas": lambda: self.p_idea(body),
             "/api/ideas/from-spec": lambda: self.p_idea_from_spec(body),
             "/api/kill": lambda: self.p_kill(body),
@@ -861,6 +908,108 @@ class Handler(BaseHTTPRequestHandler):
                        f"{grid['best']['look']}d/{int(grid['best']['vol_tgt']*100)}%")
         self._send(200, doc)
 
+    # ---------- community handlers ----------
+    def g_users(self):
+        u = self._user()
+        rows = store.list_docs("users")
+        if not u or u.get("role") != "admin":
+            rows = [{"u": r["u"], "name": r["name"]} for r in rows if not r.get("disabled")]
+        else:
+            rows = [{k: r.get(k) for k in ("u", "name", "role", "disabled", "cash", "must_change")}
+                    for r in rows]
+        self._send(200, rows)
+
+    def p_login(self, body):
+        token = community.login(store, (body.get("u") or "").strip(), body.get("pw") or "")
+        if not token:
+            return self._err(401, "invalid username or password")
+        payload = json.dumps({"ok": True, "user": community.whoami(store, token)}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Set-Cookie", f"qds={token}; Path=/; HttpOnly; SameSite=Strict")
+        self.end_headers()
+        self.wfile.write(payload)
+        store.add_audit("login", body.get("u", "?"))
+
+    def p_password(self, body):
+        u = self._user()
+        if not u or u["u"] == "solo":
+            return self._err(401, "login required")
+        if len(body.get("pw", "")) < 8:
+            return self._err(422, "password must be ≥ 8 chars")
+        community.set_password(store, u["u"], body["pw"])
+        self._send(200, {"ok": True})
+
+    def p_create_user(self, body):
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        doc, err = community.create_user(store, (body.get("u") or "").strip(),
+                                         body.get("pw") or "changeme",
+                                         body.get("name"), body.get("role", "user"))
+        if err:
+            return self._err(422, err)
+        store.add_audit("user_created", doc["u"])
+        self._send(201, {"u": doc["u"], "role": doc["role"]})
+
+    def p_publish(self, body):
+        u = self._user()
+        idea, err = community.publish(store, u, body.get("idea_id"), body.get("public"))
+        if err:
+            return self._err(409, err)
+        store.add_feed("info", f"COMMUNITY — {u['u']} set {idea['name']} "
+                       f"{'PUBLIC' if idea['public'] else 'private'}")
+        self._send(200, idea)
+
+    def p_invest(self, body):
+        u = self._user()
+        res, err = community.invest(store, u, body.get("idea_id"),
+                                    body.get("amount", 0), body.get("params"))
+        if err:
+            return self._err(422, err)
+        note = " (strategy FORCED PUBLIC — leaderboard rule)" if res["forced_public"] else ""
+        store.add_feed("info", f"COMMUNITY — {u['u']} invested "
+                       f"${res['investment']['amount']:,.0f} in {res['investment']['strategy']}{note}")
+        store.add_audit("invest", json.dumps(res["investment"]))
+        self._send(201, res)
+
+    def p_copy(self, body):
+        u = self._user()
+        doc, err = community.copy_strategy(store, u, body.get("idea_id"))
+        if err:
+            return self._err(404, err)
+        store.add_feed("info", f"COMMUNITY — {u['u']} copied {doc['copied_from']['strategy']} "
+                       f"from {doc['copied_from']['user']}")
+        self._send(201, doc)
+
+    def p_finalize(self):
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        week = community.current_week_id()
+        store.set_kv(f"finalized:{week}", "")   # allow re-run
+        s2 = community.standings(store)
+        winners = store.get_doc("static", "winners") or []
+        if s2["rows"]:
+            w = s2["rows"][0]
+            winners.insert(0, {"week": week, "user": w["user"],
+                               "week_pnl": w["week_pnl"],
+                               "week_return_pct": w["week_return_pct"],
+                               "finalized": "manual (admin)"})
+            store.put_doc("static", "winners", winners[:52])
+        store.set_kv(f"finalized:{week}", "1")
+        self._send(200, {"finalized": week, "winner": s2["rows"][0] if s2["rows"] else None})
+
+    def p_chat(self, body):
+        u = self._user() or {"u": "anon"}
+        msg = (body.get("msg") or "").strip()[:500]
+        if not msg:
+            return self._err(422, "empty message")
+        provider = "anthropic" if os.environ.get("ANTHROPIC_API_KEY") else "builtin"
+        reply, used = community.chat(store, u, msg, provider)
+        self._send(200, {"reply": reply, "provider": used})
+
     # ---------- helpers ----------
     @staticmethod
     def _parity_key(name):
@@ -980,6 +1129,17 @@ def main():
     _backup_loop()
     _redis_feed_loop()
     _alert_loop()
+    # weekly leaderboard finalizer (Saturday 23:59 ET)
+    import threading as _th
+
+    def _week_loop():
+        while True:
+            try:
+                community.maybe_finalize_week(store)
+            except Exception:
+                pass
+            time.sleep(600)
+    _th.Thread(target=_week_loop, daemon=True).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

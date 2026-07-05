@@ -299,6 +299,11 @@ label.fl b{color:var(--red)}
     <button class="nav-item" data-s="safe"><span class="ic">⛉</span>Accounts &amp; Safety</button>
     <button class="nav-item" data-s="risk"><span class="ic">⛨</span>Risk Controls</button>
     <button class="nav-item" data-s="golive"><span class="ic">▶</span>Go-Live Wizard</button>
+    <div class="nav-sec">Community</div>
+    <button class="nav-item" data-s="board"><span class="ic">🏆</span>Leaderboard</button>
+    <button class="nav-item" data-s="me"><span class="ic">👤</span>My Panel</button>
+    <button class="nav-item" data-s="chat"><span class="ic">💬</span>Assistant</button>
+    <button class="nav-item" data-s="admin" id="navAdmin" style="display:none"><span class="ic">🛠</span>Admin</button>
     <div class="nav-sec">Venues</div>
     <div id="venueList" style="padding:0 12px;font-size:12px;line-height:2;color:var(--muted)"></div>
     <div class="foot">LEAN CLI · NautilusTrader<br>Docker stack: <span class="dot g"></span>6/6 up<br><span class="mono" style="font-size:10px">v0.3 · <span id="footMode">connecting…</span></span></div>
@@ -856,6 +861,96 @@ label.fl b{color:var(--red)}
       </div>
     </section>
 
+    <!-- ======== LEADERBOARD ======== -->
+    <section class="screen" id="s-board">
+      <div class="flex spread"><div><h1>Leaderboard</h1>
+      <div class="sub">Weekly contest on $100k virtual books. Rule: every strategy with money on it is PUBLIC — anyone can inspect and copy it. Winner frozen <b>Saturday 11:59 PM ET</b>.</div></div>
+      <span class="tag warn" id="boardWeek" style="font-size:12px;padding:6px 14px"></span></div>
+      <div class="card">
+        <h2 style="margin-top:0">This week's standings <span class="mut" id="boardMeta"></span></h2>
+        <div id="boardRows" class="mut">connect backend</div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h2 style="margin-top:0">🏆 Past winners (rolling)</h2>
+        <div id="boardWinners" class="mut">none yet — first week closes Saturday 23:59 ET</div>
+      </div>
+    </section>
+
+    <!-- ======== MY PANEL ======== -->
+    <section class="screen" id="s-me">
+      <div class="flex spread"><div><h1>My Panel</h1>
+      <div class="sub">Your virtual book, your strategies, your visibility choices.</div></div>
+      <span id="meWho" class="tag paper" style="font-size:12px;padding:6px 14px"></span></div>
+      <div class="grid g2">
+        <div class="card">
+          <h2 style="margin-top:0">Virtual book</h2>
+          <div class="kpi"><div class="lbl">Available virtual cash</div><div class="val" id="meCash">—</div></div>
+          <h2>💰 Invest in a strategy</h2>
+          <div class="f2">
+            <div><label class="fl">Strategy</label><select id="invSel" class="inp"></select></div>
+            <div><label class="fl">Amount ($ virtual)</label><input type="number" id="invAmt" value="10000"></div>
+            <div><label class="fl">Momentum lookback (blank = frozen 252)</label><input type="number" id="invMom" placeholder="252"></div>
+            <div><label class="fl">Vol target (blank = 0.10)</label><input type="number" id="invVt" step="0.01" placeholder="0.10"></div>
+          </div>
+          <button class="btn primary" style="margin-top:12px" onclick="UI.doInvest()">Invest → joins leaderboard</button>
+          <p class="mut" style="margin-top:8px">⚠ Investing makes the strategy PUBLIC automatically — that's the transparency rule. Parameter tweaks create YOUR variant, scored by its real weekly engine return.</p>
+          <h2>My open investments</h2>
+          <div id="meInv" class="mut">—</div>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">My strategies &amp; visibility</h2>
+          <div id="meStrats" class="mut">—</div>
+          <h2>Account</h2>
+          <div class="f2">
+            <div><label class="fl">New password (≥8 chars)</label><input type="text" id="mePw" placeholder="········"></div>
+            <div style="display:flex;align-items:flex-end"><button class="btn" onclick="UI.changePw()">Change password</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== ASSISTANT (LLM CHAT) ======== -->
+    <section class="screen" id="s-chat">
+      <h1>Assistant</h1>
+      <div class="sub">Ask about signals, the leaderboard, copying strategies, platform mechanics. Grounded in live platform data. <span id="chatProv" class="mono"></span></div>
+      <div class="card">
+        <div id="chatLog" style="min-height:260px;max-height:440px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-bottom:8px"></div>
+        <div class="flex" style="margin-top:10px">
+          <input type="text" id="chatIn" placeholder="e.g. what is the regime right now? · how do I copy a strategy?" style="flex:1" onkeydown="if(event.key==='Enter')UI.chatSend()">
+          <button class="btn primary" onclick="UI.chatSend()">Send</button>
+        </div>
+        <p class="mut" style="margin-top:8px">Educational assistant — never personalized financial advice. Connect ANTHROPIC_API_KEY in .env for deeper answers (built-in fallback otherwise).</p>
+      </div>
+    </section>
+
+    <!-- ======== ADMIN ======== -->
+    <section class="screen" id="s-admin">
+      <h1>Admin Panel</h1>
+      <div class="sub">User management, contest control, audit. Admin role only.</div>
+      <div class="grid g2">
+        <div class="card">
+          <h2 style="margin-top:0">Users</h2>
+          <table><thead><tr><th>User</th><th>Name</th><th>Role</th><th>Virtual cash</th><th>Status</th></tr></thead>
+          <tbody id="admUsers"><tr><td colspan="5" class="s mut">—</td></tr></tbody></table>
+          <h2>Create user</h2>
+          <div class="f2">
+            <div><label class="fl">Username</label><input type="text" id="auU"></div>
+            <div><label class="fl">Display name</label><input type="text" id="auN"></div>
+            <div><label class="fl">Temp password</label><input type="text" id="auP" value="changeme"></div>
+            <div><label class="fl">Role</label><div class="chips" id="auR"><span class="chip sel" data-v="user">user</span><span class="chip" data-v="admin">admin</span></div></div>
+          </div>
+          <button class="btn primary" style="margin-top:12px" onclick="UI.admCreate()">Create</button>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Contest control</h2>
+          <p class="mut">The week closes automatically Saturday 23:59 ET. Manual finalize (e.g. classroom demo):</p>
+          <button class="btn danger" onclick="UI.admFinalize()">🏁 Finalize current week now</button>
+          <h2>All investments (admin view)</h2>
+          <div id="admInv" class="feed" style="max-height:220px;font-family:var(--sans);font-size:12px">—</div>
+        </div>
+      </div>
+    </section>
+
     <!-- ======== RISK ======== -->
     <section class="screen" id="s-risk">
       <h1>Risk Controls</h1>
@@ -929,6 +1024,16 @@ label.fl b{color:var(--red)}
 <!-- Drawer, modal, toast -->
 <div id="drawer"></div>
 <div id="overlay"><div class="modal" id="modalBox"></div></div>
+<div id="loginOverlay" style="position:fixed;inset:0;background:rgba(4,6,10,.92);display:none;align-items:center;justify-content:center;z-index:300;backdrop-filter:blur(4px)">
+  <div class="modal" style="width:360px">
+    <h3 style="color:var(--blue)">QuantDesk — sign in</h3>
+    <label class="fl">Username</label><input type="text" id="liU" placeholder="admin">
+    <label class="fl">Password</label><input type="password" id="liP" onkeydown="if(event.key==='Enter')UI.doLogin()">
+    <div class="ferr" id="liErr"></div>
+    <button class="btn primary" style="width:100%;margin-top:16px" onclick="UI.doLogin()">Sign in</button>
+    <p class="mut" style="margin-top:10px">First run: admin / changeme (you'll be asked to change it). Multi-user mode is on (QD_MULTIUSER=1 in .env).</p>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -1364,6 +1469,9 @@ const UI = {
       if(b.dataset.s==='desk') this.renderDesk();
       if(b.dataset.s==='data') this.renderData();
       if(b.dataset.s==='safe') this.renderSafe();
+      if(b.dataset.s==='board') this.renderBoard();
+      if(b.dataset.s==='me') this.renderMe();
+      if(b.dataset.s==='admin') this.renderAdmin();
     });
     setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
     document.getElementById('venueList').innerHTML = API.venues.map(v=>
@@ -2153,6 +2261,132 @@ const UI = {
     this.renderPipeline(); this.renderJournal(); this.toast('Idea deleted','ok');
   },
 
+  /* ---- community: auth / leaderboard / panel / admin / chat ---- */
+  me:null,
+  async checkAuth(){
+    try{
+      const r=await fetch('/api/me'); const d=await r.json();
+      if(d.anon&&d.multiuser){ document.getElementById('loginOverlay').style.display='flex'; return false; }
+      this.me=d.u?d:{u:'solo',name:'Solo Trader',role:'admin',cash:100000};
+      document.getElementById('navAdmin').style.display=this.me.role==='admin'?'flex':'none';
+      if(this.me.must_change){ this.toast('⚠ Change your temporary password in My Panel','err');
+        document.querySelector('[data-s=me]').click(); }
+      return true;
+    }catch(e){ this.me={u:'solo',role:'admin',cash:100000}; return true; }
+  },
+  async doLogin(){
+    const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({u:document.getElementById('liU').value.trim(),pw:document.getElementById('liP').value})});
+    const d=await r.json();
+    if(!r.ok){ const e=document.getElementById('liErr'); e.style.display='block'; e.textContent='⛔ '+d.error; return; }
+    document.getElementById('loginOverlay').style.display='none';
+    this.me=d.user; location.reload();
+  },
+  async changePw(){
+    const pw=document.getElementById('mePw').value;
+    const r=await QD.post('/api/auth/password',{pw}); if(!r||r.err)return;
+    this.toast('Password changed','ok'); document.getElementById('mePw').value='';
+  },
+  async renderBoard(){
+    if(!QD.on)return;
+    try{
+      const d=await(await fetch('/api/leaderboard')).json();
+      document.getElementById('boardWeek').textContent=`week ${d.week} · closes ${d.closes}`;
+      document.getElementById('boardMeta').textContent=d.rows.length?'':'— no investments yet: be first (My Panel → Invest)';
+      document.getElementById('boardRows').innerHTML=d.rows.length?d.rows.map(r=>`
+        <div class="card" style="margin-bottom:10px;background:var(--bg2)">
+          <div class="flex spread"><b>#${r.rank} ${r.user}</b>
+            <span class="${r.week_pnl>=0?'up':'down'} mono">${r.week_pnl>=0?'+':''}$${Math.abs(r.week_pnl).toLocaleString()} (${r.week_return_pct>=0?'+':''}${r.week_return_pct}%)</span></div>
+          <table style="margin-top:8px"><thead><tr><th>Strategy (PUBLIC)</th><th>Amount</th><th>Params</th><th>Week ret</th><th></th></tr></thead><tbody>
+          ${r.positions.map(p2=>`<tr><td class="s">${p2.strategy}</td><td>$${p2.amount.toLocaleString()}</td>
+            <td class="s mono" style="font-size:11px">${typeof p2.params==='string'?p2.params:JSON.stringify(p2.params)}</td>
+            <td class="${p2.week_return_pct>=0?'up':'down'}">${p2.week_return_pct>=0?'+':''}${p2.week_return_pct}%</td>
+            <td><button class="btn" style="padding:2px 10px;font-size:11px" onclick="UI.copyFromBoard('${p2.strategy}')">Copy</button></td></tr>`).join('')}
+          </tbody></table></div>`).join(''):'<p class="mut">Empty board — every strategy invested in appears here, fully public.</p>';
+      document.getElementById('boardWinners').innerHTML=(d.winners||[]).length?
+        d.winners.map(w=>`<div class="hb"><span class="hn">🏆 <b>${w.user}</b> — week ${w.week}</span>
+          <span class="${w.week_return_pct>=0?'up':'down'} mono">${w.week_return_pct>=0?'+':''}${w.week_return_pct}%</span>
+          <span class="mut" style="font-size:11px">${w.finalized}</span></div>`).join('')
+        :'none yet — first week closes Saturday 23:59 ET';
+    }catch(e){}
+  },
+  async copyFromBoard(name){
+    const pub=await(await fetch('/api/community/public')).json();
+    const src=pub.find(p2=>p2.name===name); if(!src){this.toast('not found','err');return;}
+    const r=await QD.post('/api/community/copy',{idea_id:src.id}); if(!r||r.err)return;
+    API.ideas.push(r); this.renderPipeline(); this.renderJournal();
+    this.toast(`Copied ${name} into your Journal (private draft, credited to ${r.copied_from.user}). Review its kill criterion!`,'ok');
+  },
+  async renderMe(){
+    if(!QD.on)return;
+    const me=await(await fetch('/api/me')).json(); this.me=me.u?me:this.me;
+    document.getElementById('meWho').textContent=`${this.me.name||this.me.u} · ${this.me.role}`;
+    document.getElementById('meCash').textContent='$'+(this.me.cash||0).toLocaleString();
+    const mine=API.ideas.filter(i=>!community_enabled_hint()||!i.owner||i.owner===this.me.u);
+    document.getElementById('invSel').innerHTML=mine.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+    document.getElementById('meStrats').innerHTML=mine.map(i=>`
+      <div class="hb"><span class="hn">${i.name} ${i.copied_from?`<span class="mut" style="font-size:11px">(copied from ${i.copied_from.user})</span>`:''}</span>
+        <span class="tag ${i.public?'ok':'off'}">${i.public?'PUBLIC':'private'}</span>
+        <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.togglePub(${i.id},${!i.public})">${i.public?'make private':'publish'}</button></div>`).join('')
+      ||'<p class="mut">no strategies yet — Journal or AI Builder to create one</p>';
+    const inv=await(await fetch('/api/community/investments')).json();
+    document.getElementById('meInv').innerHTML=inv.filter(x=>x.user===(this.me.u||'solo')).map(x=>
+      `<div class="hb"><span class="hn">${x.strategy} · $${x.amount.toLocaleString()}</span>
+       <span class="mut" style="font-size:11px">${Object.keys(x.params||{}).length?JSON.stringify(x.params):'frozen params'} · since ${x.opened}</span></div>`).join('')
+      ||'<p class="mut">none — invest above to join the leaderboard</p>';
+  },
+  async togglePub(id,pub){
+    const r=await QD.post('/api/community/publish',{idea_id:id,public:pub}); if(!r||r.err)return;
+    const i=API.ideas.find(x=>x.id===id); if(i)i.public=r.public;
+    this.renderMe(); this.toast(r.public?'Published — visible & copyable by everyone':'Made private','ok');
+  },
+  async doInvest(){
+    const params={};
+    if(document.getElementById('invMom').value)params.mom=+document.getElementById('invMom').value;
+    if(document.getElementById('invVt').value)params.vol_tgt=+document.getElementById('invVt').value;
+    const r=await QD.post('/api/community/invest',{idea_id:+document.getElementById('invSel').value,
+      amount:+document.getElementById('invAmt').value,params});
+    if(!r||r.err)return;
+    this.toast(`Invested $${r.investment.amount.toLocaleString()} in ${r.investment.strategy}`+
+      (r.forced_public?' — strategy is now PUBLIC (leaderboard rule)':''),'ok');
+    this.renderMe();
+  },
+  async renderAdmin(){
+    if(!QD.on)return;
+    const users=await(await fetch('/api/community/users')).json();
+    document.getElementById('admUsers').innerHTML=users.map(u=>
+      `<tr><td>${u.u}</td><td class="s">${u.name||''}</td><td class="s">${u.role||'—'}</td>
+       <td>${u.cash!==undefined?'$'+u.cash.toLocaleString():'—'}</td>
+       <td class="s">${u.disabled?'<span class="tag fail">disabled</span>':'<span class="tag ok">active</span>'}${u.must_change?' <span class="tag warn">temp pw</span>':''}</td></tr>`).join('');
+    const inv=await(await fetch('/api/community/investments')).json();
+    document.getElementById('admInv').innerHTML=inv.map(x=>
+      `<div>${x.user}: $${x.amount.toLocaleString()} → ${x.strategy} (${Object.keys(x.params||{}).length?JSON.stringify(x.params):'frozen'})</div>`).join('')||'none';
+    document.querySelectorAll('#auR .chip').forEach(ch=>ch.onclick=()=>{
+      document.querySelectorAll('#auR .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
+  },
+  async admCreate(){
+    const r=await QD.post('/api/community/users',{u:document.getElementById('auU').value.trim(),
+      name:document.getElementById('auN').value.trim(),pw:document.getElementById('auP').value,
+      role:document.querySelector('#auR .chip.sel').dataset.v});
+    if(!r||r.err)return; this.toast(`User ${r.u} created (${r.role})`,'ok'); this.renderAdmin();
+  },
+  async admFinalize(){
+    if(!confirm('Finalize the current week NOW and record the winner?'))return;
+    const r=await QD.post('/api/community/finalize'); if(!r||r.err)return;
+    this.toast(r.winner?`🏆 Week ${r.finalized} winner: ${r.winner.user}`:'finalized (empty board)','ok');
+    this.renderBoard();
+  },
+  async chatSend(){
+    const inp=document.getElementById('chatIn'); const msg=inp.value.trim(); if(!msg)return;
+    const log=document.getElementById('chatLog');
+    log.innerHTML+=`<div style="align-self:flex-end;background:var(--blue-dim);padding:8px 12px;border-radius:10px;max-width:75%">${msg.replace(/</g,'&lt;')}</div>`;
+    inp.value=''; log.scrollTop=log.scrollHeight;
+    const r=await QD.post('/api/chat',{msg}); if(!r)return;
+    document.getElementById('chatProv').textContent='· provider: '+(r.provider||'builtin');
+    log.innerHTML+=`<div style="align-self:flex-start;background:var(--panel2);padding:8px 12px;border-radius:10px;max-width:80%">${(r.reply||r.err||'').replace(/</g,'&lt;')}</div>`;
+    log.scrollTop=log.scrollHeight;
+  },
+
   /* ---- data & artifacts (real inventory) ---- */
   async renderData(){
     if(!QD.on){document.getElementById('dataProv').textContent='backend offline';return;}
@@ -2556,6 +2790,7 @@ const UI = {
    ?mock=1 (or no backend running) => pure offline demo on embedded mocks.
 ===================================================================== */
 const QD={on:false};
+function community_enabled_hint(){return !!(UI.me&&UI.me.u&&UI.me.u!=='solo');}
 QD.post=async function(path,body){
   if(!QD.on)return null;
   try{ const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
@@ -2617,6 +2852,7 @@ QD.updState=async function(){
 window.addEventListener('error',e=>{try{fetch('/api/clientlog',{method:'POST',body:JSON.stringify({msg:String(e.message).slice(0,300),src:(e.filename||'').split('/').pop()+':'+e.lineno})});}catch(_){}});
 window.addEventListener('unhandledrejection',e=>{try{fetch('/api/clientlog',{method:'POST',body:JSON.stringify({msg:('promise: '+String(e.reason)).slice(0,300)})});}catch(_){}});
 UI.init();
+UI.checkAuth();
 (function(){const scr=new URLSearchParams(location.search).get('screen');
   if(scr){const b=document.querySelector('[data-s="'+scr+'"]'); if(b)b.click();}})();
 QD.sync();
