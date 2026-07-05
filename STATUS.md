@@ -7,8 +7,8 @@ Updated: 2026-07-05. Legend: ✅ done & verified · 🟡 partial (works, deeper 
 | M1 backend | ✅ | Zero-dep stdlib server, full API contract, SQLite persistence, all gates enforced server-side | FastAPI/Postgres upgrade optional (M3) |
 | M2 GUI wiring | ✅ | GUI auto-connects, all mutations POST, offline `?mock=1` | — |
 | M3 Docker stack | 🟡 | Docker verified (`hello-world` ✅); compose files ready; **Redis feed bridge live in server** — `docker run -d -p 127.0.0.1:6379:6379 redis:7` then `redis-cli PUBLISH feed '{"msg":"hi"}'` shows in GUI | Postgres migration deferred until FastAPI upgrade |
-| M4 LEAN | 👤 | **LEAN CLI 1.0.227 installed** (`~/.quantdesk/venv/bin/lean`); strategy source ready | **You:** `~/.quantdesk/venv/bin/lean login` (QuantConnect credentials), then I take over: init, project, runner service |
-| M5 Nautilus | 🟡 | Dual-engine parity gate fully working on real data; **nautilus_trader 1.230.0 installed** (python3.12 venv) | Port runner to real BacktestNode once installed |
+| M4 LEAN | 🟡👤 | **LEAN CLI 1.0.227 installed**; strategy source ready. Cloud login optional — the research leg runs via engine A + real Nautilus covers execution | If you find the API token (free tier does include one under Settings→API), `lean login` unlocks the QC data library; otherwise not needed |
+| M5 Nautilus | ✅ | **REAL nautilus_trader 1.230.0 backtest wired as the parity naut leg** — 494 fills, gate PASSES on real Yahoo data (0.38pp ret diff, 0.01 SR diff) | — |
 | M6 paper trading | 👤 | Compose overlay + adapters config ready | **You:** IB paper credentials + exchange testnet keys into `.env` |
 | M7 risk | ✅ | Order validation live (notional/band/per-class caps tested), breach simulation, kill switch with audit | Node-side flatten path needs M6 |
 | M8 go-live | ✅ (by design 👤) | Server enforces checklist + phrase + parity; flip is staged-only, human restarts stack | Intentionally never automated |

@@ -28,12 +28,20 @@ def req(method, path, body=None):
 
 
 class TestEngines(unittest.TestCase):
-    def test_clean_run_reconciles(self):
-        r = backtest.run_parity_backtest()
+    def test_clean_run_reconciles_internal(self):
+        # internal twin engines must match exactly
+        r = backtest.run_parity_backtest(engine="internal")
         self.assertIsNotNone(r, "catalog data missing")
         self.assertTrue(r["pass"])
         self.assertEqual(r["raw"]["a_trades"], r["raw"]["b_trades"])
         self.assertAlmostEqual(r["raw"]["a_sharpe"], r["raw"]["b_sharpe"], places=6)
+
+    def test_auto_engine_within_tolerance(self):
+        # auto mode may use REAL nautilus_trader (if installed) — must pass tolerances,
+        # exact equality NOT required (different fill semantics are the whole point)
+        r = backtest.run_parity_backtest(engine="auto")
+        self.assertIsNotNone(r)
+        self.assertTrue(r["pass"], r["tol"])
 
     def test_warmup_bug_fails_gate(self):
         r = backtest.run_parity_backtest(inject_warmup_bug=True)
