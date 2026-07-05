@@ -1487,7 +1487,10 @@ const UI = {
       if(b.dataset.s==='board') this.renderBoard();
       if(b.dataset.s==='me') this.renderMe();
       if(b.dataset.s==='admin') this.renderAdmin();
+      history.replaceState(null,'','#/'+b.dataset.s);
     });
+    const h=(location.hash||'').replace(/^#\/?/,'');
+    if(h){const nb=document.querySelector(`.nav-item[data-s="${h}"]`); if(nb) nb.click();}
     setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
     document.getElementById('venueList').innerHTML = API.venues.map(v=>
       `<div><span class="dot ${v.ok?'g':'a'}"></span>${v.name} <span style="color:var(--dim)">· ${v.env} · ${v.lat}</span></div>`).join('');
