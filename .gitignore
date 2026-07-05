@@ -8,3 +8,5 @@ __pycache__/
 *.pyc
 .venv/
 *.db
+.bridge/
+.bridge_runner.log

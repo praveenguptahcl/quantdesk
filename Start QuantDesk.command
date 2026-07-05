@@ -26,7 +26,15 @@ echo "--- starting backend on http://127.0.0.1:8700 ---"
 nohup python3 api/server.py > logs_and_artifacts/server.log 2>&1 &
 sleep 1.5
 
-# 4) open the GUI
+# 4) bridge runner: lets Claude run commands here without touching your screen
+if ! pgrep -f "mac_runner.py" > /dev/null; then
+  nohup python3 scripts/mac_runner.py > .bridge_runner.log 2>&1 &
+  echo "bridge runner: started (audit trail in .bridge/audit.log; stop: pkill -f mac_runner.py)"
+else
+  echo "bridge runner: already running"
+fi
+
+# 5) open the GUI
 open "http://127.0.0.1:8700"
 echo ""
 echo "QuantDesk is running. This window can be closed."
