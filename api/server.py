@@ -119,6 +119,10 @@ class Handler(BaseHTTPRequestHandler):
         if r:
             return r()
 
+        m = re.match(r"^/api/signals/history$", path)
+        if m:
+            h = backtest.signal_history(sym=re.search(r"sym=(\w+)", q).group(1) if re.search(r"sym=(\w+)", q) else "XLK")
+            return self._send(200, h) if h else self._err(503, "catalog data missing")
         m = re.match(r"^/api/micro/([\w.-]+)$", path)
         if m:
             snap = micro.snapshot(m.group(1))
@@ -145,6 +149,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/risk/simulate-breach": self.p_breach,
             "/api/orders/validate": lambda: self.p_validate_order(body),
             "/api/paper/test-order": self.p_paper_test,
+            "/api/signals/history": lambda: (lambda h: self._send(200, h) if h else self._err(
+                503, "catalog data missing"))(backtest.signal_history(
+                    sym=body.get("sym", "XLK"), params=body.get("params"))),
         }
         r = routes.get(path)
         if r:

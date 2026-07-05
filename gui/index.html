@@ -552,27 +552,68 @@ label.fl b{color:var(--red)}
         Same math drives the backtests and the paper node — one source of truth.</p></div>
       </div>
 
-      <div class="card">
-        <h2 style="margin-top:0">Price · Regime · Triggers <span class="mut" style="text-transform:none;letter-spacing:0">— green shading = regime risk-on (SPY &gt; SMA200) · ▲ entry ▼ exit</span></h2>
-        <canvas id="labChart" height="230"></canvas>
-        <div class="legend"><span><span class="dot" style="background:var(--text)"></span>Price</span>
-        <span><span class="dot" style="background:var(--amber)"></span>SMA200 (regime line)</span>
-        <span><span class="dot g"></span>▲ entry trigger</span><span><span class="dot r"></span>▼ exit trigger</span></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="flex spread" style="flex-wrap:wrap">
+          <h2 style="margin-top:0">Historical signal trace — REAL data, real dates</h2>
+          <div class="flex">
+            <span class="mut">Asset:</span>
+            <select id="labEtf" class="inp" style="width:auto" onchange="UI.loadLabHistory();UI.renderLiveSignal()">
+              <option>XLK</option><option>XLE</option><option>XLF</option><option>XLV</option><option>XLI</option>
+              <option>XLP</option><option>XLY</option><option>XLU</option><option>XLB</option></select>
+            <span class="mut" id="labMeta"></span>
+          </div>
+        </div>
+        <h2>1 · Regime — SPY vs SMA (green = RISK-ON, red = RISK-OFF, ◆ = flip)</h2>
+        <canvas id="regimeChart" height="170"></canvas>
+        <h2 style="margin-top:14px">2 · <span id="labEtfName">XLK</span> price with actual triggers (▲ entry · ▼ exit)</h2>
+        <canvas id="labChart" height="190"></canvas>
+        <div class="grid g2" style="margin-top:14px">
+          <div>
+            <h2 style="margin-top:0">3 · Confidence (green line = entry 0.50 · red = exit 0.25)</h2>
+            <canvas id="labConf" height="110"></canvas>
+          </div>
+          <div>
+            <h2 style="margin-top:0">4 · Target weight (% of equity)</h2>
+            <canvas id="labSize" height="110"></canvas>
+          </div>
+        </div>
+        <p class="mut" id="labTiming" style="margin-top:10px"></p>
       </div>
 
-      <div class="grid g2" style="margin-top:14px">
+      <div class="grid g2" style="margin-bottom:14px">
         <div class="card">
-          <h2 style="margin-top:0">System Confidence (0–1)</h2>
-          <canvas id="labConf" height="120"></canvas>
-          <p class="mut" style="margin-top:8px">confidence = sigmoid(momentum z-score) × regime. Entry requires ≥ 0.50; exit below 0.25 (hysteresis prevents whipsaw).</p>
-          <h2>Target Position Size (% of equity)</h2>
-          <canvas id="labSize" height="120"></canvas>
-          <p class="mut" style="margin-top:8px">weight = confidence × min(σ<sub>target</sub> / σ<sub>realized,20d</sub>, 1.5), capped by risk layer. Size shrinks automatically when volatility rises.</p>
+          <h2 style="margin-top:0">Trigger log — when &amp; WHY, every event</h2>
+          <div class="feed" id="labEvents" style="max-height:300px;font-family:var(--sans);font-size:12px">connect backend</div>
         </div>
+        <div class="card">
+          <h2 style="margin-top:0">Regime impact (full logic: docs/REGIME.md)</h2>
+          <div id="labRegimeStats" class="mut">connect backend</div>
+          <h2>✎ Edit parameters — what-if (recomputes everything above)</h2>
+          <div class="f2" style="font-size:12px">
+            <div><label class="fl">Regime SMA (days)</label><input type="number" id="pe-sma" value="200"></div>
+            <div><label class="fl">Regime band % (anti-whipsaw)</label><input type="number" id="pe-band" value="0" step="0.5"></div>
+            <div><label class="fl">Momentum lookback (days)</label><input type="number" id="pe-mom" value="252"></div>
+            <div><label class="fl">Momentum skip (days)</label><input type="number" id="pe-skip" value="21"></div>
+            <div><label class="fl">Entry confidence</label><input type="number" id="pe-entry" value="0.50" step="0.05"></div>
+            <div><label class="fl">Exit confidence</label><input type="number" id="pe-exit" value="0.25" step="0.05"></div>
+            <div><label class="fl">Vol target</label><input type="number" id="pe-vt" value="0.10" step="0.01"></div>
+            <div><label class="fl">Top N</label><input type="number" id="pe-topn" value="3"></div>
+          </div>
+          <div class="flex" style="margin-top:12px">
+            <button class="btn primary" onclick="UI.labWhatIf()">▶ Recompute what-if</button>
+            <button class="btn" onclick="UI.labReset()">Reset to frozen params</button>
+          </div>
+          <p class="mut" style="margin-top:8px">⚠ What-ifs are experiments — they never change the frozen strategy. To adopt new parameters: Optimize screen → plateau check → freeze in git → re-run parity.</p>
+        </div>
+      </div>
+
+      <div class="grid g2">
         <div class="card">
           <h2 style="margin-top:0">Trigger Conditions — current bar</h2>
           <div id="labSigs"></div>
-          <h2>Decision — current bar</h2>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Decision — current bar</h2>
           <div id="labDecision"></div>
         </div>
       </div>
@@ -1208,6 +1249,46 @@ const CH = {
     x.fillStyle='#5c6478'; x.font='10px SF Mono,Menlo,monospace'; x.textAlign='right';
     x.fillText(max.toFixed(2),W-4,12); x.fillText('0',W-4,H-4);
   },
+  // Real time-series chart with date axis, optional shading/markers/thresholds
+  timeSeries(id, dates, seriesList, opts={}){
+    const s=this.setup(id); if(!s)return; const{x,W,H}=s;
+    const all=seriesList.flatMap(v=>v.pts.filter(p=>p!==null&&p!==undefined));
+    let min=Math.min(...all), max=Math.max(...all);
+    if(opts.min!==undefined)min=opts.min; if(opts.max!==undefined)max=Math.max(max,opts.max);
+    const pad=(max-min)*0.05||1; min-=pad; max+=pad;
+    const N=dates.length, X=i=>i/(N-1)*W, Y=p=>H-18-((p-min)/(max-min))*(H-30);
+    // regime shading
+    if(opts.regime){ for(let i=1;i<N;i++){
+      x.fillStyle=opts.regime[i]?'rgba(47,191,113,.08)':'rgba(229,72,77,.07)';
+      x.fillRect(X(i-1),0,X(i)-X(i-1)+0.6,H-16);} }
+    this.grid(x,W,H-16);
+    // threshold lines [[value,color,label]]
+    (opts.thresholds||[]).forEach(([v,c,lb])=>{ if(v<min||v>max)return; const y=Y(v);
+      x.strokeStyle=c; x.setLineDash([4,3]); x.beginPath(); x.moveTo(0,y); x.lineTo(W,y); x.stroke(); x.setLineDash([]);
+      if(lb){x.fillStyle=c;x.font='9px SF Mono,Menlo,monospace';x.textAlign='left';x.fillText(lb,4,y-3);} });
+    // series
+    seriesList.forEach(sr=>{ x.strokeStyle=sr.color; x.lineWidth=sr.width||1.6; x.setLineDash(sr.dash||[]);
+      x.beginPath(); let started=false;
+      sr.pts.forEach((p,i)=>{ if(p===null||p===undefined){started=false;return;}
+        if(!started){x.moveTo(X(i),Y(p));started=true;} else x.lineTo(X(i),Y(p)); });
+      x.stroke(); x.setLineDash([]); });
+    // markers [{i, side:'B'|'S'|'F'}] on first series
+    (opts.markers||[]).forEach(m=>{ const p=seriesList[0].pts[m.i]; if(p==null)return;
+      const cx=X(m.i), cy=Y(p);
+      if(m.side==='F'){ x.fillStyle='#f5a623'; x.beginPath();
+        x.moveTo(cx,cy-6);x.lineTo(cx+5,cy);x.lineTo(cx,cy+6);x.lineTo(cx-5,cy);x.closePath();x.fill(); return; }
+      x.fillStyle=m.side==='B'?'#2fbf71':'#e5484d'; x.beginPath();
+      if(m.side==='B'){x.moveTo(cx,cy+14);x.lineTo(cx-5,cy+23);x.lineTo(cx+5,cy+23);}
+      else{x.moveTo(cx,cy-14);x.lineTo(cx-5,cy-23);x.lineTo(cx+5,cy-23);}
+      x.closePath(); x.fill(); });
+    // y labels
+    x.fillStyle='#5c6478'; x.font='10px SF Mono,Menlo,monospace'; x.textAlign='right';
+    x.fillText(max.toFixed(max>100?0:2),W-4,12); x.fillText(min.toFixed(min>100?0:2),W-4,H-22);
+    // DATE AXIS: ~6 ticks
+    x.textAlign='center'; x.fillStyle='#5c6478';
+    const step=Math.max(1,Math.floor(N/6));
+    for(let i=0;i<N;i+=step){ x.fillText(dates[i].slice(0,7),Math.min(Math.max(X(i),24),W-24),H-4); }
+  },
   spark(canvas,pts,color){
     const W=canvas.clientWidth||150,H=26; canvas.width=W*2; canvas.height=H*2;
     const x=canvas.getContext('2d'); x.scale(2,2);
@@ -1837,8 +1918,92 @@ const UI = {
   },
 
   /* ---- strategy lab ---- */
+  _labHist:null, _labParams:null,
+  async loadLabHistory(){
+    if(!QD.on){ this.renderLabSynthFallback(); return; }
+    const sym=document.getElementById('labEtf').value;
+    document.getElementById('labEtfName').textContent=sym;
+    try{
+      let r;
+      if(this._labParams) r=await fetch('/api/signals/history',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({sym,params:this._labParams})});
+      else r=await fetch('/api/signals/history?sym='+sym);
+      if(!r.ok)throw 0;
+      this._labHist=await r.json();
+      this.drawLabHistory();
+    }catch(e){ this.renderLabSynthFallback(); }
+  },
+  drawLabHistory(){
+    const d=this._labHist; if(!d)return;
+    document.getElementById('labMeta').textContent=
+      `${d.dates[0]} → ${d.dates[d.dates.length-1]} · ${d.data_provenance}`+(d.is_whatif?' · ⚠ WHAT-IF PARAMS':' · frozen params');
+    document.getElementById('labTiming').textContent='⏱ '+d.timing;
+    // 1) regime chart: SPY + SMA + shading + flip markers
+    const flips=(d.regime_stats.flips||[]).map(f=>({i:d.dates.indexOf(f.date),side:'F'})).filter(m=>m.i>0);
+    CH.timeSeries('regimeChart',d.dates,[
+      {pts:d.spy,color:'#e6eaf2',width:1.7},
+      {pts:d.sma,color:'#f5a623',dash:[5,4]}],
+      {regime:d.regime,markers:flips});
+    // 2) ETF price + entry/exit markers
+    const marks=(d.events||[]).map(e=>({i:d.dates.indexOf(e.date),side:e.action==='ENTRY'?'B':'S'})).filter(m=>m.i>0);
+    CH.timeSeries('labChart',d.dates,[{pts:d.etf_close,color:'#4c8dff',width:1.7}],
+      {regime:d.regime,markers:marks});
+    // 3) confidence with thresholds
+    const P=d.params_used;
+    CH.timeSeries('labConf',d.dates,[{pts:d.confidence,color:'#9d7bff'}],
+      {min:0,max:1,thresholds:[[P.entry,'#2fbf71','entry '+P.entry],[P.exit,'#e5484d','exit '+P.exit]]});
+    // 4) weight
+    CH.timeSeries('labSize',d.dates,[{pts:d.weight_pct,color:'#39c5cf'}],{min:0});
+    // trigger log (newest first)
+    document.getElementById('labEvents').innerHTML=(d.events||[]).slice().reverse().map(e=>
+      `<div style="padding:5px 0;border-bottom:1px solid #1c2231">
+        <span class="mono" style="color:var(--dim)">${e.date}</span>
+        <span class="tag ${e.action==='ENTRY'?'ok':'fail'}" style="margin:0 6px">${e.action}</span>${e.reason}</div>`).join('')
+      ||'<div class="mut">no trigger events in window</div>';
+    // regime impact
+    const rs=d.regime_stats;
+    document.getElementById('labRegimeStats').innerHTML=`
+      <div class="kv" style="grid-template-columns:190px 1fr">
+        <span class="k">Rule</span><span class="v" style="font-family:var(--sans)">ON: SPY &gt; SMA${P.sma_n}${rs.band_pct?'×(1+'+rs.band_pct+'%)':''} · OFF: SPY &lt; SMA${P.sma_n}${rs.band_pct?'×(1−'+rs.band_pct+'%)':''} · between: hold state</span>
+        <span class="k">Time in RISK-ON</span><span class="v">${rs.pct_risk_on}% of days</span>
+        <span class="k">Regime flips</span><span class="v">${rs.n_flips} (band ${rs.band_pct}% — raise to cut whipsaw)</span>
+        <span class="k">SPY move while OFF</span><span class="v ${rs.spy_return_during_off_pct<0?'up':'warn'}">${rs.spy_return_during_off_pct}%</span>
+        <span class="k">SPY max drawdown</span><span class="v">${rs.spy_max_dd_pct}%</span>
+      </div>
+      <p style="margin-top:6px;font-size:12px">${rs.explain}</p>
+      <div class="feed" style="max-height:110px;font-size:11px;margin-top:6px">${(rs.flips||[]).slice().reverse().map(f=>
+        `<div><span class="t">${f.date}</span> <span class="${f.to==='RISK-ON'?'lv-fill':'lv-err'}">→ ${f.to}</span></div>`).join('')}</div>`;
+  },
+  labWhatIf(){
+    const g=id=>parseFloat(document.getElementById(id).value);
+    this._labParams={sma_n:g('pe-sma'),regime_band_pct:g('pe-band'),mom:g('pe-mom'),skip:g('pe-skip'),
+      entry:g('pe-entry'),exit:g('pe-exit'),vol_tgt:g('pe-vt'),top_n:g('pe-topn')};
+    this.loadLabHistory();
+    this.toast('What-if recomputed — charts show experimental parameters (frozen strategy unchanged)','ok');
+  },
+  labReset(){
+    this._labParams=null;
+    document.getElementById('pe-sma').value=200; document.getElementById('pe-band').value=0;
+    document.getElementById('pe-mom').value=252; document.getElementById('pe-skip').value=21;
+    document.getElementById('pe-entry').value=0.50; document.getElementById('pe-exit').value=0.25;
+    document.getElementById('pe-vt').value=0.10; document.getElementById('pe-topn').value=3;
+    this.loadLabHistory();
+    this.toast('Back to frozen parameters','ok');
+  },
+  renderLabSynthFallback(){
+    document.getElementById('labMeta').textContent='backend offline — start it for real charts (python3 api/server.py)';
+    const d=CH.labSeries(11);
+    const fake=[...Array(d.px.length)].map((_,i)=>'demo-'+i);
+    CH.timeSeries('regimeChart',fake.map(()=>''),[{pts:d.px,color:'#e6eaf2'},{pts:d.sma.map(v=>v),color:'#f5a623',dash:[5,4]}],{regime:d.regime.map(r=>r?1:0)});
+    CH.timeSeries('labChart',fake.map(()=>''),[{pts:d.px,color:'#4c8dff'}],{});
+    CH.timeSeries('labConf',fake.map(()=>''),[{pts:d.conf,color:'#9d7bff'}],{min:0,max:1});
+    CH.timeSeries('labSize',fake.map(()=>''),[{pts:d.wt.map(w=>w*100),color:'#39c5cf'}],{min:0});
+    document.getElementById('labEvents').innerHTML='<div class="mut">SYNTHETIC demo — no real dates/events without the backend</div>';
+    document.getElementById('labRegimeStats').innerHTML='<p class="mut">connect the backend for real regime statistics</p>';
+  },
   renderLab(){
     this.renderLiveSignal();
+    this.loadLabHistory();
     const seed=+document.getElementById('labSel').value;
     const d=CH.labSeries(seed);
     const last=d.px.length-1;
@@ -1856,11 +2021,8 @@ const UI = {
     ];
     document.getElementById('labAnat').innerHTML=anat.map(([t,v,on])=>
       `<div class="an ${on?'on':'hold'}"><div class="t">${t}</div><div class="v">${v}</div></div>`).join('');
-    // charts
-    CH.labChart('labChart',d);
-    CH.threshLine('labConf',d.conf,'rgb(157,123,255)',[[0.5,'#2fbf71'],[0.25,'#e5484d']]);
-    CH.threshLine('labSize',d.wt,'rgb(76,141,255)',[[1.0,'#f5a623']]);
-    // trigger conditions
+    // trigger conditions (synthetic fallback — overwritten by live signal when connected)
+    if(QD.on) return;
     const conds=[
       ['Regime: SPY close > SMA(200)', `${d.px[last].toFixed(2)} vs ${d.sma[last]?.toFixed(2)}`, regimeOn],
       ['Momentum: 12-1 return > 0', `${(mom*100).toFixed(2)}%`, mom>0],
@@ -1899,6 +2061,27 @@ const UI = {
         <div class="verdict ${reg.risk_on?'pass':'fail'}" style="margin-top:4px">${d.decision}</div>
         <p class="mut" style="margin-top:8px">Pipeline: ${d.pipeline.join(' → ')}. Full derivation with formulas and citations: <b>docs/SIGNALS.md</b>.
         These exact numbers feed the paper node — <span class="mono">python3 scripts/paper_node.py</span> turns them into orders.</p>`;
+      // fill the current-bar condition panel with REAL values
+      const sel=document.getElementById('labEtf')?document.getElementById('labEtf').value:'XLK';
+      const row=d.table.find(r=>r.sym===sel)||d.table[0];
+      const sigsEl=document.getElementById('labSigs');
+      if(sigsEl&&row){
+        const conds=[
+          ['Regime: SPY close > SMA200', `${reg.spy_close.toLocaleString()} vs ${reg.sma200.toLocaleString()}`, reg.risk_on],
+          [`${row.sym} in top-3 by 12-1 momentum`, `rank #${row.rank} (${row.mom_12_1_pct}%)`, row.in_top3],
+          ['Confidence ≥ 0.50 (entry)', String(row.confidence), row.confidence>=0.5],
+          ['Vol-target sizing', `σ ${row.vol_ann_pct}% → scalar ${row.vol_scalar}×`, true],
+          ['Risk layer (pre-route caps)', 'risk/limits.yaml', true],
+        ];
+        sigsEl.innerHTML=conds.map(([c,v,ok])=>
+          `<div class="sig"><span>${c}</span><span class="cond">${v}</span><span class="tag ${ok?'ok':'fail'}">${ok?'TRUE':'FALSE'}</span></div>`).join('')
+          +'<p class="mut" style="margin-top:6px">REAL values, as of '+d.as_of+' close.</p>';
+        document.getElementById('labDecision').innerHTML=
+          `<div class="verdict ${row.target_weight_pct>0?'pass':'fail'}" style="margin-top:0">${row.sym}: `+
+          (row.target_weight_pct>0?`TARGET ${row.target_weight_pct}% of equity`:
+           (reg.risk_on?`NO POSITION — ${row.in_top3?'confidence below entry':'not in top-3 (rank #'+row.rank+')'}`:'FLAT — regime RISK-OFF'))+
+          `</div><p class="mut" style="margin-top:8px">Portfolio decision: ${d.decision}</p>`;
+      }
     }catch(e){el.innerHTML='<p class="mut">signal fetch failed</p>';}
   },
 
@@ -2117,7 +2300,7 @@ QD.updState=async function(){
 };
 UI.init();
 QD.sync();
-window.addEventListener('resize',()=>{UI.renderParity();});
+window.addEventListener('resize',()=>{UI.renderParity(); if(UI._labHist)UI.drawLabHistory();});
 </script>
 </body>
 </html>

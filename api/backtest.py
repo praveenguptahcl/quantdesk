@@ -304,6 +304,147 @@ def current_signal():
     }
 
 
+# ------------------------------------------------------------------ signal history (Strategy Lab)
+def signal_history(sym="XLK", params=None):
+    """Full historical signal trace on REAL catalog data for one ETF:
+    dates, SPY+SMA+regime, the ETF's price/momentum/confidence/weight series,
+    every trigger event WITH its reason, and regime impact statistics.
+    `params` overrides run a WHAT-IF (never mutates the frozen strategy).
+    Regime supports an optional anti-whipsaw band (docs/REGIME.md):
+      ON  when SPY > SMA*(1+band);  OFF when SPY < SMA*(1-band);  else hold state."""
+    P = {"mom": MOM, "skip": SKIP, "sma_n": SMA_N, "volw": VOLW,
+         "vol_tgt": VOL_TGT, "vol_cap": VOL_CAP, "top_n": TOP_N,
+         "entry": ENTRY_CONF, "exit": EXIT_CONF, "regime_band_pct": 0.0}
+    if params:
+        for k, v in params.items():
+            if k in P:
+                try:
+                    P[k] = float(v)
+                except (TypeError, ValueError):
+                    pass
+    for k in ("mom", "skip", "sma_n", "volw", "top_n"):
+        P[k] = max(int(P[k]), 2)
+    if sym not in ETFS:
+        sym = ETFS[0]
+
+    spy = load_bars("SPY")
+    data = {s2: load_bars(s2) for s2 in ETFS}
+    if spy is None or any(v is None for v in data.values()):
+        return None
+    n = min(len(spy), *(len(v) for v in data.values()))
+    dates = [spy[i][0] for i in range(n)]
+    spy_c = [spy[i][1] for i in range(n)]
+    closes = {s2: [data[s2][i][1] for i in range(n)] for s2 in ETFS}
+
+    sma_n, band = P["sma_n"], P["regime_band_pct"] / 100.0
+    sma = [None] * n
+    run = 0.0
+    for i in range(n):
+        run += spy_c[i]
+        if i >= sma_n:
+            run -= spy_c[i - sma_n]
+        if i >= sma_n - 1:
+            sma[i] = run / sma_n
+
+    # regime with hysteresis band
+    regime, state = [], False
+    for i in range(n):
+        if sma[i] is None:
+            regime.append(0)
+            continue
+        if spy_c[i] > sma[i] * (1 + band):
+            state = True
+        elif spy_c[i] < sma[i] * (1 - band):
+            state = False
+        regime.append(1 if state else 0)
+
+    def mom_12_1(s2, i):
+        c = closes[s2]
+        if i < P["mom"]:
+            return None
+        return (c[i] / c[i - P["mom"]] - 1) - (c[i] / c[i - P["skip"]] - 1)
+
+    conf_series, wt_series, events = [], [], []
+    entered = set()
+    cur_wt = {s2: 0.0 for s2 in ETFS}
+    warm = max(P["mom"], sma_n)
+    for i in range(n):
+        m_sel = mom_12_1(sym, i)
+        c_sel = 0.0 if (m_sel is None or not regime[i]) else 1.0 / (1.0 + math.exp(-3.0 * (m_sel / 0.08)))
+        conf_series.append(round(c_sel, 3))
+        if i >= warm and _wd(dates[i]) == 0:  # Monday rebalance
+            if not regime[i]:
+                if any(cur_wt[s2] > 0 for s2 in ETFS) and cur_wt[sym] > 0:
+                    events.append({"date": dates[i], "action": "EXIT",
+                                   "reason": "regime flipped RISK-OFF (SPY < SMA%d%s) — liquidate all"
+                                   % (sma_n, f"×(1−{P['regime_band_pct']}%)" if band else "")})
+                entered.clear()
+                cur_wt = {s2: 0.0 for s2 in ETFS}
+            else:
+                moms = {s2: mom_12_1(s2, i) for s2 in ETFS}
+                ranked = sorted(ETFS, key=lambda s2: moms[s2] or -9, reverse=True)
+                rank = ranked.index(sym) + 1
+                top = set(ranked[:int(P["top_n"])])
+                thr = P["exit"] if sym in entered else P["entry"]
+                was_in = cur_wt[sym] > 0
+                if sym in top and c_sel >= thr:
+                    c = closes[sym]
+                    rets = [c[j] / c[j - 1] - 1 for j in range(i - P["volw"] + 1, i + 1)]
+                    mu = sum(rets) / P["volw"]
+                    vol = max(math.sqrt(sum((r - mu) ** 2 for r in rets) / P["volw"]) * math.sqrt(252), 0.02)
+                    w = c_sel * min(P["vol_tgt"] / vol, P["vol_cap"]) / P["top_n"]
+                    if not was_in:
+                        events.append({"date": dates[i], "action": "ENTRY",
+                                       "reason": f"rank #{rank} of 9 (12-1 mom {moms[sym]*100:.1f}%), "
+                                                 f"confidence {c_sel:.2f} ≥ {P['entry']:.2f}, regime ON, "
+                                                 f"vol {vol*100:.0f}% → weight {w*100:.1f}%"})
+                    entered.add(sym)
+                    cur_wt[sym] = w
+                else:
+                    if was_in:
+                        why = (f"dropped to rank #{rank} (out of top {int(P['top_n'])})" if sym not in top
+                               else f"confidence {c_sel:.2f} < exit threshold {P['exit']:.2f}")
+                        events.append({"date": dates[i], "action": "EXIT", "reason": why})
+                    entered.discard(sym)
+                    cur_wt[sym] = 0.0
+        wt_series.append(round(cur_wt[sym] * 100, 1))
+
+    # regime impact statistics
+    flips = []
+    for i in range(1, n):
+        if regime[i] != regime[i - 1] and sma[i] is not None:
+            flips.append({"date": dates[i], "to": "RISK-ON" if regime[i] else "RISK-OFF"})
+    days_on = sum(regime)
+    off_ret = 1.0
+    for i in range(1, n):
+        if not regime[i - 1]:
+            off_ret *= spy_c[i] / spy_c[i - 1]
+    peak, spy_dd = spy_c[0], 0.0
+    for v in spy_c:
+        peak = max(peak, v)
+        spy_dd = min(spy_dd, v / peak - 1)
+    return {
+        "sym": sym, "dates": dates, "spy": [round(v, 2) for v in spy_c],
+        "sma": [round(v, 2) if v else None for v in sma], "regime": regime,
+        "etf_close": [round(v, 2) for v in closes[sym]],
+        "confidence": conf_series, "weight_pct": wt_series,
+        "events": events[-60:],
+        "regime_stats": {
+            "pct_risk_on": round(days_on / n * 100, 1),
+            "n_flips": len(flips), "flips": flips[-12:],
+            "spy_return_during_off_pct": round((off_ret - 1) * 100, 1),
+            "spy_max_dd_pct": round(spy_dd * 100, 1),
+            "band_pct": P["regime_band_pct"],
+            "explain": ("While OFF the strategy holds cash; SPY moved "
+                        f"{(off_ret-1)*100:+.1f}% in those periods — negative means the filter dodged losses."),
+        },
+        "params_used": P, "is_whatif": bool(params),
+        "data_provenance": provenance(),
+        "timing": "Signals use daily closes; rebalance decision on Monday's close, "
+                  "paper node executes ~09:35 AM ET next session.",
+    }
+
+
 # ------------------------------------------------------------------ real nautilus (M5)
 NAUT_PY = os.path.expanduser("~/.quantdesk/venv/bin/python")
 NAUT_SCRIPT = os.path.normpath(os.path.join(HERE, "..", "scripts", "nautilus_backtest.py"))
