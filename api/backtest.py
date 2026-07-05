@@ -540,6 +540,8 @@ def run_parity_backtest(inject_warmup_bug=False, tolerances=None, engine="auto")
             if par["pass"] else
             "Divergence detected — first suspect: indicator warm-up length in the event-driven port.")
     return {
+        "eq_a": a.get("equity_monthly") or [],
+        "eq_b": b.get("equity_monthly") or [],
         "naut_engine": b_name,
         "window": a["window"] + f" · daily bars · fees {FEE_BPS:.0f}bp · data: {provenance()} · naut leg: {b_name}",
         "lean": fmt_stats(a), "naut": fmt_stats(b),

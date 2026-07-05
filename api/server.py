@@ -113,6 +113,8 @@ class Handler(BaseHTTPRequestHandler):
                 "results": store.get_doc("backtests", "momo-etf-v3"),
                 "data_provenance": backtest.provenance()}),
             "/api/drift": self.g_drift,
+            "/api/data/inventory": self.g_data_inventory,
+            "/api/equity/history": self.g_equity_history,
             "/api/signals": lambda: (lambda sig: self._send(200, sig) if sig else self._err(
                 503, "catalog data missing"))(backtest.current_signal()),
         }.get(path)
@@ -147,6 +149,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/notes": lambda: self.p_note(body),
             "/api/alerts": lambda: self.p_alert(body),
             "/api/risk/simulate-breach": self.p_breach,
+            "/api/risk/reset": self.p_risk_reset,
+            "/api/data/refresh": self.p_data_refresh,
+            "/api/data/record": lambda: self.p_data_record(body),
             "/api/orders/validate": lambda: self.p_validate_order(body),
             "/api/paper/test-order": self.p_paper_test,
             "/api/signals/history": lambda: (lambda h: self._send(200, h) if h else self._err(
@@ -512,6 +517,8 @@ class Handler(BaseHTTPRequestHandler):
         parity = store.static("parity") or {}
         parity["momo"] = {k: result[k] for k in
                           ("window", "lean", "naut", "tol", "pass", "diffs", "diffNote", "seed", "div")}
+        parity["momo"]["eq_a"] = result.get("eq_a") or []
+        parity["momo"]["eq_b"] = result.get("eq_b") or []
         store.put_doc("static", "parity", parity)
         # keep the idea's gate in sync with the computed verdict
         for idea in store.list_docs("ideas"):
@@ -605,6 +612,110 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, r)
         except alpaca.AlpacaError as e:
             self._err(502, str(e))
+
+    def g_data_inventory(self):
+        """Real scan of data/catalog — what a trader actually has."""
+        import csv as _csv
+        import datetime
+        cat = backtest.CATALOG
+        today = datetime.date.today()
+        bars = []
+        if os.path.isdir(cat):
+            for fn in sorted(os.listdir(cat)):
+                if not fn.endswith(".csv"):
+                    continue
+                fp = os.path.join(cat, fn)
+                first = last = None
+                rows = 0
+                with open(fp) as f:
+                    for r in _csv.DictReader(f):
+                        d = r.get("Date")
+                        if not d:
+                            continue
+                        rows += 1
+                        first = first or d
+                        last = d
+                stale = (today - datetime.date.fromisoformat(last)).days if last else None
+                bars.append({"sym": fn[:-4], "rows": rows, "first": first, "last": last,
+                             "stale_days": stale, "kb": round(os.path.getsize(fp) / 1024, 1)})
+        l2 = []
+        l2dir = os.path.join(cat, "l2")
+        if os.path.isdir(l2dir):
+            for fn in sorted(os.listdir(l2dir)):
+                fp = os.path.join(l2dir, fn)
+                n_snap = sum(1 for _ in open(fp))
+                age_h = round((time.time() - os.path.getmtime(fp)) / 3600, 1)
+                l2.append({"file": fn, "snapshots": n_snap, "age_hours": age_h,
+                           "mb": round(os.path.getsize(fp) / 1e6, 2)})
+        # coverage vs strategy needs: momo needs 253 bars of every symbol
+        need = backtest.MOM + 1
+        have = min((b["rows"] for b in bars), default=0)
+        return self._send(200, {
+            "provenance": backtest.provenance(),
+            "bars": bars, "l2": l2,
+            "coverage": {"strategy": "momo-etf-v3", "bars_needed": need,
+                         "bars_available": have, "ok": have >= need,
+                         "note": f"needs {need} daily bars (252 momentum + 1) per symbol; regime SMA needs 200"},
+            "refreshing": store.get_kv("data_refreshing") == "1",
+        })
+
+    def p_data_refresh(self):
+        """Run scripts/fetch_data.py in the background (real Yahoo pull)."""
+        import subprocess
+        import threading
+        if store.get_kv("data_refreshing") == "1":
+            return self._err(409, "refresh already running")
+        store.set_kv("data_refreshing", "1")
+        store.add_feed("info", "DATA — refresh started (Yahoo daily bars, ~20s)")
+
+        def run():
+            try:
+                script = os.path.join(HERE, "..", "scripts", "fetch_data.py")
+                p2 = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=180)
+                ok = "provenance: REAL" in p2.stdout
+                store.add_feed("info" if ok else "warn",
+                               "DATA — refresh " + ("complete: real bars updated" if ok
+                                                    else "finished with issues (see logs)"))
+            except Exception as e:
+                store.add_feed("err", f"DATA — refresh failed: {type(e).__name__}")
+            finally:
+                store.set_kv("data_refreshing", "0")
+
+        threading.Thread(target=run, daemon=True).start()
+        self._send(202, {"status": "started"})
+
+    def p_data_record(self, body):
+        """Start an L2 recording (Coinbase public book) in the background."""
+        import subprocess
+        product = (body or {}).get("product", "BTC-USD")
+        secs = min(int((body or {}).get("seconds", 60)), 600)
+        if not re.match(r"^[A-Z]+-[A-Z]+$", product):
+            return self._err(422, "product like BTC-USD / ETH-USD")
+        script = os.path.join(HERE, "..", "scripts", "record_l2.py")
+        subprocess.Popen([sys.executable, script, product, str(secs)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        store.add_feed("info", f"DATA — L2 recording started: {product} for {secs}s (Coinbase public book)")
+        self._send(202, {"status": "recording", "product": product, "seconds": secs})
+
+    def p_risk_reset(self):
+        store.set_kv("halted", "0")
+        store.add_feed("info", "RISK — breakers re-armed by operator; order submission enabled")
+        store.add_audit("risk_reset", "operator re-armed after halt")
+        self._send(200, {"halted": False})
+
+    def g_equity_history(self):
+        """Real paper equity curve (Alpaca portfolio history) for the dashboard."""
+        if alpaca.configured():
+            try:
+                import datetime
+                h = alpaca.portfolio_history("1M")
+                pts = [{"d": datetime.date.fromtimestamp(ts).isoformat(), "eq": eq}
+                       for ts, eq in zip(h.get("timestamp") or [], h.get("equity") or []) if eq]
+                if pts:
+                    return self._send(200, {"source": "alpaca-paper", "points": pts})
+            except alpaca.AlpacaError:
+                pass
+        self._send(200, {"source": "none", "points": []})
 
     # ---------- helpers ----------
     @staticmethod

@@ -621,51 +621,43 @@ label.fl b{color:var(--red)}
 
     <!-- ======== DATA & ARTIFACTS ======== -->
     <section class="screen" id="s-data">
-      <h1>Data &amp; Artifacts</h1>
-      <div class="sub">What each engine sees — LEAN's hosted library, Nautilus's ParquetDataCatalog, and the Object Store artifacts shared between them.</div>
+      <div class="flex spread"><div><h1>Data &amp; Artifacts</h1>
+      <div class="sub">What data you actually have on disk, how fresh it is, and one-click ways to get more. Everything below is a real scan — nothing seeded.</div></div>
+      <span class="mut" id="dataProv"></span></div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="flex spread">
+          <h2 style="margin-top:0">① Market data on disk <span class="mut" style="text-transform:none">(feeds signals → backtests → paper node)</span></h2>
+          <button class="btn primary" id="btnRefresh" onclick="UI.dataRefresh()">⟳ Refresh from Yahoo (free, ~20s)</button>
+        </div>
+        <table><thead><tr><th>Symbol</th><th>Bars</th><th>From</th><th>To</th><th>Freshness</th><th>Size</th></tr></thead>
+        <tbody id="dataBars"><tr><td colspan="6" class="s mut">connect backend</td></tr></tbody></table>
+      </div>
+
       <div class="grid g2">
         <div class="card">
-          <h2 style="margin-top:0">LEAN Data Library (subscribed)</h2>
-          <table><thead><tr><th>Dataset</th><th>Resolution</th><th>Range</th><th>Used by</th></tr></thead><tbody>
-            <tr><td class="s">US Equities (9 SPDR + SPY)</td><td>Daily</td><td>1998 → live</td><td class="s">momo-etf-v3</td></tr>
-            <tr><td class="s">US Equities (mega-cap tech)</td><td>Minute</td><td>2010 → live</td><td class="s">pairs-stat-v1</td></tr>
-            <tr><td class="s">CME Futures (MES, MNQ)</td><td>Minute</td><td>2019 → live</td><td class="s">fut-carry-v1</td></tr>
-            <tr><td class="s">Crypto (Binance spot)</td><td>Hour</td><td>2019 → live</td><td class="s">crypto-mr-v2</td></tr>
-            <tr><td class="s">SPX Index Options</td><td>Minute</td><td>2012 → live</td><td class="s">vol-premium-v1</td></tr>
-          </tbody></table>
+          <div class="flex spread">
+            <h2 style="margin-top:0">② Order-book recordings <span class="mut" style="text-transform:none">(feeds Microstructure)</span></h2>
+            <div class="flex">
+              <select id="recProduct" class="inp" style="width:auto"><option>BTC-USD</option><option>ETH-USD</option></select>
+              <button class="btn" onclick="UI.dataRecord()">⏺ Record 60s</button>
+            </div>
+          </div>
+          <table><thead><tr><th>File</th><th>Snapshots</th><th>Age</th><th>Size</th></tr></thead>
+          <tbody id="dataL2"><tr><td colspan="4" class="s mut">connect backend</td></tr></tbody></table>
+          <p class="mut" style="margin-top:8px">Live BTC/ETH book+tape from Coinbase's public API (no key needed). After recording, open Microstructure scoped to that symbol.</p>
         </div>
         <div class="card">
-          <h2 style="margin-top:0">Nautilus ParquetDataCatalog</h2>
-          <table><thead><tr><th>Bar type</th><th>Rows</th><th>Size</th><th>Window</th><th>Parity</th></tr></thead><tbody>
-            <tr><td>SPY.XNAS-1D</td><td>754</td><td>0.4 MB</td><td>2023-01→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
-            <tr><td>XL*.XNAS-1D ×9</td><td>6,786</td><td>3.2 MB</td><td>2023-01→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
-            <tr><td>MSFT/GOOG… -1M ×16</td><td>5.9M</td><td>612 MB</td><td>2022-06→2025-12</td><td class="s"><span class="tag warn">re-export</span></td></tr>
-            <tr><td>MES.XCME-1M</td><td>1.4M</td><td>96 MB</td><td>2022-01→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
-            <tr><td>BTCUSDT.BINANCE-1H</td><td>61k</td><td>4.1 MB</td><td>2019-09→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
-          </tbody></table>
-          <p class="mut" style="margin-top:8px">⚠ Parity requires the identical window in both engines — “re-export” means LEAN data changed since the last catalog import.</p>
-        </div>
-      </div>
-      <div class="grid g2" style="margin-top:14px">
-        <div class="card">
-          <h2 style="margin-top:0">Object Store — shared model artifacts</h2>
-          <table><thead><tr><th>Key</th><th>Type</th><th>SHA</th><th>Loaded by</th></tr></thead><tbody>
-            <tr><td>momo-etf-v3/model.pkl</td><td class="s">ranker weights</td><td>a41f…9c</td><td class="s">LEAN algo + NT strategy</td></tr>
-            <tr><td>momo-etf-v3/features.json</td><td class="s">feature list</td><td>7bd2…11</td><td class="s">LEAN algo + NT strategy</td></tr>
-            <tr><td>crypto-mr-v2/scaler.pkl</td><td class="s">z-score scaler</td><td>03ce…8a</td><td class="s">LEAN algo + NT strategy</td></tr>
-            <tr><td>pairs-stat-v1/coint_pairs.json</td><td class="s">pair universe</td><td>f19a…42</td><td class="s">LEAN algo only ⚠</td></tr>
-          </tbody></table>
-          <p class="mut" style="margin-top:8px">⚠ pairs-stat-v1's Nautilus port loads a locally-copied pair list — hash mismatch is a parity-failure suspect. Both engines must load the same artifact.</p>
-        </div>
-        <div class="card">
-          <h2 style="margin-top:0">Warm-up / History Requirements</h2>
-          <table><thead><tr><th>Strategy</th><th>Longest lookback</th><th>Warm-up set</th><th>Status</th></tr></thead><tbody>
-            <tr><td class="s">momo-etf-v3</td><td>252d (12-1 mom) + 200d SMA</td><td>380 cal. days</td><td class="s"><span class="tag ok">correct</span></td></tr>
-            <tr><td class="s">fut-carry-v1</td><td>60d spread window</td><td>90 cal. days</td><td class="s"><span class="tag ok">correct</span></td></tr>
-            <tr><td class="s">crypto-mr-v2</td><td>30d funding z</td><td>45 days</td><td class="s"><span class="tag ok">correct</span></td></tr>
-            <tr><td class="s">pairs-stat-v1</td><td>90d coint window</td><td>NT: 60d ⚠ LEAN: 90d</td><td class="s"><span class="tag fail">mismatch</span></td></tr>
-          </tbody></table>
-          <p class="mut" style="margin-top:8px">Warm-up must cover the <b>longest</b> indicator lookback in <b>both</b> engines. The pairs-stat-v1 mismatch is exactly what the parity screen's trade-diff table diagnosed.</p>
+          <h2 style="margin-top:0">③ Does your data cover your strategy?</h2>
+          <div id="dataCoverage" class="mut">connect backend</div>
+          <h2>How data flows here</h2>
+          <p class="mut" style="line-height:1.7">
+          <b>Daily bars</b> (①) → signals → backtests → paper-node orders.<br>
+          <b>L2 recordings</b> (②) → Microstructure screen → HFT research.<br>
+          <b>Alpaca account data</b> (positions, fills, P&amp;L) → Dashboard/Orders/P&amp;L calendar — fetched live from the broker, never stored here.<br>
+          Upgrades: minute/tick equity history needs a paid vendor key in <span class="mono">.env</span> (Databento/Polygon — STATUS.md M10).</p>
+          <h2>Model artifacts</h2>
+          <p class="mut">None yet — trained-model artifacts appear here when a strategy uses them; momo-etf-v3 is pure price rules. Strategy specs live in <span class="mono">library/strategies/</span> (30 YAML files, git-versioned).</p>
         </div>
       </div>
     </section>
@@ -828,7 +820,8 @@ label.fl b{color:var(--red)}
           </div>
           <div class="bar-outer"><div class="bar-inner" style="width:43%;background:var(--green)"></div></div>
           <div class="mut" style="margin-top:6px">Drawdown headroom used: 43%</div>
-          <button class="btn" style="margin-top:14px" onclick="UI.toast('Simulated breach: daily loss limit tripped → all strategies halted, no new orders. Reset to re-arm.','err')">⚡ Simulate breach (test)</button>
+          <div class="flex" style="margin-top:14px"><button class="btn" onclick="if(QD.on){QD.post('/api/risk/simulate-breach').then(()=>{QD.updState();UI.toast('BREACH SIMULATED — halted. Use Re-arm to resume.','err')})}else UI.toast('backend offline','err')">⚡ Simulate breach (test)</button>
+          <button class="btn green" style="background:var(--green);border-color:var(--green);color:#04140b" onclick="UI.riskReset()">🔄 Re-arm breakers</button></div>
         </div>
         <div class="card"><h2 style="margin-top:0">Per-Asset-Class Limits</h2>
           <div class="kv">
@@ -1316,6 +1309,7 @@ const UI = {
       if(b.dataset.s==='micro') this.renderMicro();
       if(b.dataset.s==='lib') this.renderLib();
       if(b.dataset.s==='desk') this.renderDesk();
+      if(b.dataset.s==='data') this.renderData();
       if(b.dataset.s==='safe') this.renderSafe();
     });
     setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
@@ -1325,9 +1319,30 @@ const UI = {
       `<div><span class="t">${t}</span> <span class="lv-${lv}">${m}</span></div>`).join('');
     this.renderSymbols(); this.renderDash(); this.setupAI();
     this.renderPipeline(); this.renderJournal(); this.renderWizard();
-    const eq1=CH.equity(120,7,0.0009,0.006), eq2=CH.equity(120,7,0.001,0.004);
-    CH.multi('eqChart',[{pts:eq1.eq,color:'#2fbf71',fill:'rgba(47,191,113,.08)'},{pts:eq2.eq,color:'#4c8dff',dash:[5,4]}]);
+    this.drawDashEquity();
     this.renderParity();
+  },
+
+  async drawDashEquity(){
+    let drew=false;
+    if(QD.on){
+      try{
+        const h=await(await fetch('/api/equity/history')).json();
+        if(h.points&&h.points.length>2){
+          CH.timeSeries('eqChart',h.points.map(p=>p.d),
+            [{pts:h.points.map(p=>p.eq),color:'#2fbf71',width:1.8}],{});
+          const lg=document.querySelector('#s-dash .legend');
+          if(lg)lg.innerHTML='<span><span class="dot g"></span>REAL paper equity (Alpaca portfolio history, 1M)</span>';
+          drew=true;
+        }
+      }catch(e){}
+    }
+    if(!drew){
+      const eq1=CH.equity(120,7,0.0009,0.006), eq2=CH.equity(120,7,0.001,0.004);
+      CH.multi('eqChart',[{pts:eq1.eq,color:'#2fbf71',fill:'rgba(47,191,113,.08)'},{pts:eq2.eq,color:'#4c8dff',dash:[5,4]}]);
+      const lg=document.querySelector('#s-dash .legend');
+      if(lg)lg.innerHTML='<span class="warn">DEMO curve — real equity chart appears once the paper account has history</span>';
+    }
   },
 
   /* ---- research: pipeline + journal ---- */
@@ -1492,7 +1507,19 @@ const UI = {
       return `<div class="tk"><div class="l">${lbl}</div><div class="a">${a}</div>
         <div class="b">NT ${b}</div><div class="d ${close?'ok':'bad'}">${close?'≈ match':'Δ diverges'}</div></div>`;
     }).join('');
-    // charts
+    // charts — REAL backtest equity curves when the server has them
+    if(p.eq_a&&p.eq_a.length>2){
+      const idx=p.eq_a.map((_,i)=>'m'+i);
+      const series=[{pts:p.eq_a,color:'#4c8dff',width:1.8}];
+      if(p.eq_b&&p.eq_b.length===p.eq_a.length)series.push({pts:p.eq_b,color:'#39c5cf',dash:[5,4]});
+      CH.timeSeries('parityChart',idx.map(()=>''),series,{});
+      CH.drawdown('ddChart',p.eq_a,'#e5484d');
+      const rets=[];for(let i=1;i<p.eq_a.length;i++)rets.push(p.eq_a[i]/p.eq_a[i-1]-1);
+      CH.hist('histChart',rets);
+      const s2=CH.setup('rollChart'); if(s2){s2.x.fillStyle='#5c6478';s2.x.font='11px sans-serif';s2.x.fillText('REAL equity (21-bar samples) — rolling Sharpe needs daily series (M9)',8,s2.H/2);}
+      this.renderHeatmapReal(p.eq_a);
+      // tolerance + verdict + diffs (below) still render
+    } else {
     const n=180, lean=CH.equity(n,p.seed,0.00085,0.0075);
     let naut;
     if(p.div){ // diverging port: same path early, drift apart
@@ -1511,6 +1538,7 @@ const UI = {
     CH.hist('histChart',lean.rets);
     // heatmap
     this.renderHeatmap(lean.rets, k==='momo'?2023:2022);
+    }
     // tolerance
     document.getElementById('tolTbl').innerHTML='<thead><tr><th>Metric</th><th>Observed</th><th>Tolerance</th><th>Result</th></tr></thead>'+
       p.tol.map(t=>`<tr><td class="s">${t.m}</td><td>${t.v}</td><td>${t.lim}</td><td class="s"><span class="tag ${t.ok?'ok':'fail'}">${t.ok?'PASS':'FAIL'}</span></td></tr>`).join('');
@@ -1522,6 +1550,24 @@ const UI = {
       p.diffs.map(d=>`<tr><td>${d.t}</td><td>${d.sym}</td><td class="s">${d.lean}</td><td class="s">${d.naut}</td><td class="s ${d.d.startsWith('⚠')?'warn':'mut'}">${d.d}</td></tr>`).join('');
     document.getElementById('diffNote').textContent=p.diffNote;
   },
+  renderHeatmapReal(eqMonthly){
+    // one cell per 21-bar sample (≈month) from the REAL backtest equity
+    const rets=[];for(let i=1;i<eqMonthly.length;i++)rets.push((eqMonthly[i]/eqMonthly[i-1]-1)*100);
+    const months=['1','2','3','4','5','6','7','8','9','10','11','12'];
+    let html='<div class="hl">yr</div>'+months.map(m=>`<div class="hc hh">${m}</div>`).join('');
+    for(let y=0;y<Math.ceil(rets.length/12);y++){
+      html+=`<div class="hl">Y${y+1}</div>`;
+      for(let m2=0;m2<12;m2++){
+        const r=rets[y*12+m2];
+        if(r===undefined){html+='<div class="hc" style="background:var(--bg)"></div>';continue;}
+        const a2=Math.min(Math.abs(r)/5,1);
+        const bg=r>=0?`rgba(47,191,113,${0.15+a2*0.55})`:`rgba(229,72,77,${0.15+a2*0.55})`;
+        html+=`<div class="hc" style="background:${bg}">${r.toFixed(1)}</div>`;
+      }
+    }
+    document.getElementById('heatmap').innerHTML=html;
+    const h2=document.querySelector('#s-parity .card .hm');
+    },
   renderHeatmap(rets, startYear){
     const months=['J','F','M','A','M','J','J','A','S','O','N','D'];
     const perMonth=Math.floor(rets.length/36)||1;
@@ -1915,6 +1961,46 @@ const UI = {
     if(QD.on)QD.post('/api/alerts',alertDoc);
     API.alerts.unshift({...alertDoc, on:true});
     this.closeModal(); this.renderSafe(); this.toast('Alert created (stub — evaluated server-side, Blueprint M14)','ok');
+  },
+
+  /* ---- data & artifacts (real inventory) ---- */
+  async renderData(){
+    if(!QD.on){document.getElementById('dataProv').textContent='backend offline';return;}
+    try{
+      const d=await(await fetch('/api/data/inventory')).json();
+      document.getElementById('dataProv').textContent='provenance: '+d.provenance;
+      document.getElementById('dataBars').innerHTML=d.bars.map(b=>{
+        const fresh=b.stale_days==null?'—':b.stale_days<=4?`<span class="tag ok">fresh (${b.stale_days}d)</span>`
+          :b.stale_days<=14?`<span class="tag warn">${b.stale_days}d old</span>`
+          :`<span class="tag fail">STALE ${b.stale_days}d — refresh!</span>`;
+        return `<tr><td>${b.sym}</td><td>${b.rows}</td><td>${b.first}</td><td>${b.last}</td><td class="s">${fresh}</td><td>${b.kb} KB</td></tr>`;
+      }).join('')||'<tr><td colspan="6" class="s mut">no bar data — hit Refresh</td></tr>';
+      document.getElementById('dataL2').innerHTML=d.l2.map(f=>
+        `<tr><td class="s">${f.file}</td><td>${f.snapshots}</td><td>${f.age_hours}h</td><td>${f.mb} MB</td></tr>`)
+        .join('')||'<tr><td colspan="4" class="s mut">no recordings yet — hit Record</td></tr>';
+      const c=d.coverage;
+      document.getElementById('dataCoverage').innerHTML=
+        `<div class="verdict ${c.ok?'pass':'fail'}" style="margin-top:0">${c.strategy}: ${c.ok?'✓ COVERED':'⛔ INSUFFICIENT DATA'} — have ${c.bars_available} bars, need ${c.bars_needed}</div>
+         <p class="mut" style="margin-top:8px">${c.note}</p>`;
+      const btn=document.getElementById('btnRefresh');
+      if(d.refreshing){btn.disabled=true;btn.textContent='⟳ refreshing… (watch the feed)';}
+      else{btn.disabled=false;btn.textContent='⟳ Refresh from Yahoo (free, ~20s)';}
+    }catch(e){document.getElementById('dataProv').textContent='inventory fetch failed';}
+  },
+  async dataRefresh(){
+    const r=await QD.post('/api/data/refresh'); if(!r||r.err)return;
+    this.toast('Data refresh started — table updates when done (watch the dashboard feed)','ok');
+    setTimeout(()=>this.renderData(),25000); this.renderData();
+  },
+  async dataRecord(){
+    const product=document.getElementById('recProduct').value;
+    const r=await QD.post('/api/data/record',{product,seconds:60}); if(!r||r.err)return;
+    this.toast(`Recording ${product} order book for 60s — appears below when done`,'ok');
+    setTimeout(()=>this.renderData(),65000);
+  },
+  async riskReset(){
+    const r=await QD.post('/api/risk/reset'); if(!r||r.err)return;
+    QD.updState(); this.toast('Breakers re-armed — order submission enabled','ok');
   },
 
   /* ---- strategy lab ---- */
