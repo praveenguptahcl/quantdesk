@@ -1,0 +1,10 @@
+.env
+.env.live
+lean.json
+data/catalog/*
+logs_and_artifacts/*
+backups/*
+__pycache__/
+*.pyc
+.venv/
+*.db

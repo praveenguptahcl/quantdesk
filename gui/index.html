@@ -1,0 +1,1903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuantDesk — Control Plane</title>
+<style>
+:root{
+  --bg:#0b0e14; --bg2:#11151f; --panel:#161b27; --panel2:#1c2333; --border:#252d40;
+  --text:#e6eaf2; --muted:#8b93a7; --dim:#5c6478;
+  --green:#2fbf71; --green-dim:#1a4d33; --red:#e5484d; --red-dim:#4d1f21;
+  --amber:#f5a623; --amber-dim:#4d3a12; --blue:#4c8dff; --blue-dim:#1b3260;
+  --purple:#9d7bff; --cyan:#39c5cf;
+  --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;overflow:hidden}
+#app{display:grid;grid-template-columns:216px 1fr;grid-template-rows:44px 40px 1fr;height:100vh}
+
+/* ===== Symbol bar (global filter) ===== */
+#symbar{grid-column:1/3;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto}
+#symbar .sl{font-size:10.5px;letter-spacing:1px;color:var(--dim);text-transform:uppercase;margin-right:4px;flex:none}
+.symchip{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12px;font-weight:600;padding:5px 12px;border:1px solid var(--border);border-radius:16px;background:var(--panel);color:var(--muted);cursor:pointer;flex:none;transition:.12s}
+.symchip:hover{border-color:var(--blue)}
+.symchip.sel{border-color:var(--blue);background:var(--blue-dim);color:var(--text)}
+.symchip .sp{width:7px;height:7px;border-radius:50%;flex:none}
+.symchip .sp.full{background:var(--green)} .symchip .sp.part{background:var(--amber)} .symchip .sp.dl{background:var(--blue);animation:pulse 1s infinite}
+.symchip .rm{color:var(--dim);font-size:10px;margin-left:2px}
+.symchip .rm:hover{color:var(--red)}
+.symchip.add{border-style:dashed;color:var(--blue)}
+#symScope{margin-left:auto;flex:none;font-size:11.5px;color:var(--muted)}
+
+/* ===== Microstructure ===== */
+.ladder{font-family:var(--mono);font-size:11.5px;width:100%}
+.ladder .lrow{display:grid;grid-template-columns:70px 1fr 84px 1fr 70px;gap:6px;align-items:center;padding:2px 0}
+.ladder .sz{color:var(--muted);text-align:right}
+.ladder .szr{text-align:left}
+.ladder .pxc{text-align:center;color:var(--text)}
+.ladder .bar{height:13px;border-radius:2px}
+.ladder .bb{background:rgba(47,191,113,.35);margin-left:auto}
+.ladder .ba{background:rgba(229,72,77,.35)}
+.ladder .mid{text-align:center;color:var(--amber);font-weight:700;padding:5px 0;border-top:1px dashed var(--border);border-bottom:1px dashed var(--border);margin:3px 0}
+.tape{font-family:var(--mono);font-size:11.5px;max-height:330px;overflow-y:auto;line-height:1.85}
+.tape .b{color:var(--green)} .tape .a{color:var(--red)} .tape .t{color:var(--dim)}
+
+/* ===== AI builder ===== */
+.provider{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.spec-json{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:11.5px;line-height:1.7;white-space:pre-wrap;max-height:420px;overflow-y:auto;color:#a8c7fa}
+.spec-json .k2{color:var(--cyan)}
+.warnrow{font-size:12px;color:var(--amber);padding:4px 0}
+
+/* ===== HFT library ===== */
+.libgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.lib{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:.12s}
+.lib:hover{border-color:var(--blue)}
+.lib .ln{font-weight:700;font-size:13px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.lib .le{font-size:12px;color:var(--muted);margin:7px 0;line-height:1.5}
+.lib .lm{display:flex;gap:6px;flex-wrap:wrap}
+.lib .spec{display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px}
+.lib.open .spec{display:block}
+.lib .spec .kv{grid-template-columns:92px 1fr;margin:8px 0;font-size:12px}
+.tag.colo{background:#3d1530;color:#ff7ac2} .tag.lowlat{background:var(--amber-dim);color:var(--amber)} .tag.retail{background:var(--green-dim);color:var(--green)}
+.tag.mm{background:var(--blue-dim);color:var(--blue)} .tag.flow{background:#3a2a55;color:var(--purple)} .tag.arb{background:#123f42;color:var(--cyan)}
+.tag.event{background:var(--amber-dim);color:var(--amber)} .tag.liq{background:#2a3040;color:var(--muted)} .tag.scalp{background:var(--green-dim);color:var(--green)}
+
+/* ===== Global mode banner ===== */
+#modebar{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:0 18px;background:linear-gradient(90deg,var(--blue-dim),var(--bg2));border-bottom:1px solid var(--border)}
+#modebar.live{background:linear-gradient(90deg,var(--red-dim),var(--bg2))}
+.mode-pill{font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:2px;padding:4px 14px;border-radius:4px;background:var(--blue);color:#fff}
+#modebar.live .mode-pill{background:var(--red);animation:pulse 1.5s infinite}
+@keyframes pulse{50%{opacity:.6}}
+.mode-desc{color:var(--muted);font-size:12.5px}
+#clock{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+#killswitch{background:var(--red);color:#fff;border:none;font-weight:700;font-size:12px;letter-spacing:1px;padding:7px 16px;border-radius:5px;cursor:pointer;transition:.15s}
+#killswitch:hover{background:#ff5b60;box-shadow:0 0 14px rgba(229,72,77,.5)}
+
+/* ===== Sidebar ===== */
+#sidebar{background:var(--bg2);border-right:1px solid var(--border);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.brand{font-weight:800;font-size:15px;padding:4px 10px 16px;letter-spacing:.4px}
+.brand span{color:var(--blue)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:7px;color:var(--muted);cursor:pointer;font-size:13.5px;font-weight:500;border:none;background:none;text-align:left;width:100%}
+.nav-item:hover{background:var(--panel);color:var(--text)}
+.nav-item.active{background:var(--panel2);color:var(--text)}
+.nav-item .ic{width:17px;text-align:center;font-size:14px}
+.nav-sec{font-size:10.5px;letter-spacing:1.4px;color:var(--dim);padding:16px 12px 6px;text-transform:uppercase}
+#sidebar .foot{margin-top:auto;padding:10px 12px;font-size:11px;color:var(--dim);line-height:1.6}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
+.dot.g{background:var(--green)} .dot.r{background:var(--red)} .dot.a{background:var(--amber)}
+
+/* ===== Main ===== */
+#main{overflow-y:auto;padding:22px 26px 60px}
+.screen{display:none;max-width:1280px;margin:0 auto}
+.screen.active{display:block}
+h1{font-size:19px;font-weight:700;margin-bottom:4px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+h2{font-size:13px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}
+
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g2{grid-template-columns:repeat(2,1fr)}
+.g32{grid-template-columns:3fr 2fr}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+.kpi .lbl{font-size:11.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+.kpi .val{font-family:var(--mono);font-size:23px;font-weight:700;margin-top:6px}
+.kpi .delta{font-family:var(--mono);font-size:12px;margin-top:3px}
+.up{color:var(--green)} .down{color:var(--red)} .warn{color:var(--amber)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+td{padding:9px 10px;border-bottom:1px solid #1c2231;font-family:var(--mono);font-size:12.5px}
+td.s{font-family:var(--sans);font-size:13px}
+tr:last-child td{border-bottom:none}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.6px;padding:3px 9px;border-radius:20px;text-transform:uppercase}
+.tag.paper{background:var(--blue-dim);color:var(--blue)} .tag.live{background:var(--red-dim);color:var(--red)}
+.tag.ok{background:var(--green-dim);color:var(--green)} .tag.warn{background:var(--amber-dim);color:var(--amber)}
+.tag.off{background:#2a3040;color:var(--muted)} .tag.fail{background:var(--red-dim);color:var(--red)}
+.tag.eq{background:var(--blue-dim);color:var(--blue)} .tag.fut{background:#3a2a55;color:var(--purple)} .tag.cry{background:#123f42;color:var(--cyan)} .tag.opt{background:var(--amber-dim);color:var(--amber)}
+
+canvas{width:100%;display:block}
+.feed{max-height:260px;overflow-y:auto;font-family:var(--mono);font-size:12px;line-height:1.9}
+.feed .t{color:var(--dim)} .feed .lv-info{color:var(--blue)} .feed .lv-fill{color:var(--green)} .feed .lv-warn{color:var(--amber)} .feed .lv-err{color:var(--red)}
+
+/* Pipeline */
+.pipe{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px}
+.pipe-col{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px;min-height:170px}
+.pipe-col h3{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:2px 4px 10px;display:flex;justify-content:space-between}
+.pipe-col.gatecol{border-color:#3a3050}
+.idea{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer;transition:.12s}
+.idea:hover{border-color:var(--blue);transform:translateY(-1px)}
+.idea.ac-fut{border-left-color:var(--purple)} .idea.ac-cry{border-left-color:var(--cyan)} .idea.ac-opt{border-left-color:var(--amber)}
+.idea .nm{font-weight:600;font-size:12.5px;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center}
+.idea .mt{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;margin-top:4px}
+.idea canvas{height:26px;margin-top:6px;opacity:.9}
+.gate{font-size:10px;margin-top:6px;color:var(--dim)}
+.gate.pass{color:var(--green)} .gate.block{color:var(--amber)}
+
+/* Detail drawer */
+#drawer{position:fixed;top:44px;right:-520px;width:500px;bottom:0;background:var(--bg2);border-left:1px solid var(--border);padding:22px;overflow-y:auto;transition:right .25s;z-index:40}
+#drawer.open{right:0}
+#drawer h3{font-size:16px;margin-bottom:2px}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:12.5px;margin:14px 0}
+.kv .k{color:var(--muted)} .kv .v{font-family:var(--mono)}
+.close-x{float:right;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
+.statrow{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:12px}
+.statrow .sl{width:110px;color:var(--muted)} .statrow .sv{width:52px;font-family:var(--mono);text-align:right}
+.statbar{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+.statbar i{display:block;height:100%;border-radius:3px}
+.cp{display:flex;gap:8px;align-items:center;font-size:12px;padding:6px 0;color:var(--muted)}
+.cp .ck{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;flex:none}
+.cp.done{color:var(--text)} .cp.done .ck{background:var(--green-dim);color:var(--green)}
+.cp.todo .ck{background:var(--panel2);color:var(--dim);border:1px solid var(--border)}
+.cp.blocked{color:var(--amber)} .cp.blocked .ck{background:var(--amber-dim);color:var(--amber)}
+
+/* Buttons / forms */
+.btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:8px 16px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--blue)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+input[type=text],input[type=number],textarea,select.inp{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);padding:9px 10px;border-radius:6px;font-size:13px;width:100%}
+textarea{font-family:var(--sans);resize:vertical;min-height:60px}
+input:focus,textarea:focus,select.inp:focus{outline:none;border-color:var(--blue)}
+label.fl{display:block;font-size:11.5px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin:14px 0 6px}
+label.fl:first-child{margin-top:0}
+label.fl b{color:var(--red)}
+.check{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer}
+.check:hover{border-color:var(--blue)}
+.check input{margin-top:3px;accent-color:var(--green)}
+.check .d{font-size:12px;color:var(--muted);margin-top:2px}
+.check.done{border-color:var(--green-dim);background:rgba(47,191,113,.05)}
+
+/* Wizard */
+.steps{display:flex;gap:0;margin:18px 0 22px}
+.step{flex:1;text-align:center;position:relative;color:var(--dim);font-size:12px;font-weight:600}
+.step .n{width:28px;height:28px;border-radius:50%;background:var(--panel2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-family:var(--mono)}
+.step.cur{color:var(--text)} .step.cur .n{background:var(--blue);border-color:var(--blue);color:#fff}
+.step.done{color:var(--green)} .step.done .n{background:var(--green-dim);border-color:var(--green);color:var(--green)}
+.step::after{content:'';position:absolute;top:14px;left:calc(50% + 20px);right:calc(-50% + 20px);height:1px;background:var(--border)}
+.step:last-child::after{display:none}
+
+/* Modal */
+#overlay{position:fixed;inset:0;background:rgba(4,6,10,.75);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px)}
+#overlay.show{display:flex}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:26px;width:430px;max-height:86vh;overflow-y:auto}
+.modal.danger{border-color:var(--red)}
+.modal.wide{width:640px}
+.modal h3{font-size:16px;margin-bottom:10px}
+.modal.danger h3{color:var(--red)}
+.modal p{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px}
+.modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:7px 14px;border:1px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;color:var(--muted)}
+.chip.sel{border-color:var(--blue);background:var(--blue-dim);color:var(--blue);font-weight:600}
+.ferr{color:var(--red);font-size:12px;margin-top:10px;display:none}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel2);border:1px solid var(--border);padding:11px 22px;border-radius:8px;font-size:13px;transition:.25s;z-index:200;max-width:600px}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.ok{border-color:var(--green)} #toast.err{border-color:var(--red)}
+
+.bar-outer{height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin-top:8px}
+.bar-inner{height:100%;border-radius:4px;transition:width .3s}
+.mut{color:var(--muted);font-size:12px}
+.mono{font-family:var(--mono)}
+.flex{display:flex;align-items:center;gap:10px}
+.spread{justify-content:space-between}
+.verdict{font-size:15px;font-weight:700;padding:14px;border-radius:8px;text-align:center;margin-top:14px}
+.verdict.pass{background:var(--green-dim);color:var(--green)} .verdict.fail{background:var(--red-dim);color:var(--red)}
+
+/* Strategy Lab */
+.anat{display:flex;align-items:stretch;margin-bottom:14px;flex-wrap:wrap;gap:18px 0}
+.an{flex:1;min-width:118px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:10px 12px;position:relative;margin-right:20px}
+.an:last-child{margin-right:0}
+.an::after{content:'→';position:absolute;right:-16px;top:50%;transform:translateY(-50%);color:var(--dim)}
+.an:last-child::after{display:none}
+.an .t{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.an .v{font-family:var(--mono);font-size:11.5px;margin-top:5px;line-height:1.5}
+.an.on{border-color:var(--green)} .an.hold{border-color:var(--amber)}
+.sig{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;font-size:12.5px}
+.sig .cond{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+/* param heatmap + walk-forward */
+.pgrid{display:grid;gap:3px;font-family:var(--mono);font-size:10.5px}
+.pc{border-radius:3px;height:30px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.9)}
+.pc.hd{color:var(--dim);background:none}
+.pc.best{outline:2px solid var(--text)}
+.wfrow{display:flex;gap:3px;margin:5px 0;align-items:center;font-family:var(--mono);font-size:10.5px}
+.wfrow .wl{width:60px;color:var(--dim)}
+.wfseg{height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9.5px;color:rgba(255,255,255,.85)}
+/* P&L calendar + safety */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-family:var(--mono);font-size:10.5px}
+.cal .ch{color:var(--dim);text-align:center;padding:2px 0}
+.cal .cd{border-radius:5px;min-height:46px;padding:5px 6px;background:var(--bg2);border:1px solid transparent}
+.cal .cd .dn{color:var(--dim);font-size:9.5px}
+.cal .cd .dv{margin-top:4px;font-weight:600;font-size:10.5px}
+.cal .cd.off{opacity:.28}
+.hb{display:flex;align-items:center;gap:8px;font-size:12px;padding:7px 0;border-bottom:1px solid #1c2231}
+.hb:last-child{border-bottom:none}
+.hb .hn{flex:1}
+.switch{position:relative;width:36px;height:20px;background:var(--panel2);border:1px solid var(--border);border-radius:12px;cursor:pointer;flex:none}
+.switch.on{background:var(--green-dim);border-color:var(--green)}
+.switch i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:.15s}
+.switch.on i{left:18px;background:var(--green)}
+.mktclock{font-family:var(--mono);font-size:13px}
+.setupbar{display:flex;align-items:center;gap:12px;margin-bottom:6px;font-size:12.5px}
+.setupbar .sbl{width:210px}
+/* Tearsheet */
+.tear-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+.tk{background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:12px}
+.tk .l{font-size:10.5px;color:var(--dim);letter-spacing:.5px;text-transform:uppercase}
+.tk .a{font-family:var(--mono);font-size:17px;font-weight:700;margin-top:5px}
+.tk .b{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:2px}
+.tk .d{font-family:var(--mono);font-size:10.5px;margin-top:5px;padding:2px 7px;border-radius:10px;display:inline-block}
+.tk .d.ok{background:var(--green-dim);color:var(--green)} .tk .d.bad{background:var(--red-dim);color:var(--red)}
+.hm{display:grid;grid-template-columns:44px repeat(12,1fr);gap:3px;font-family:var(--mono);font-size:10.5px}
+.hm .hl{color:var(--dim);display:flex;align-items:center}
+.hm .hc{border-radius:3px;height:26px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.85);font-size:10px}
+.hm .hh{color:var(--dim);text-align:center;height:auto}
+.legend{display:flex;gap:18px;margin-top:10px;font-size:11.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ MODE BANNER ============ -->
+  <div id="modebar">
+    <span class="mode-pill" id="modePill">PAPER</span>
+    <span class="mode-desc" id="modeDesc">All venues in paper / sandbox mode — no real capital at risk</span>
+    <span id="clock"></span>
+    <button id="killswitch" onclick="UI.killSwitch()">⏻ KILL SWITCH</button>
+  </div>
+
+  <!-- ============ SYMBOL BAR (global filter) ============ -->
+  <div id="symbar">
+    <span class="sl">Scope</span>
+    <div id="symChips" style="display:flex;gap:8px"></div>
+    <button class="symchip add" onclick="UI.addSymbol()">＋ Add symbol</button>
+    <span id="symScope"></span>
+  </div>
+
+  <!-- ============ SIDEBAR ============ -->
+  <nav id="sidebar">
+    <div class="brand">Quant<span>Desk</span></div>
+    <div class="nav-sec">Research</div>
+    <button class="nav-item" data-s="research"><span class="ic">✦</span>Research Journal</button>
+    <button class="nav-item" data-s="ai"><span class="ic">✧</span>AI Strategy Builder</button>
+    <button class="nav-item" data-s="lib"><span class="ic">⚡</span>HFT Library</button>
+    <button class="nav-item" data-s="lab"><span class="ic">⚗</span>Strategy Lab</button>
+    <button class="nav-item" data-s="data"><span class="ic">◫</span>Data &amp; Artifacts</button>
+    <div class="nav-sec">Validation</div>
+    <button class="nav-item" data-s="parity"><span class="ic">⇄</span>Backtest &amp; Parity</button>
+    <button class="nav-item" data-s="opt"><span class="ic">◬</span>Optimize &amp; WF</button>
+    <div class="nav-sec">Operations</div>
+    <button class="nav-item active" data-s="dash"><span class="ic">◧</span>Ops Dashboard</button>
+    <button class="nav-item" data-s="micro"><span class="ic">≣</span>Microstructure</button>
+    <button class="nav-item" data-s="orders"><span class="ic">⇅</span>Orders &amp; Fills</button>
+    <button class="nav-item" data-s="desk"><span class="ic">▤</span>P&amp;L &amp; Journal</button>
+    <button class="nav-item" data-s="safe"><span class="ic">⛉</span>Accounts &amp; Safety</button>
+    <button class="nav-item" data-s="risk"><span class="ic">⛨</span>Risk Controls</button>
+    <button class="nav-item" data-s="golive"><span class="ic">▶</span>Go-Live Wizard</button>
+    <div class="nav-sec">Venues</div>
+    <div id="venueList" style="padding:0 12px;font-size:12px;line-height:2;color:var(--muted)"></div>
+    <div class="foot">LEAN CLI · NautilusTrader<br>Docker stack: <span class="dot g"></span>6/6 up<br><span class="mono" style="font-size:10px">v0.2 · mock data mode</span></div>
+  </nav>
+
+  <!-- ============ MAIN ============ -->
+  <main id="main">
+
+    <!-- ======== DASHBOARD ======== -->
+    <section class="screen active" id="s-dash">
+      <h1>Ops Dashboard</h1>
+      <div class="sub">Paper-trading session · all times ET</div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="lbl">Equity (paper)</div><div class="val">$104,382.19</div><div class="delta up">▲ +$1,204.55 today (+1.17%)</div></div>
+        <div class="card kpi"><div class="lbl">Total P&amp;L (30d paper)</div><div class="val up">+$4,382.19</div><div class="delta mut">vs backtest expectation +$4,910</div></div>
+        <div class="card kpi"><div class="lbl">Max Drawdown</div><div class="val">−3.42%</div><div class="delta mut">limit −8.00% · <span class="up">headroom OK</span></div></div>
+        <div class="card kpi"><div class="lbl">Open Risk</div><div class="val">$18,240</div><div class="delta mut">gross exposure 17.5% of equity</div></div>
+      </div>
+
+      <h2>Equity Curve — paper vs backtest expectation</h2>
+      <div class="card"><canvas id="eqChart" height="190"></canvas>
+        <div class="legend"><span><span class="dot g"></span>Paper equity</span><span><span class="dot" style="background:var(--blue)"></span>Backtest expectation</span></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">Open Positions</h2>
+          <table><thead><tr><th>Symbol</th><th>Venue</th><th>Qty</th><th>Avg Px</th><th>Unrl P&amp;L</th><th>Strategy</th></tr></thead>
+          <tbody id="posRows"></tbody></table>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Strategies</h2>
+          <table><thead><tr><th>Strategy</th><th>Stage</th><th>Sharpe (paper)</th><th>State</th></tr></thead>
+          <tbody id="stratRows"></tbody></table>
+          <h2>Activity Feed</h2>
+          <div class="feed" id="feed"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== RESEARCH JOURNAL ======== -->
+    <section class="screen" id="s-research">
+      <div class="flex spread"><div><h1>Research Journal</h1>
+      <div class="sub">Alpha pipeline — ideas advance only when the stage checkpoint passes. Click a card for the full record.</div></div>
+      <button class="btn primary" onclick="UI.newIdea()">＋ New Alpha Idea</button></div>
+      <div class="pipe" id="pipeline"></div>
+      <h2>Journal Entries</h2>
+      <div class="card">
+        <table><thead><tr><th>Idea</th><th>Class</th><th>Hypothesis</th><th>IS Sharpe</th><th>Exp. Turnover</th><th>Kill Criterion</th><th>Stage</th></tr></thead>
+        <tbody id="journalRows"></tbody></table>
+      </div>
+    </section>
+
+    <!-- ======== BACKTEST & PARITY ======== -->
+    <section class="screen" id="s-parity">
+      <h1>Backtest &amp; Parity Gate</h1>
+      <div class="sub">Full tearsheet per strategy, then LEAN vs NautilusTrader reconciliation — the hard gate before paper trading.</div>
+      <div class="flex" style="margin-bottom:16px;flex-wrap:wrap">
+        <span class="mut">Strategy:</span>
+        <select id="paritySel" class="inp" style="width:auto" onchange="UI.renderParity()">
+          <option value="momo">momo-etf-v3 · 2023-01 → 2025-12</option>
+          <option value="pairs">pairs-stat-v1 · 2022-06 → 2025-12</option>
+        </select>
+        <button class="btn" onclick="UI.toast('Re-running LEAN backtest… (stub — wire to lean backtest)','ok')">↻ LEAN leg</button>
+        <button class="btn" onclick="UI.toast('Re-running Nautilus backtest… (stub — wire to BacktestNode)','ok')">↻ Nautilus leg</button>
+        <span style="flex:1"></span>
+        <span id="parityBadge"></span>
+      </div>
+
+      <div class="tear-kpis" id="tearKpis"></div>
+
+      <div class="grid g32">
+        <div class="card">
+          <h2 style="margin-top:0">Equity — LEAN vs Nautilus (log scale)</h2>
+          <canvas id="parityChart" height="200"></canvas>
+          <div class="legend"><span><span class="dot" style="background:var(--blue)"></span>LEAN · QCAlgorithm</span><span><span class="dot" style="background:var(--cyan)"></span>Nautilus · Strategy</span></div>
+          <h2>Drawdown</h2>
+          <canvas id="ddChart" height="90"></canvas>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Rolling 6-month Sharpe (LEAN)</h2>
+          <canvas id="rollChart" height="120"></canvas>
+          <h2>Return Distribution — daily (LEAN)</h2>
+          <canvas id="histChart" height="120"></canvas>
+        </div>
+      </div>
+
+      <h2>Monthly Returns — LEAN (%)</h2>
+      <div class="card"><div class="hm" id="heatmap"></div></div>
+
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">Tolerance Check</h2>
+          <table id="tolTbl"></table>
+          <div id="parityVerdict"></div>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Trade-Level Diff (first divergences)</h2>
+          <table id="diffTbl"></table>
+          <p class="mut" id="diffNote" style="margin-top:10px"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== MICROSTRUCTURE (HFT) ======== -->
+    <section class="screen" id="s-micro">
+      <div class="flex spread"><div><h1>Microstructure <span id="microSym" class="mono" style="color:var(--blue)"></span></h1>
+      <div class="sub">L2 order book, tape, and HFT signals for the selected symbol. Requires the L2/tick tier of the data spine.</div></div>
+      <span class="mut" id="microFeedInfo"></span></div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="lbl">Spread</div><div class="val" id="mSpread">—</div><div class="delta mut" id="mSpreadBps"></div></div>
+        <div class="card kpi"><div class="lbl">Msg rate</div><div class="val" id="mMsg">—</div><div class="delta mut">book updates /s</div></div>
+        <div class="card kpi"><div class="lbl">Tick-to-trade p50</div><div class="val" id="mLat">—</div><div class="delta mut" id="mLatNote"></div></div>
+        <div class="card kpi"><div class="lbl">Adverse selection</div><div class="val warn" id="mAdv">—</div><div class="delta mut">avg markout @ 1s, 30d</div></div>
+      </div>
+      <div class="grid g3" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">Order Book — 10 levels</h2>
+          <div class="ladder" id="bookLadder"></div>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Order Flow Imbalance (rolling 1s)</h2>
+          <canvas id="ofiChart" height="110"></canvas>
+          <p class="mut" style="margin:6px 0 0">OFI &gt; 0 = net buy pressure at the touch. Signal for strategies #6–#8 in the HFT Library.</p>
+          <h2>Microprice − Mid (bps)</h2>
+          <canvas id="mpChart" height="110"></canvas>
+          <p class="mut" style="margin:6px 0 0">Depth-weighted microprice leads mid by ~100–400ms in liquid names.</p>
+          <h2>Tick-to-Trade Latency (µs, in-process)</h2>
+          <canvas id="latChart" height="100"></canvas>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Tape</h2>
+          <div class="tape" id="tape"></div>
+          <h2>HFT session stats</h2>
+          <div class="kv">
+            <span class="k">Cancel ratio</span><span class="v" id="mCancel">—</span>
+            <span class="k">Queue pos (est.)</span><span class="v" id="mQueue">—</span>
+            <span class="k">Fill rate (passive)</span><span class="v" id="mFillR">—</span>
+            <span class="k">Maker/taker mix</span><span class="v" id="mMix">—</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== AI STRATEGY BUILDER ======== -->
+    <section class="screen" id="s-ai">
+      <h1>AI Strategy Builder</h1>
+      <div class="sub">Describe a strategy in plain language → get a structured spec the platform consumes (the same schema as STRATEGY_GUIDE.md). Works offline with the built-in parser; connect any LLM for deeper extraction.</div>
+      <div class="grid g32">
+        <div class="card">
+          <h2 style="margin-top:0">Verbal strategy</h2>
+          <textarea id="aiText" style="min-height:150px" placeholder="e.g.  Buy AAPL when order flow imbalance stays above 0.6 for 500ms and the spread is at most 1 tick; exit at +4 bps or -2 bps stop, or after 30 seconds. Size 5% of equity, halve size when 1-min realized vol doubles. Stand aside in the first 5 minutes after open. Kill the strategy if hit rate drops below 52% over a week.">Buy AAPL when order flow imbalance stays above 0.6 for 500ms and the spread is at most 1 tick; exit at +4 bps or -2 bps stop, or after 30 seconds. Size 5% of equity, halve size when 1-min realized vol doubles. Stand aside in the first 5 minutes after open. Kill the strategy if hit rate drops below 52% over a week.</textarea>
+          <div class="flex" style="margin-top:12px">
+            <button class="btn primary" onclick="UI.aiParse()">⚙ Parse to spec</button>
+            <button class="btn" id="aiLogBtn" disabled onclick="UI.aiToJournal()">Log to Journal →</button>
+            <span class="mut" id="aiStatus"></span>
+          </div>
+          <div id="aiWarns" style="margin-top:10px"></div>
+          <h2>LLM connection</h2>
+          <div class="provider" id="aiProv">
+            <span class="chip" data-p="builtin">Built-in parser (offline)</span>
+            <span class="chip" data-p="anthropic">Claude API</span>
+            <span class="chip" data-p="openai">OpenAI</span>
+            <span class="chip" data-p="ollama">Ollama (local)</span>
+            <span class="chip" data-p="lmstudio">LM Studio (local)</span>
+            <span class="chip" data-p="custom">Custom endpoint</span>
+          </div>
+          <div class="f2" id="aiConn" style="display:none">
+            <div><label class="fl">Endpoint</label><input type="text" id="aiEp" placeholder="http://localhost:11434/v1"></div>
+            <div><label class="fl">Model</label><input type="text" id="aiModel" placeholder="llama3.1:70b / claude-sonnet-5 / gpt-…"></div>
+            <div style="grid-column:1/3"><label class="fl">API key (kept in memory only — never persisted or logged)</label><input type="text" id="aiKey" placeholder="sk-… (blank for local endpoints)"></div>
+          </div>
+          <p class="mut" style="margin-top:10px">Multiple providers can be configured; the backend routes to the selected one (see Blueprint M12). The LLM returns the same JSON schema as the built-in parser — the platform consumes specs, not prose, so any model works.</p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Structured spec <span class="mut" style="text-transform:none">(platform schema v1)</span></h2>
+          <div class="spec-json" id="aiSpec">— parse a strategy to see its spec —</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== HFT LIBRARY ======== -->
+    <section class="screen" id="s-lib">
+      <div class="flex spread"><div><h1>HFT Strategy Library</h1>
+      <div class="sub">30 documented HFT/low-latency archetypes with full specs (details in HFT_STRATEGY_LIBRARY.md). Filtered by the symbol scope above. Infra tier is honest: <span class="tag colo">COLO</span> needs colocation/direct feeds, <span class="tag lowlat">LOW-LAT</span> works from a good VPS, <span class="tag retail">RETAIL</span> works on this stack today.</div></div></div>
+      <div class="flex" style="margin-bottom:14px;flex-wrap:wrap" id="libFilters"></div>
+      <div class="libgrid" id="libGrid"></div>
+    </section>
+
+    <!-- ======== STRATEGY LAB ======== -->
+    <section class="screen" id="s-lab">
+      <div class="flex spread"><div><h1>Strategy Lab</h1>
+      <div class="sub">The anatomy of a strategy — every stage of the decision chain, live. This is what the code in STRATEGY_GUIDE.md produces.</div></div>
+      <select id="labSel" class="inp" style="width:auto" onchange="UI.renderLab()">
+        <option value="11">momo-etf-v3</option><option value="22">fut-carry-v1</option><option value="33">crypto-mr-v2</option>
+      </select></div>
+
+      <div class="anat" id="labAnat"></div>
+
+      <div class="card">
+        <h2 style="margin-top:0">Price · Regime · Triggers <span class="mut" style="text-transform:none;letter-spacing:0">— green shading = regime risk-on (SPY &gt; SMA200) · ▲ entry ▼ exit</span></h2>
+        <canvas id="labChart" height="230"></canvas>
+        <div class="legend"><span><span class="dot" style="background:var(--text)"></span>Price</span>
+        <span><span class="dot" style="background:var(--amber)"></span>SMA200 (regime line)</span>
+        <span><span class="dot g"></span>▲ entry trigger</span><span><span class="dot r"></span>▼ exit trigger</span></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">System Confidence (0–1)</h2>
+          <canvas id="labConf" height="120"></canvas>
+          <p class="mut" style="margin-top:8px">confidence = sigmoid(momentum z-score) × regime. Entry requires ≥ 0.50; exit below 0.25 (hysteresis prevents whipsaw).</p>
+          <h2>Target Position Size (% of equity)</h2>
+          <canvas id="labSize" height="120"></canvas>
+          <p class="mut" style="margin-top:8px">weight = confidence × min(σ<sub>target</sub> / σ<sub>realized,20d</sub>, 1.5), capped by risk layer. Size shrinks automatically when volatility rises.</p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Trigger Conditions — current bar</h2>
+          <div id="labSigs"></div>
+          <h2>Decision — current bar</h2>
+          <div id="labDecision"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== DATA & ARTIFACTS ======== -->
+    <section class="screen" id="s-data">
+      <h1>Data &amp; Artifacts</h1>
+      <div class="sub">What each engine sees — LEAN's hosted library, Nautilus's ParquetDataCatalog, and the Object Store artifacts shared between them.</div>
+      <div class="grid g2">
+        <div class="card">
+          <h2 style="margin-top:0">LEAN Data Library (subscribed)</h2>
+          <table><thead><tr><th>Dataset</th><th>Resolution</th><th>Range</th><th>Used by</th></tr></thead><tbody>
+            <tr><td class="s">US Equities (9 SPDR + SPY)</td><td>Daily</td><td>1998 → live</td><td class="s">momo-etf-v3</td></tr>
+            <tr><td class="s">US Equities (mega-cap tech)</td><td>Minute</td><td>2010 → live</td><td class="s">pairs-stat-v1</td></tr>
+            <tr><td class="s">CME Futures (MES, MNQ)</td><td>Minute</td><td>2019 → live</td><td class="s">fut-carry-v1</td></tr>
+            <tr><td class="s">Crypto (Binance spot)</td><td>Hour</td><td>2019 → live</td><td class="s">crypto-mr-v2</td></tr>
+            <tr><td class="s">SPX Index Options</td><td>Minute</td><td>2012 → live</td><td class="s">vol-premium-v1</td></tr>
+          </tbody></table>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Nautilus ParquetDataCatalog</h2>
+          <table><thead><tr><th>Bar type</th><th>Rows</th><th>Size</th><th>Window</th><th>Parity</th></tr></thead><tbody>
+            <tr><td>SPY.XNAS-1D</td><td>754</td><td>0.4 MB</td><td>2023-01→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
+            <tr><td>XL*.XNAS-1D ×9</td><td>6,786</td><td>3.2 MB</td><td>2023-01→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
+            <tr><td>MSFT/GOOG… -1M ×16</td><td>5.9M</td><td>612 MB</td><td>2022-06→2025-12</td><td class="s"><span class="tag warn">re-export</span></td></tr>
+            <tr><td>MES.XCME-1M</td><td>1.4M</td><td>96 MB</td><td>2022-01→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
+            <tr><td>BTCUSDT.BINANCE-1H</td><td>61k</td><td>4.1 MB</td><td>2019-09→2025-12</td><td class="s"><span class="tag ok">synced</span></td></tr>
+          </tbody></table>
+          <p class="mut" style="margin-top:8px">⚠ Parity requires the identical window in both engines — “re-export” means LEAN data changed since the last catalog import.</p>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">Object Store — shared model artifacts</h2>
+          <table><thead><tr><th>Key</th><th>Type</th><th>SHA</th><th>Loaded by</th></tr></thead><tbody>
+            <tr><td>momo-etf-v3/model.pkl</td><td class="s">ranker weights</td><td>a41f…9c</td><td class="s">LEAN algo + NT strategy</td></tr>
+            <tr><td>momo-etf-v3/features.json</td><td class="s">feature list</td><td>7bd2…11</td><td class="s">LEAN algo + NT strategy</td></tr>
+            <tr><td>crypto-mr-v2/scaler.pkl</td><td class="s">z-score scaler</td><td>03ce…8a</td><td class="s">LEAN algo + NT strategy</td></tr>
+            <tr><td>pairs-stat-v1/coint_pairs.json</td><td class="s">pair universe</td><td>f19a…42</td><td class="s">LEAN algo only ⚠</td></tr>
+          </tbody></table>
+          <p class="mut" style="margin-top:8px">⚠ pairs-stat-v1's Nautilus port loads a locally-copied pair list — hash mismatch is a parity-failure suspect. Both engines must load the same artifact.</p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Warm-up / History Requirements</h2>
+          <table><thead><tr><th>Strategy</th><th>Longest lookback</th><th>Warm-up set</th><th>Status</th></tr></thead><tbody>
+            <tr><td class="s">momo-etf-v3</td><td>252d (12-1 mom) + 200d SMA</td><td>380 cal. days</td><td class="s"><span class="tag ok">correct</span></td></tr>
+            <tr><td class="s">fut-carry-v1</td><td>60d spread window</td><td>90 cal. days</td><td class="s"><span class="tag ok">correct</span></td></tr>
+            <tr><td class="s">crypto-mr-v2</td><td>30d funding z</td><td>45 days</td><td class="s"><span class="tag ok">correct</span></td></tr>
+            <tr><td class="s">pairs-stat-v1</td><td>90d coint window</td><td>NT: 60d ⚠ LEAN: 90d</td><td class="s"><span class="tag fail">mismatch</span></td></tr>
+          </tbody></table>
+          <p class="mut" style="margin-top:8px">Warm-up must cover the <b>longest</b> indicator lookback in <b>both</b> engines. The pairs-stat-v1 mismatch is exactly what the parity screen's trade-diff table diagnosed.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== OPTIMIZE & WALK-FORWARD ======== -->
+    <section class="screen" id="s-opt">
+      <h1>Optimize &amp; Walk-Forward</h1>
+      <div class="sub">Parameter sweeps via <span class="mono">lean optimize</span>; robustness via walk-forward. A jagged heatmap = fragile parameters. A smooth plateau = robust region — pick the plateau's center, never the single best cell.</div>
+      <div class="grid g32">
+        <div class="card">
+          <h2 style="margin-top:0">Sharpe by parameter — momo-etf-v3 <span class="mut" style="text-transform:none">(momentum lookback × vol target)</span></h2>
+          <div class="pgrid" id="optGrid"></div>
+          <p class="mut" style="margin-top:10px" id="optNote"></p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Overfitting Guards</h2>
+          <div class="cp done"><span class="ck">✓</span>Parameter count ≤ 3 (currently 2)</div>
+          <div class="cp done"><span class="ck">✓</span>Chosen params on plateau, not peak</div>
+          <div class="cp done"><span class="ck">✓</span>OOS window never touched during tuning</div>
+          <div class="cp done"><span class="ck">✓</span>Backtest window frozen after selection</div>
+          <div class="cp blocked"><span class="ck">!</span>Deflated Sharpe ratio &gt; 0 — pending (run after WF)</div>
+          <p class="mut" style="margin-top:10px">Run: <span class="mono">lean optimize "momo-etf-v3" --strategy "Grid Search" --target "Sharpe Ratio"</span></p>
+        </div>
+      </div>
+      <h2>Walk-Forward Windows — anchored, 12m in-sample / 6m out-of-sample</h2>
+      <div class="card">
+        <div id="wfRows"></div>
+        <div class="legend" style="margin-top:12px"><span><span class="dot" style="background:var(--blue)"></span>In-sample (fit)</span><span><span class="dot g"></span>OOS pass (Sharpe ≥ 0.7)</span><span><span class="dot r"></span>OOS fail</span></div>
+        <div class="verdict pass" style="margin-top:14px">✓ WALK-FORWARD: 5 of 6 OOS windows pass · mean OOS Sharpe 1.21 · Phase 3 checkpoint satisfied</div>
+      </div>
+    </section>
+
+    <!-- ======== ORDERS & FILLS ======== -->
+    <section class="screen" id="s-orders">
+      <h1>Orders &amp; Fills</h1>
+      <div class="sub">Full order lifecycle across venues — submitted → accepted → filled/canceled/rejected — plus execution quality vs backtest assumptions.</div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="lbl">Working orders</div><div class="val">3</div><div class="delta mut">2 limit · 1 stop</div></div>
+        <div class="card kpi"><div class="lbl">Fills today</div><div class="val">14</div><div class="delta mut">$92,410 notional</div></div>
+        <div class="card kpi"><div class="lbl">Avg slippage (30d)</div><div class="val warn">+1.8 bp</div><div class="delta mut">backtest assumed +1.5 bp</div></div>
+        <div class="card kpi"><div class="lbl">Reject rate (30d)</div><div class="val">0.5%</div><div class="delta mut">7 of 1,284 — all pre-route risk</div></div>
+      </div>
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">Working Orders</h2>
+          <table><thead><tr><th>ID</th><th>Symbol</th><th>Side</th><th>Type</th><th>Qty</th><th>Px</th><th>Venue</th><th>State</th><th></th></tr></thead><tbody id="openOrders"></tbody></table>
+          <h2>Execution Quality by Venue (30d)</h2>
+          <table><thead><tr><th>Venue</th><th>Fills</th><th>Slippage</th><th>Latency p50</th><th>vs backtest</th></tr></thead><tbody>
+            <tr><td class="s">IBKR paper</td><td>642</td><td>+1.2 bp</td><td>184 ms</td><td class="s"><span class="tag ok">within model</span></td></tr>
+            <tr><td class="s">Binance testnet</td><td>388</td><td>+2.1 bp</td><td>96 ms</td><td class="s"><span class="tag warn">+0.6 bp over</span></td></tr>
+            <tr><td class="s">Bybit testnet</td><td>201</td><td>+3.4 bp</td><td>142 ms</td><td class="s"><span class="tag warn">+1.4 bp over</span></td></tr>
+            <tr><td class="s">Coinbase sandbox</td><td>53</td><td>+2.8 bp</td><td>210 ms</td><td class="s"><span class="tag ok">within model</span></td></tr>
+          </tbody></table>
+          <p class="mut" style="margin-top:8px">Slippage over model feeds Phase 9: update the backtest fee/slippage assumptions, re-run, and re-check the paper acceptance bar.</p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Order History (today)</h2>
+          <table><thead><tr><th>Time</th><th>Symbol</th><th>Side/Qty</th><th>Fill Px</th><th>Slip</th><th>Status</th></tr></thead><tbody id="orderHist"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== P&L & JOURNAL (trader's desk) ======== -->
+    <section class="screen" id="s-desk">
+      <h1>P&amp;L &amp; Journal</h1>
+      <div class="sub">The individual trader's ledger: daily P&L calendar, trade notes, costs, taxes, and the only benchmark that matters — would SPY buy-and-hold have beaten all of this?</div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="lbl">Net P&amp;L (YTD, after costs)</div><div class="val up" id="dNet">—</div><div class="delta mut" id="dNetNote"></div></div>
+        <div class="card kpi"><div class="lbl">Costs (YTD)</div><div class="val warn" id="dCosts">—</div><div class="delta mut">data + infra + commissions</div></div>
+        <div class="card kpi"><div class="lbl">vs SPY buy &amp; hold</div><div class="val" id="dAlpha">—</div><div class="delta mut">same capital, same period</div></div>
+        <div class="card kpi"><div class="lbl">Realized P&amp;L (taxable, YTD)</div><div class="val" id="dReal">—</div><div class="delta warn" id="dWash"></div></div>
+      </div>
+      <div class="grid g32" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0" id="calTitle">Daily P&amp;L — July 2026</h2>
+          <div class="cal" id="pnlCal"></div>
+          <h2>Equity vs SPY benchmark</h2>
+          <canvas id="benchChart" height="140"></canvas>
+          <div class="legend"><span><span class="dot g"></span>Platform (net of costs)</span><span><span class="dot" style="background:var(--muted)"></span>SPY buy &amp; hold</span></div>
+        </div>
+        <div class="card">
+          <div class="flex spread"><h2 style="margin-top:0">Trade Journal</h2>
+          <button class="btn" onclick="UI.addNote()">＋ Note</button></div>
+          <div id="noteList"></div>
+          <h2>Monthly Costs</h2>
+          <table><tbody id="costRows"></tbody></table>
+          <h2>Exports (for your accountant / your own scripts)</h2>
+          <div class="flex" style="flex-wrap:wrap">
+            <button class="btn" onclick="UI.exportCSV()">⬇ Trades CSV</button>
+            <button class="btn" onclick="UI.exportBackup()">⬇ Full backup (JSON)</button>
+            <button class="btn" onclick="UI.toast('Tax-lot report stub — requires broker statements ingest (Blueprint M14)','ok')">⬇ Tax lots</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== ACCOUNTS & SAFETY ======== -->
+    <section class="screen" id="s-safe">
+      <h1>Accounts &amp; Safety</h1>
+      <div class="sub">Everything that protects you when you're not at the desk — and the money that funds it all.</div>
+
+      <div class="card" style="margin-bottom:14px">
+        <h2 style="margin-top:0">Platform setup progress</h2>
+        <div id="setupList"></div>
+      </div>
+
+      <div class="grid g3">
+        <div class="card">
+          <h2 style="margin-top:0">Accounts</h2>
+          <table><thead><tr><th>Account</th><th>Equity</th><th>Buying pwr</th><th>Margin</th></tr></thead><tbody id="acctRows"></tbody></table>
+          <h2>Market clock</h2>
+          <div class="mktclock" id="mktClock">—</div>
+          <h2>Upcoming events (strategy-gating)</h2>
+          <div id="econRows"></div>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Dead-man's switch</h2>
+          <div class="hb"><span class="hn">Heartbeat monitor (GUI ↔ node)</span><span class="tag ok">alive · 2s ago</span></div>
+          <div class="hb"><span class="hn">Auto-flatten if node unreachable &gt; 5 min</span><div class="switch on" onclick="UI.toggleSwitch(this,'auto-flatten')"><i></i></div></div>
+          <div class="hb"><span class="hn">Broker-side stop orders as backstop</span><div class="switch on" onclick="UI.toggleSwitch(this,'broker stops')"><i></i></div></div>
+          <div class="hb"><span class="hn">Auto-flatten on power/network loss (VPS watchdog)</span><div class="switch" onclick="UI.toggleSwitch(this,'vps watchdog')"><i></i></div></div>
+          <p class="mut" style="margin-top:8px">If this machine dies mid-session, the node must fail safe without you. Test quarterly: pull the network cable in paper mode and watch the flatten happen.</p>
+          <h2>Remote monitoring</h2>
+          <div class="hb"><span class="hn">Telegram bot (status / P&amp;L / FLATTEN command)</span><span class="tag off">not configured</span></div>
+          <div class="hb"><span class="hn">Email alerts</span><span class="tag ok">configured</span></div>
+          <button class="btn" onclick="UI.toast('Telegram setup stub — Blueprint M14: bot token in .env, /status /pnl /flatten commands with typed confirmation','ok')">Configure Telegram</button>
+          <h2>Backups</h2>
+          <div class="hb"><span class="hn">Last automatic backup (Postgres + configs)</span><span class="mono mut">today 03:00</span></div>
+          <div class="flex"><button class="btn" onclick="UI.exportBackup()">Backup now</button>
+          <button class="btn" onclick="UI.toast('Restore stub — select a backup JSON; applies ideas/settings/journal (Blueprint M14)','ok')">Restore…</button></div>
+        </div>
+        <div class="card">
+          <div class="flex spread"><h2 style="margin-top:0">Alerts Center</h2><button class="btn" onclick="UI.addAlert()">＋ Alert</button></div>
+          <div id="alertRows"></div>
+          <h2>Data health</h2>
+          <div class="hb"><span class="hn">Catalog disk usage</span><span class="mono mut">184 / 500 GB</span></div>
+          <div class="bar-outer"><div class="bar-inner" style="width:37%;background:var(--blue)"></div></div>
+          <div class="hb" style="margin-top:8px"><span class="hn">Gap check (last night)</span><span class="tag warn">2 gaps: ETHUSDT-1H</span></div>
+          <div class="hb"><span class="hn">Clock drift (NTP)</span><span class="tag ok">+0.4 ms</span></div>
+          <h2>Disaster runbook</h2>
+          <div class="cp done"><span class="ck">✓</span>Kill switch tested this month</div>
+          <div class="cp done"><span class="ck">✓</span>Broker phone numbers on paper, not just in the app</div>
+          <div class="cp blocked"><span class="ck">!</span>Dead-man auto-flatten drill — due (quarterly)</div>
+          <div class="cp todo"><span class="ck">○</span>Restore-from-backup drill on a clean machine</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======== RISK ======== -->
+    <section class="screen" id="s-risk">
+      <h1>Risk Controls</h1>
+      <div class="sub">Limits are enforced in the pre-route order-validation layer — independent of strategy logic.</div>
+      <div class="grid g3">
+        <div class="card"><h2 style="margin-top:0">Circuit Breakers</h2>
+          <div class="kv">
+            <span class="k">Daily loss limit</span><span class="v">−$2,000 <span class="tag ok">Armed</span></span>
+            <span class="k">Today's P&amp;L</span><span class="v up">+$1,204.55</span>
+            <span class="k">Max-DD auto-halt</span><span class="v">−8.0% <span class="tag ok">Armed</span></span>
+            <span class="k">Current DD</span><span class="v">−3.42%</span>
+          </div>
+          <div class="bar-outer"><div class="bar-inner" style="width:43%;background:var(--green)"></div></div>
+          <div class="mut" style="margin-top:6px">Drawdown headroom used: 43%</div>
+          <button class="btn" style="margin-top:14px" onclick="UI.toast('Simulated breach: daily loss limit tripped → all strategies halted, no new orders. Reset to re-arm.','err')">⚡ Simulate breach (test)</button>
+        </div>
+        <div class="card"><h2 style="margin-top:0">Per-Asset-Class Limits</h2>
+          <div class="kv">
+            <span class="k">Equity max position</span><span class="v">$15,000 / symbol</span>
+            <span class="k">Equity max gross</span><span class="v">40% of equity</span>
+            <span class="k">Futures max contracts</span><span class="v">4 / product</span>
+            <span class="k">Futures margin cap</span><span class="v">25% of equity</span>
+            <span class="k">Crypto max position</span><span class="v">vol-adjusted, $8,000 cap</span>
+            <span class="k">Crypto leverage</span><span class="v">1.0× (spot only)</span>
+          </div>
+          <button class="btn" onclick="UI.toast('Limits editor stub — persist to risk/limits.yaml and hot-reload validation layer','ok')">✎ Edit limits</button>
+        </div>
+        <div class="card"><h2 style="margin-top:0">Order Validation Layer</h2>
+          <div class="kv">
+            <span class="k">Price sanity band</span><span class="v">±3% of last</span>
+            <span class="k">Max single order</span><span class="v">$10,000 notional</span>
+            <span class="k">Orders validated</span><span class="v">1,284 (30d)</span>
+            <span class="k">Rejected</span><span class="v warn">7 (0.5%)</span>
+          </div>
+          <h2>Recent rejections</h2>
+          <div class="feed" style="max-height:120px">
+            <div><span class="t">07-03 14:22:10</span> <span class="lv-warn">REJECT</span> BTCUSDT qty 0.9 — exceeds vol-adj cap</div>
+            <div><span class="t">07-02 09:31:04</span> <span class="lv-warn">REJECT</span> QQQ limit 620.00 — outside sanity band</div>
+            <div><span class="t">06-30 15:58:41</span> <span class="lv-warn">REJECT</span> MES x6 — exceeds contract limit</div>
+          </div>
+        </div>
+      </div>
+      <h2>Kill Switch</h2>
+      <div class="card flex spread">
+        <div><b>Manual kill switch</b><div class="mut" style="margin-top:4px">Immediately flattens all positions on all venues and disables new order submission. Test regularly — Phase 7 checkpoint requires a verified flatten-and-halt.</div></div>
+        <div class="flex"><button class="btn" onclick="UI.toast('Dry-run: flatten orders generated for 5 positions, halt signal verified in 380ms. No orders sent.','ok')">Dry-run test</button>
+        <button class="btn danger" onclick="UI.killSwitch()">⏻ Activate</button></div>
+      </div>
+    </section>
+
+    <!-- ======== GO-LIVE WIZARD ======== -->
+    <section class="screen" id="s-golive">
+      <h1>Go-Live Wizard</h1>
+      <div class="sub">One venue, one strategy at a time. Every item must be signed off; the final flip requires a typed confirmation. Nothing here is automated.</div>
+      <div class="steps" id="wizSteps"></div>
+      <div class="card" id="wizBody"></div>
+      <div class="flex spread" style="margin-top:14px">
+        <button class="btn" id="wizBack" onclick="UI.wizNav(-1)">← Back</button>
+        <button class="btn primary" id="wizNext" onclick="UI.wizNav(1)">Continue →</button>
+      </div>
+      <h2>Audit Log</h2>
+      <div class="card feed" id="auditLog" style="max-height:150px">
+        <div><span class="t">—</span> No go-live confirmations recorded yet.</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Drawer, modal, toast -->
+<div id="drawer"></div>
+<div id="overlay"><div class="modal" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+/* =====================================================================
+   API LAYER — mock now, real later.
+   Replace each method body with a fetch() to the FastAPI backend.
+   The UI code only talks to API.*, so no UI changes are needed.
+===================================================================== */
+/* Global symbol scope — every screen filters through Filt */
+const Filt = {
+  sym: 'ALL',
+  ac: null,   // asset class of selected symbol, set on select
+  hit(syms){ return this.sym==='ALL' || (syms||[]).includes(this.sym); },
+  hitAc(ac){ return this.sym==='ALL' || !this.ac || ac===this.ac || (Array.isArray(ac)&&ac.includes(this.ac)); },
+};
+
+const API = {
+  mode: 'paper',
+  symbols: [
+    {s:'SPY',    ac:'eq',  spine:'full', note:'daily 10y · minute 5y · L1 2y · L2 90d'},
+    {s:'QQQ',    ac:'eq',  spine:'full', note:'daily 10y · minute 5y · L1 2y · L2 90d'},
+    {s:'AAPL',   ac:'eq',  spine:'full', note:'daily 10y · minute 5y · L1 2y · L2 90d'},
+    {s:'XLK',    ac:'eq',  spine:'part', note:'daily 10y · minute 5y — no tick tier'},
+    {s:'MES',    ac:'fut', spine:'full', note:'minute 5y · L1 2y · L2 60d'},
+    {s:'BTCUSDT',ac:'cry', spine:'full', note:'hour 7y · L1 1y · L2 180d'},
+    {s:'ETHUSDT',ac:'cry', spine:'part', note:'hour 7y · L1 1y — L2 queued'},
+  ],
+  spineTiers: [
+    ['ref','Reference data (listing, ticks size, sessions)','~1 MB'],
+    ['daily','Daily bars, 10y (LEAN library)','~2 MB'],
+    ['minute','Minute bars, 5y (LEAN library → catalog export)','~400 MB'],
+    ['l1','L1 quotes/trades ticks, 2y (vendor/venue)','~15 GB'],
+    ['l2','L2 depth snapshots+deltas, 90d (venue direct)','~60 GB'],
+  ],
+  venues: [
+    {name:'IBKR Gateway', env:'paper', lat:'12ms', ok:true},
+    {name:'Alpaca', env:'paper (LEAN)', lat:'41ms', ok:true},
+    {name:'Binance', env:'testnet', lat:'88ms', ok:true},
+    {name:'Bybit', env:'testnet', lat:'104ms', ok:false},
+    {name:'Coinbase', env:'sandbox', lat:'67ms', ok:true},
+  ],
+  positions: [
+    {sym:'SPY', venue:'IBKR', qty:'+42', px:'618.34', pnl:312.40, strat:'momo-etf-v3'},
+    {sym:'QQQ', venue:'IBKR', qty:'−15', px:'551.02', pnl:-88.15, strat:'momo-etf-v3'},
+    {sym:'AAPL', venue:'IBKR', qty:'+120', px:'254.80', pnl:96.20, strat:'ofi-scalp-v1'},
+    {sym:'MES', venue:'IBKR', qty:'+2', px:'6,412.25', pnl:145.00, strat:'fut-carry-v1'},
+    {sym:'BTCUSDT', venue:'Binance·TN', qty:'+0.18', px:'112,480', pnl:204.66, strat:'crypto-mr-v2'},
+    {sym:'ETHUSDT', venue:'Bybit·TN', qty:'−1.40', px:'4,182.10', pnl:-41.02, strat:'crypto-mr-v2'},
+  ],
+  strategies: [
+    {n:'momo-etf-v3', syms:['SPY','QQQ','XLK'], stage:'Paper', sr:'1.41', st:'Running', c:'ok'},
+    {n:'ofi-scalp-v1', syms:['AAPL'], stage:'Paper', sr:'2.32', st:'Running · HFT', c:'ok'},
+    {n:'fut-carry-v1', syms:['MES'], stage:'Paper', sr:'0.92', st:'Running', c:'ok'},
+    {n:'crypto-mr-v2', syms:['BTCUSDT','ETHUSDT'], stage:'Paper', sr:'1.18', st:'Degraded', c:'warn'},
+    {n:'pairs-stat-v1', syms:['AAPL','QQQ'], stage:'Parity', sr:'—', st:'Gate blocked', c:'off'},
+  ],
+  ideas: [
+    {id:1, name:'momo-etf-v3', ac:'eq', syms:['SPY','QQQ','XLK'], stage:5, hyp:'12-1 momentum on liquid sector ETFs, weekly rebalance, vol-scaled', uni:'9 SPDR sectors', feats:'12-1 mom, 20d realized vol, ADV', sharpe:1.62, turn:'3.1×', cap:'$5M', kill:'IS Sharpe < 0.8 on rolling 6m', gate:'pass', gateNote:'Parity passed 2026-05-14 · tol 0.9%', seed:11},
+    {id:2, name:'fut-carry-v1', ac:'fut', syms:['MES'], stage:5, hyp:'Roll-yield carry on MES/MNQ term structure', uni:'MES, MNQ', feats:'front-back spread, roll calendar', sharpe:1.10, turn:'1.4×', cap:'$2M', kill:'Carry signal decay > 50%', gate:'pass', gateNote:'Parity passed 2026-06-02 · tol 1.4%', seed:22},
+    {id:3, name:'crypto-mr-v2', ac:'cry', syms:['BTCUSDT','ETHUSDT'], stage:5, hyp:'Overnight mean-reversion on BTC/ETH funding extremes', uni:'BTCUSDT, ETHUSDT', feats:'funding rate z, OI delta, 4h RSI', sharpe:1.35, turn:'6.0×', cap:'$800k', kill:'2 consecutive months paper Sharpe < 0', gate:'pass', gateNote:'Parity passed 2026-06-20 · tol 1.1%', seed:33},
+    {id:4, name:'pairs-stat-v1', ac:'eq', syms:['AAPL','QQQ'], stage:4, hyp:'Cointegrated pairs in mega-cap tech, z-score entry/exit', uni:'8 pairs, US tech', feats:'coint z-score, half-life, beta', sharpe:1.48, turn:'8.4×', cap:'$3M', kill:'Half-life > 12 days', gate:'block', gateNote:'BLOCKED: trade-count diff 6.2% > 2% tolerance — suspect indicator warm-up mismatch', seed:44},
+    {id:5, name:'gap-fade-v1', ac:'eq', syms:['AAPL','SPY'], stage:3, hyp:'Fade opening gaps > 1.5σ in high-ADV equities', uni:'Russell 200 subset', feats:'gap σ, pre-mkt vol, sector beta', sharpe:1.21, turn:'12×', cap:'$1.5M', kill:'Win rate < 52% OOS', gate:'block', gateNote:'Awaiting walk-forward validation (Phase 3 checkpoint)', seed:55},
+    {id:6, name:'vol-premium-v1', ac:'opt', syms:['SPY'], stage:2, hyp:'Systematic short vol via defined-risk option structures', uni:'SPX weeklies', feats:'IV-RV spread, term slope, skew', sharpe:null, turn:'2×', cap:'TBD', kill:'Any tail event loss > 3× premium', gate:'block', gateNote:'In-sample significance checks not yet run', seed:66},
+    {id:7, name:'flow-imbalance', ac:'fut', syms:['MES'], stage:1, hyp:'Order-flow imbalance predicts 5-min drift in ES', uni:'ES', feats:'TBD', sharpe:null, turn:'TBD', cap:'TBD', kill:'TBD', gate:'block', gateNote:'Hypothesis logged — research not started', seed:77},
+  ],
+  stages: ['—','Idea','Research','LEAN Backtest','Parity Gate','Paper','Live'],
+  // Per-stage checkpoint definitions (rendered in the idea drawer)
+  checkpoints: {
+    1:['Hypothesis written with economic rationale','Universe & data availability confirmed','Kill criterion defined'],
+    2:['Features engineered in QuantBook','In-sample significance checks pass','Model artifact saved to Object Store'],
+    3:['QCAlgorithm implemented & frozen in git','LEAN tearsheet meets bar (Sharpe/DD/capacity)','Out-of-sample / walk-forward validation passed'],
+    4:['Strategy ported to Nautilus','Identical-window backtest run','Parity within tolerance (hard gate)'],
+    5:['All venue adapters connected (paper)','Min. paper duration met','Paper P&L tracks backtest within slippage assumptions'],
+    6:['Go-Live Wizard completed with typed confirmation'],
+  },
+  parity: {
+    momo: {
+      window:'2023-01-02 → 2025-12-31 · daily bars · fees: IB tiered',
+      lean:{cagr:'11.4%', sharpe:1.62, sortino:2.21, dd:'−9.1%', win:'58.2%', trades:412, turn:'3.1×', fees:'$1,842', ret:'+38.4%'},
+      naut:{cagr:'11.2%', sharpe:1.59, sortino:2.16, dd:'−9.4%', win:'57.9%', trades:409, turn:'3.1×', fees:'$1,867', ret:'+37.9%'},
+      tol:[
+        {m:'Total return diff', v:'0.50pp', lim:'≤ 1.00pp', ok:true},
+        {m:'Sharpe diff', v:'0.03', lim:'≤ 0.10', ok:true},
+        {m:'Trade count diff', v:'0.7%', lim:'≤ 2.0%', ok:true},
+        {m:'Max DD diff', v:'0.3pp', lim:'≤ 1.0pp', ok:true},
+      ],
+      diffs:[
+        {t:'2023-03-14 09:31', sym:'XLK', lean:'BUY 118 @ 142.31', naut:'BUY 118 @ 142.33', d:'+2bp px (queue model)'},
+        {t:'2024-08-05 09:31', sym:'XLE', lean:'SELL 84 @ 91.02', naut:'SELL 84 @ 91.02', d:'match'},
+        {t:'2025-02-03 09:31', sym:'XLF', lean:'BUY 210 @ 48.11', naut:'— (skipped)', d:'ADV filter rounding'},
+      ],
+      diffNote:'3 of 412 trades diverge; all attributable to fill-price model differences. Within tolerance.',
+      pass:true, seed:11, div:0
+    },
+    pairs: {
+      window:'2022-06-01 → 2025-12-31 · minute bars · fees: IB tiered',
+      lean:{cagr:'10.2%', sharpe:1.48, sortino:1.94, dd:'−11.3%', win:'54.7%', trades:1204, turn:'8.4×', fees:'$6,110', ret:'+41.2%'},
+      naut:{cagr:'8.9%', sharpe:1.29, sortino:1.66, dd:'−13.0%', win:'53.1%', trades:1279, turn:'8.9×', fees:'$6,488', ret:'+35.6%'},
+      tol:[
+        {m:'Total return diff', v:'5.6pp', lim:'≤ 1.00pp', ok:false},
+        {m:'Sharpe diff', v:'0.19', lim:'≤ 0.10', ok:false},
+        {m:'Trade count diff', v:'6.2%', lim:'≤ 2.0%', ok:false},
+        {m:'Max DD diff', v:'1.7pp', lim:'≤ 1.0pp', ok:false},
+      ],
+      diffs:[
+        {t:'2022-06-13 10:04', sym:'MSFT/GOOG', lean:'ENTRY z=−2.1', naut:'no signal (z=−1.8)', d:'⚠ warm-up: 30 bars short'},
+        {t:'2022-06-13 11:22', sym:'AAPL/MSFT', lean:'no signal', naut:'ENTRY z=−2.0', d:'⚠ rolling window off-by-one'},
+        {t:'2022-06-14 09:47', sym:'NVDA/AMD', lean:'EXIT z=0.1', naut:'EXIT z=0.4 (late 6 bars)', d:'⚠ indicator update ordering'},
+      ],
+      diffNote:'First divergence at bar 1 of live signals — indicator warm-up in the Nautilus port is 30 bars shorter than LEAN’s. Fix the warm-up, re-run, and expect trade diffs to collapse.',
+      pass:false, seed:44, div:1
+    }
+  },
+  feed: [
+    ['10:41:02','fill','FILL BTCUSDT +0.05 @ 112,391 (Binance·TN) crypto-mr-v2'],
+    ['10:38:44','info','momo-etf-v3 weekly rebalance computed — 3 orders queued'],
+    ['10:38:45','fill','FILL SPY +12 @ 618.90 (IBKR paper)'],
+    ['10:35:12','warn','Bybit·TN websocket reconnect (attempt 2) — degraded'],
+    ['10:22:07','info','Risk check passed: gross exposure 17.5% < 40% cap'],
+    ['09:30:01','info','US cash session open — 3 strategies active'],
+    ['08:00:00','info','TradingNode healthy · Redis OK · Postgres OK'],
+  ],
+  killAll(){ return new Promise(r=>setTimeout(()=>r({flattened:5, halted:true, ms:412}),600)); },
+  addIdea(o){ o.id=Date.now(); o.stage=1; o.gate='block'; o.gateNote='Hypothesis logged — research not started'; o.seed=Math.floor(Math.random()*1000); this.ideas.push(o); return o; },
+  openOrders: [
+    {id:'O-8841', sym:'XLK', side:'BUY', type:'LMT', qty:64, px:'241.10', venue:'IBKR', state:'Working'},
+    {id:'O-8842', sym:'BTCUSDT', side:'SELL', type:'LMT', qty:0.05, px:'113,900', venue:'Binance·TN', state:'Working'},
+    {id:'O-8836', sym:'MES SEP26', side:'SELL', type:'STP', qty:2, px:'6,350.00', venue:'IBKR', state:'Working'},
+  ],
+  orderHist: [
+    {t:'10:38:45', sym:'SPY', sq:'BUY 12', px:'618.90', slip:'+1.1bp', st:'filled'},
+    {t:'10:38:45', sym:'XLE', sq:'SELL 40', px:'89.42', slip:'+0.8bp', st:'filled'},
+    {t:'10:41:02', sym:'BTCUSDT', sq:'BUY 0.05', px:'112,391', slip:'+2.4bp', st:'filled'},
+    {t:'10:12:20', sym:'QQQ', sq:'BUY 8', px:'—', slip:'—', st:'canceled'},
+    {t:'09:47:13', sym:'ETHUSDT', sq:'SELL 0.6', px:'4,190.55', slip:'+3.1bp', st:'filled'},
+    {t:'09:31:04', sym:'QQQ', sq:'BUY 30', px:'—', slip:'—', st:'rejected'},
+    {t:'09:30:22', sym:'XLV', sq:'BUY 55', px:'148.02', slip:'+0.9bp', st:'filled'},
+  ],
+  wf: [
+    {is:'2022-01→2022-12', oos:'2023-01→2023-06', sr:1.34, pass:true},
+    {is:'2022-01→2023-06', oos:'2023-07→2023-12', sr:1.52, pass:true},
+    {is:'2022-01→2023-12', oos:'2024-01→2024-06', sr:0.44, pass:false},
+    {is:'2022-01→2024-06', oos:'2024-07→2024-12', sr:1.18, pass:true},
+    {is:'2022-01→2024-12', oos:'2025-01→2025-06', sr:1.41, pass:true},
+    {is:'2022-01→2025-06', oos:'2025-07→2025-12', sr:1.35, pass:true},
+  ],
+  /* 30 HFT/low-latency archetypes — full write-ups in HFT_STRATEGY_LIBRARY.md.
+     Documented archetypes, not guaranteed profits: realized edge depends on
+     latency tier, queue position, fees/rebates and adverse selection. */
+  hftLib: [
+    {id:1, n:'AS Inventory Market Making', cls:'mm', ac:['eq','cry'], hold:'ms–min', infra:'colo', sr:'2–6', edge:'Quote both sides around a reservation price skewed by inventory (Avellaneda–Stoikov); earn spread minus adverse selection.', sig:'resv px = mid − q·γσ²τ; spread = γσ²τ + (2/γ)ln(1+γ/κ)', entry:'post bid/ask around reservation price', exit:'inventory bounds ±Qmax; EOD flat', size:'per-quote size s.t. inventory ≤ 2% ADV', risk:'pull quotes on vol spike >3σ or news flag'},
+    {id:2, n:'Multi-Venue MM w/ Netting', cls:'mm', ac:['cry'], hold:'ms–min', infra:'lowlat', sr:'2–5', edge:'Quote the same pair on 2–3 crypto venues; net inventory across venues; capture venue-specific spreads.', sig:'per-venue fair value from consolidated book', entry:'post at consolidated fair ± venue offset', exit:'net inventory bounds; hedge residual on deepest venue', size:'per-venue caps + global net cap', risk:'venue outage → cancel-all on siblings'},
+    {id:3, n:'Queue-Position MM', cls:'mm', ac:['eq','fut'], hold:'s–min', infra:'colo', sr:'2–5', edge:'Join deep queues early for priority; cancel when queue ahead depletes abnormally (toxicity).', sig:'queue depletion rate + trade-through prob', entry:'join best when queue > K× avg', exit:'cancel on depletion threshold; EOD flat', size:'1-lot ladders', risk:'max open orders; venue cancel-ratio budget'},
+    {id:4, n:'Delta-Hedged Options MM', cls:'mm', ac:['opt'], hold:'min–hr', infra:'colo', sr:'2–4', edge:'Quote options where market deviates from fitted vol surface; hedge delta instantly in underlying.', sig:'fitted surface vs market quotes', entry:'quote when |mkt−fit| > edge', exit:'auto delta-hedge; unwind at fair', size:'contracts s.t. greeks within caps', risk:'vega/gamma caps; pull on refit failure'},
+    {id:5, n:'Funding-Aware Perp MM', cls:'mm', ac:['cry'], hold:'min–hr', infra:'lowlat', sr:'1.5–4', edge:'Skew perp quotes by predicted funding; collect spread + favorable funding accrual.', sig:'funding prediction from premium-index EMA', entry:'asymmetric quotes tilted to funding side', exit:'inventory bounds; funding flip', size:'inventory ≤ funding-adjusted cap', risk:'liquidation buffer ≥5×; kill on basis blowout'},
+    {id:6, n:'Order Flow Imbalance Momentum', cls:'flow', ac:['eq','fut','cry'], hold:'100ms–30s', infra:'lowlat', sr:'2–5', edge:'OFI (Cont et al.) predicts short-horizon moves; trade with the imbalance.', sig:'OFI = Σ(ΔbidSz@touch − ΔaskSz@touch), 200ms–1s window', entry:'OFI z > 2 sustained 500ms AND spread ≤ 1 tick', exit:'+4bps / −2bps stop / 30s timeout', size:'f(z, book depth); ≤ 5% top-of-book', risk:'no entries 5min post-open; halt after 3 straight stops'},
+    {id:7, n:'Tape-Aggressor Momentum', cls:'flow', ac:['eq','cry'], hold:'1–60s', infra:'lowlat', sr:'1.5–4', edge:'Aggressor-side trade imbalance continues short-term.', sig:'signed volume ratio, rolling 2s', entry:'ratio > 0.75 with volume > 3× avg', exit:'ratio → 0.5 or ±bps bracket', size:'vol-scaled; participation ≤ 2% of tape', risk:'skip scheduled-news windows'},
+    {id:8, n:'Depth-Imbalance Reversion', cls:'flow', ac:['eq','fut'], hold:'1–20s', infra:'colo', sr:'2–4', edge:'Extreme one-sided depth without price follow-through mean-reverts (spoof-prone; fade it).', sig:'L2 depth ratio (5 lvls), persistence-filtered', entry:'ratio > 85th pctile AND price static 2s', exit:'ratio normalizes / 20s timeout', size:'small, fixed', risk:'strict stop; gated by #13 anomaly filter'},
+    {id:9, n:'Microprice Reversion', cls:'flow', ac:['eq','cry'], hold:'100ms–5s', infra:'colo', sr:'2–5', edge:'Mid converges to depth-weighted microprice when they deviate.', sig:'micro = (Pa·Qb+Pb·Qa)/(Qa+Qb) vs mid', entry:'|micro−mid| > 0.4 tick, passive on micro side', exit:'convergence or queue loss', size:'1–2 lots per signal', risk:'maker-only; cancel on book flip'},
+    {id:10, n:'Sweep Follow-Through', cls:'flow', ac:['eq','fut'], hold:'1–30s', infra:'lowlat', sr:'1.5–3.5', edge:'Multi-level sweeps signal informed flow; follow before book refills.', sig:'single-event take-out of ≥3 levels', entry:'market order within 50ms, sweep direction', exit:'+6bps / −3bps / refill detected', size:'fixed small clip', risk:'max 1 concurrent; tight daily loss cap'},
+    {id:11, n:'Iceberg Detection Fade', cls:'flow', ac:['eq','fut'], hold:'10s–5min', infra:'lowlat', sr:'1.5–3', edge:'Hidden size refilling at a level is a wall; fade approaches into it.', sig:'repeated same-price refills > 4× displayed', entry:'passive in front of detected iceberg', exit:'flat when refills stop (exhaustion)', size:'≤ 20% of est. hidden size', risk:'stop just through the level'},
+    {id:12, n:'Cross-Asset Lead-Lag (ES→NQ)', cls:'flow', ac:['fut'], hold:'100ms–10s', infra:'colo', sr:'2–4', edge:'ES micro-moves lead NQ by ms–s (regime-dependent); trade the laggard.', sig:'rolling Hayashi–Yoshida lead-lag estimator', entry:'leader moves > k ticks, laggard static', exit:'catch-up or 5s timeout', size:'1–2 contracts', risk:'disable when correlation < 0.7'},
+    {id:13, n:'Book-Anomaly Filter (meta)', cls:'flow', ac:['eq','fut','cry'], hold:'—', infra:'lowlat', sr:'n/a', edge:'Not standalone alpha: detects layering/quote-stuffing patterns and gates other strategies OFF — raises realized SR of #6–#12.', sig:'cancel-burst rate, depth-flicker entropy', entry:'—', exit:'—', size:'—', risk:'output = trade/no-trade flag'},
+    {id:14, n:'ETF–Basket Arbitrage', cls:'arb', ac:['eq'], hold:'s–min', infra:'colo', sr:'3–6', edge:'ETF vs replicated basket NAV divergence; trade rich/cheap leg. Full create/redeem arb needs AP status — retail trades the signal only.', sig:'ETF mid − Σwᵢ·midᵢ real-time', entry:'|premium| > costs + k·σ', exit:'convergence to fair', size:'basket-hedged pairs', risk:'hedge-leg fill risk; constituent-halt halt'},
+    {id:15, n:'Futures–ETF Basis (ES vs SPY)', cls:'arb', ac:['eq','fut'], hold:'s–min', infra:'colo', sr:'2–5', edge:'Same index, two instruments; short-lived basis deviations revert.', sig:'carry-adjusted basis z', entry:'z > 2.5, both legs simultaneous', exit:'z < 0.5', size:'notional-matched pairs', risk:'leg-out limit 200ms; flat at session breaks'},
+    {id:16, n:'Cross-Venue Crypto Arb', cls:'arb', ac:['cry'], hold:'ms–s', infra:'lowlat', sr:'2–6', edge:'Same pair priced differently across venues; taker-taker when spread > fees+slip.', sig:'bid(A) > ask(B) + total costs', entry:'simultaneous IOC both venues', exit:'immediate (atomic intent)', size:'min(depth both sides)', risk:'pre-funded both venues; withdrawal-freeze monitor'},
+    {id:17, n:'Triangular Crypto Arb', cls:'arb', ac:['cry'], hold:'ms–s', infra:'lowlat', sr:'1.5–4', edge:'A→B→C→A cycle mispricing on one venue — no transfer risk.', sig:'cycle rate product − 1 > fees', entry:'3-leg IOC sequence', exit:'cycle completion', size:'smallest-leg depth bound', risk:'partial-fill unwind logic mandatory'},
+    {id:18, n:'Perp–Spot Basis Capture', cls:'arb', ac:['cry'], hold:'hr–days', infra:'retail', sr:'1.5–3', edge:'Long spot + short perp when funding rich; delta-neutral funding carry.', sig:'annualized funding > threshold', entry:'paired entry, delta-neutral', exit:'funding normalizes', size:'≤ 30% of sleeve per pair', risk:'liquidation buffer; per-exchange counterparty cap'},
+    {id:19, n:'HF Pairs Convergence (1s bars)', cls:'arb', ac:['eq'], hold:'min–hr', infra:'lowlat', sr:'1.5–3', edge:'Tight cointegrated pairs (share classes, dual listings) deviate intraday and converge.', sig:'spread z on 1s bars, 90d coint window', entry:'z > 2.2, both legs', exit:'z < 0.3 / half-life timeout', size:'beta-weighted pairs', risk:'daily coint re-test; kill if half-life > 12d'},
+    {id:20, n:'Index Rebalance Micro-Drift', cls:'arb', ac:['eq'], hold:'min–hr', infra:'retail', sr:'1–2.5', edge:'Announced index adds/deletes drift into effective date on predictable tracking flow.', sig:'announced changes + est. flow', entry:'day-before, flow direction', exit:'at rebalance close print', size:'ADV-capped', risk:'crowding monitor; size down on spread widening'},
+    {id:21, n:'Calendar-Spread Scalping', cls:'arb', ac:['fut'], hold:'s–min', infra:'colo', sr:'2–4', edge:'Front/back spread book is thin and mean-reverts in a band intraday.', sig:'spread vs rolling VWAP band', entry:'band edge, passive', exit:'band mid', size:'1–2 spreads', risk:'roll-period rules; news flat'},
+    {id:22, n:'Opening Auction Imbalance', cls:'event', ac:['eq'], hold:'min', infra:'lowlat', sr:'1.5–3', edge:'Exchange-published auction imbalance predicts post-open drift.', sig:'imbalance/ADV at 9:28', entry:'MOO or first-minute, imbalance direction', exit:'+15min timeout or ±bps bracket', size:'imbalance-scaled, ADV cap', risk:'skip halted/news names'},
+    {id:23, n:'Closing Auction (MOC) Imbalance', cls:'event', ac:['eq'], hold:'min', infra:'lowlat', sr:'1.5–3.5', edge:'3:50pm MOC imbalance publication → drift into close.', sig:'published imbalance vs 20d norm', entry:'3:50–3:55, imbalance direction', exit:'MOC order at close print', size:'≤ 1% of imbalance', risk:'earnings-day exclusion'},
+    {id:24, n:'Macro-Release Momentum', cls:'event', ac:['fut'], hold:'100ms–5min', infra:'colo', sr:'2–5', edge:'CPI/NFP surprise direction persists minutes; the race is decided in ~10ms (machine-readable feeds + colo only — listed for completeness).', sig:'release vs consensus, ms-parsed', entry:'surprise > threshold, market order', exit:'2–5min momentum decay', size:'fixed contracts', risk:'pre-release straddle-width sanity check'},
+    {id:25, n:'Halt-Resumption Volatility', cls:'event', ac:['eq'], hold:'s–min', infra:'lowlat', sr:'1.5–3', edge:'LULD reopen overshoots then reverts; fade the reopening extreme.', sig:'reopen print vs pre-halt VWAP', entry:'fade if gap > 2× band width', exit:'VWAP touch or ±bracket', size:'small fixed, wide stop', risk:'one attempt per halt; skip news-pending T1 halts'},
+    {id:26, n:'Inverted-Venue Rebate Capture', cls:'liq', ac:['eq'], hold:'s–min', infra:'colo', sr:'1–2.5', edge:'Post on taker-rebate venues; earn rebate on flow that would cross anyway.', sig:'crossing-probability model per venue', entry:'passive at NBBO on inverted venue', exit:'fill (rebate) or cancel', size:'odd lots, high count', risk:'per-venue adverse-selection markout monitor'},
+    {id:27, n:'Midpoint Dark Liquidity', cls:'liq', ac:['eq'], hold:'s–min', infra:'lowlat', sr:'1–2.5', edge:'Rest midpoint pegs in dark pools/IEX; capture half-spread with low impact.', sig:'urgency model routes lit vs dark', entry:'midpoint peg resting', exit:'fill or reroute after T', size:'child slices of parent order', risk:'venue toxicity scores; min-quantity flags'},
+    {id:28, n:'VWAP-Band Reversion Scalp', cls:'scalp', ac:['eq','cry'], hold:'min', infra:'retail', sr:'1–2.5', edge:'Liquid names oscillate around session VWAP absent news; fade band extremes.', sig:'price vs VWAP ± 1.5σ band', entry:'band touch + tape deceleration', exit:'VWAP touch / −0.75σ stop', size:'vol-scaled', risk:'trend-day (ADX) gate — the failure mode'},
+    {id:29, n:'Opening-Range Breakout Scalp', cls:'scalp', ac:['eq','fut'], hold:'min–hr', infra:'retail', sr:'1–2', edge:'First-15min range break with volume continues; decayed classic — needs strict filters.', sig:'OR high/low ± buffer + volume confirm', entry:'stop order through range ± buffer', exit:'1R/2R bracket, EOD flat', size:'fixed risk 0.25%/trade', risk:'skip inside-day opens; one shot per side'},
+    {id:30, n:'Stop-Run Fade', cls:'scalp', ac:['fut','cry'], hold:'s–min', infra:'lowlat', sr:'1.5–3', edge:'Stop-hunt flushes through swing levels revert when depth refills; fade the flush.', sig:'sharp move through level on thin book + instant refill', entry:'fade on refill confirmation', exit:'50% retrace / beyond-flush stop', size:'small fixed', risk:'never fade news moves — #13 gate + calendar'},
+  ],
+  accounts:[
+    {n:'IBKR margin (U***4821)', eq:'$104,382', bp:'$208,764', mg:'8.2%'},
+    {n:'Alpaca paper (PA***93)', eq:'$25,000', bp:'$50,000', mg:'0%'},
+    {n:'Binance testnet', eq:'$18,240', bp:'spot only', mg:'—'},
+    {n:'Bybit testnet', eq:'$9,980', bp:'spot only', mg:'—'},
+  ],
+  costs:[['IB market data (L1 bundles)','$14.50'],['Databento equities ticks','$199.00'],['VPS (NY4-adjacent)','$42.00'],['QuantConnect tier','$60.00'],['Commissions (30d act.)','$86.40']],
+  econ:[['Jul 15 08:30','CPI (Jun)','halt: crypto-mr, vwap-band'],['Jul 28–29','FOMC','halt: all mean-reversion'],['Aug 07 08:30','NFP (Jul)','halt: fut-carry entries'],['Aug 19','MES roll week','fut-carry roll rules']],
+  notes:[
+    {d:'Jul 03', s:'crypto-mr-v2', txt:'Bybit ws degraded 10:35 — strategy kept quoting on stale book for ~4s. Added staleness guard to backlog.', tag:'incident'},
+    {d:'Jul 01', s:'momo-etf-v3', txt:'Rebalance skipped XLE despite rank 2 — vol filter working as designed. Good.', tag:'observation'},
+    {d:'Jun 27', s:'—', txt:'Overrode system, closed MES early before weekend. Cost 0.8R of profit. Stop doing this.', tag:'discipline'},
+  ],
+  alerts:[
+    {r:'Daily P&L < −$1,000', ch:'email + toast', on:true},
+    {r:'Any venue disconnected > 60s', ch:'email', on:true},
+    {r:'BTCUSDT moves > 3% in 15min', ch:'email', on:true},
+    {r:'Strategy Sharpe(20d) < 0', ch:'weekly digest', on:false},
+  ],
+  setup:[
+    ['Accounts connected (paper)', 100],['Data spine: core symbols', 86],['First LEAN backtest', 100],
+    ['Parity gate passed (1 strategy)', 100],['Paper trading 2+ weeks', 60],['Risk drills (kill switch, breach)', 50],
+    ['Dead-man switch + backups verified', 25],['Go-live checklist', 0],
+  ],
+  dailyPnl(seed){ const r=CH.rng(seed); const out={}; for(let d=1;d<=31;d++){ const wd=new Date(2026,6,d).getDay();
+    if(wd===0||wd===6){out[d]=null;continue;} out[d]= d>4? Math.round((r()-0.42)*900) : Math.round((r()-0.42)*900); }
+    return out; },
+  /* built-in verbal→spec parser (offline fallback — LLM providers do this better) */
+  aiParse(text){
+    const t=text.toLowerCase();
+    const syms=[...new Set((text.match(/\b[A-Z]{2,6}(?:USDT|USD)?\b/g)||[]).filter(x=>!['AND','OR','THE','IF','EOD','VWAP','SMA','RSI','OFI','LLM'].includes(x)))];
+    const num=(re,d)=>{const m=t.match(re);return m?parseFloat(m[1]):d;};
+    const cls=/market.?mak/.test(t)?'market_making':/imbalance|order.?flow|ofi/.test(t)?'order_flow'
+      :/mean.?rever|revert|fade/.test(t)?'mean_reversion':/momentum|breakout|trend/.test(t)?'momentum':'unclassified';
+    const spec={
+      schema:'quantdesk.strategy.v1',
+      name:(syms[0]||'strategy').toLowerCase()+'-'+cls.split('_')[0]+'-ai1',
+      class:cls,
+      universe:syms.length?syms:['<UNSPECIFIED>'],
+      data:{resolution:/\bms\b|millisecond|tick|order.?flow|book/.test(t)?'tick_l2':/\b1?s(econd)?\b/.test(t)?'second':'minute',
+        warmup:'auto_from_lookbacks'},
+      regime:{filter:(t.match(/first (\d+) ?min/)? 'exclude_first_'+t.match(/first (\d+) ?min/)[1]+'min_after_open' : (/vix|regime|sma/.test(t)?'detected — review':'none'))},
+      entry:{signal:/imbalance|ofi/.test(t)?('ofi_z > '+num(/above ([\d.]+)/,0.6)):'<EXTRACT_FAILED>',
+        persistence_ms:num(/(\d+) ?ms/,null), spread_max_ticks:num(/spread[^.]*?(\d+) tick/,null)},
+      exit:{take_profit_bps:num(/\+(\d+) ?bps/,null),
+        stop_bps:(m=>m?-Math.abs(m):null)(num(/[−-](\d+) ?bps/,null)),
+        timeout_s:num(/after (\d+) second/,null)},
+      sizing:{base_pct_equity:num(/(\d+(?:\.\d+)?) ?% of equity/,null),
+        vol_adjust:/halve|reduce|scale.*vol/.test(t)?'halve_when_short_horizon_rv_doubles':'none'},
+      confidence:{model:'threshold', note:'upgrade to sigmoid(z) per STRATEGY_GUIDE §2'},
+      risk:{daily_loss_halt:'inherit_global', per_trade_stop:'from exit.stop_bps'},
+      kill_criterion:(m=>m?m[1].trim():'<REQUIRED — not found>')(t.match(/kill[^.]*?if (.+?)(?:\.|$)/)),
+      holding_period:/second|\bms\b/.test(t)?'seconds':'minutes',
+      generated_by:'builtin-parser-v1', requires_review:true,
+    };
+    const warns=[];
+    if(spec.universe[0]==='<UNSPECIFIED>')warns.push('No symbols detected — specify a universe.');
+    if(spec.kill_criterion.startsWith('<'))warns.push('No kill criterion found — required before a journal entry can be created.');
+    if(spec.entry.signal==='<EXTRACT_FAILED>')warns.push('Entry signal not extracted — rephrase, or connect an LLM provider for deeper extraction.');
+    if(spec.data.resolution==='tick_l2')warns.push('Tick/L2 strategy — confirm the symbol spine has the L2 tier downloaded (Data & Artifacts).');
+    return {spec,warns};
+  },
+};
+
+/* ================= Chart engine (dependency-free) ================= */
+const CH = {
+  rng(seed){ let s=seed*7919+1; return ()=>{ s=(s*1103515245+12345)%2147483648; return s/2147483648; }; },
+  // realistic equity path: drift + noise + occasional drawdown clusters
+  equity(n, seed, drift=0.0008, vol=0.009){
+    const r=this.rng(seed); let v=100, out=[], rets=[];
+    for(let i=0;i<n;i++){
+      let shock=(r()-0.5)*2*vol;
+      if(r()<0.03) shock -= vol*3*r();                 // tail events
+      const ret=drift+shock; v*=(1+ret); out.push(v); rets.push(ret);
+    }
+    return {eq:out, rets};
+  },
+  setup(id,h){ const c=document.getElementById(id); if(!c)return null;
+    const W=c.clientWidth||880, H=h||c.getAttribute('height')*1;
+    c.width=W*2; c.height=H*2; const x=c.getContext('2d'); x.scale(2,2); return {c,x,W,H}; },
+  grid(x,W,H,rows=4){ x.strokeStyle='#1c2231'; x.lineWidth=1;
+    for(let i=1;i<=rows;i++){ x.beginPath(); x.moveTo(0,H*i/(rows+1)); x.lineTo(W,H*i/(rows+1)); x.stroke(); } },
+  line(x,pts,color,W,H,min,max,dash,fill){
+    const X=i=>i/(pts.length-1)*W, Y=p=>H-((p-min)/(max-min||1))*(H-16)-8;
+    if(fill){ x.beginPath(); x.moveTo(0,H); pts.forEach((p,i)=>x.lineTo(X(i),Y(p))); x.lineTo(W,H); x.closePath();
+      x.fillStyle=fill; x.fill(); }
+    x.strokeStyle=color; x.lineWidth=1.8; x.setLineDash(dash||[]); x.beginPath();
+    pts.forEach((p,i)=>i?x.lineTo(X(i),Y(p)):x.moveTo(X(i),Y(p))); x.stroke(); x.setLineDash([]);
+  },
+  yLabels(x,W,H,min,max){ x.fillStyle='#5c6478'; x.font='10px SF Mono,Menlo,monospace'; x.textAlign='right';
+    [max,(min+max)/2,min].forEach((v,i)=>x.fillText(v.toFixed(0),W-4,[12,H/2,H-4][i])); },
+  multi(id,seriesList,opt={}){
+    const s=this.setup(id); if(!s)return; const{x,W,H}=s;
+    const all=seriesList.flatMap(v=>v.pts), min=Math.min(...all), max=Math.max(...all);
+    this.grid(x,W,H); seriesList.forEach(v=>this.line(x,v.pts,v.color,W,H,min,max,v.dash,v.fill));
+    if(opt.labels!==false)this.yLabels(x,W,H,min,max);
+  },
+  drawdown(id,eq,color){
+    const s=this.setup(id); if(!s)return; const{x,W,H}=s;
+    let peak=eq[0]; const dd=eq.map(v=>{peak=Math.max(peak,v); return (v/peak-1)*100;});
+    const min=Math.min(...dd), max=0;
+    this.grid(x,W,H,2);
+    this.line(x,dd,color,W,H,min,max,null,'rgba(229,72,77,.14)');
+    x.fillStyle='#5c6478'; x.font='10px SF Mono,Menlo,monospace'; x.textAlign='right';
+    x.fillText(min.toFixed(1)+'%',W-4,H-4); x.fillText('0%',W-4,12);
+  },
+  rolling(id,rets,win,color){
+    const s=this.setup(id); if(!s)return; const{x,W,H}=s;
+    const out=[]; for(let i=win;i<rets.length;i++){ const w=rets.slice(i-win,i);
+      const m=w.reduce((a,b)=>a+b,0)/win, sd=Math.sqrt(w.reduce((a,b)=>a+(b-m)**2,0)/win)||1e-9;
+      out.push(m/sd*Math.sqrt(252)); }
+    const min=Math.min(...out,0), max=Math.max(...out,2);
+    this.grid(x,W,H,2);
+    // zero line
+    const y0=H-((0-min)/(max-min))*(H-16)-8; x.strokeStyle='#3a4258'; x.setLineDash([3,3]);
+    x.beginPath(); x.moveTo(0,y0); x.lineTo(s.W,y0); x.stroke(); x.setLineDash([]);
+    this.line(x,out,color,W,H,min,max);
+    x.fillStyle='#5c6478'; x.font='10px SF Mono,Menlo,monospace'; x.textAlign='right';
+    x.fillText(max.toFixed(1),W-4,12); x.fillText(min.toFixed(1),W-4,H-4);
+  },
+  hist(id,rets,color){
+    const s=this.setup(id); if(!s)return; const{x,W,H}=s;
+    const bins=31, min=Math.min(...rets), max=Math.max(...rets), bw=(max-min)/bins;
+    const counts=new Array(bins).fill(0);
+    rets.forEach(r=>counts[Math.min(bins-1,Math.floor((r-min)/bw))]++);
+    const cmax=Math.max(...counts), zero=(0-min)/(max-min)*W;
+    counts.forEach((cn,i)=>{ const bx=i/bins*W, bh=cn/cmax*(H-14);
+      x.fillStyle=(min+bw*(i+0.5))<0?'rgba(229,72,77,.55)':'rgba(47,191,113,.55)';
+      x.fillRect(bx+1,H-bh,W/bins-2,bh); });
+    x.strokeStyle='#3a4258'; x.setLineDash([3,3]); x.beginPath(); x.moveTo(zero,0); x.lineTo(zero,H); x.stroke(); x.setLineDash([]);
+  },
+  // Strategy Lab: computes the full decision chain from a price path.
+  // This mirrors STRATEGY_GUIDE.md exactly: regime → momentum trigger → confidence → vol-target sizing.
+  labSeries(seed){
+    const n=300, {eq:px, rets}=this.equity(n, seed, 0.00045, 0.011);
+    const SMA=120, MOM=63, VOLW=20, VOL_TGT=0.10;
+    const sma=px.map((_,i)=> i<SMA?null: px.slice(i-SMA,i).reduce((a,b)=>a+b,0)/SMA);
+    const mom=px.map((_,i)=> i<MOM?0: px[i]/px[i-MOM]-1);
+    const vol=rets.map((_,i)=>{ if(i<VOLW)return 0.15;
+      const w=rets.slice(i-VOLW,i), m=w.reduce((a,b)=>a+b,0)/VOLW;
+      return Math.sqrt(w.reduce((a,b)=>a+(b-m)**2,0)/VOLW)*Math.sqrt(252)||0.15; });
+    const regime=px.map((p,i)=> sma[i]!==null && p>sma[i]);
+    const conf=px.map((_,i)=>{ if(!regime[i])return 0;
+      const z=mom[i]/0.08; return 1/(1+Math.exp(-3*z)); });         // sigmoid of momentum z
+    const wt=conf.map((c,i)=> c<0.25?0 : c*Math.min(VOL_TGT/vol[i],1.5));
+    // hysteresis triggers: enter conf>=.5, exit conf<.25
+    const marks=[]; let inPos=false;
+    conf.forEach((c,i)=>{ if(!inPos&&c>=0.5&&i>SMA){marks.push({i,side:'B'});inPos=true;}
+      else if(inPos&&c<0.25){marks.push({i,side:'S'});inPos=false;} });
+    return {px,sma,mom,vol,regime,conf,wt:wt.map(w=>Math.min(w,1)),marks,inPos,SMA};
+  },
+  labChart(id,d){
+    const s=this.setup(id); if(!s)return; const{x,W,H}=s;
+    const min=Math.min(...d.px),max=Math.max(...d.px);
+    const X=i=>i/(d.px.length-1)*W, Y=p=>H-((p-min)/(max-min))*(H-16)-8;
+    // regime shading
+    for(let i=1;i<d.px.length;i++){
+      x.fillStyle=d.regime[i]?'rgba(47,191,113,.07)':'rgba(229,72,77,.06)';
+      x.fillRect(X(i-1),0,X(i)-X(i-1)+0.5,H);
+    }
+    this.grid(x,W,H);
+    const smaPts=d.sma.map(v=>v===null?d.px[0]:v);
+    this.line(x,smaPts,'#f5a623',W,H,min,max,[5,4]);
+    this.line(x,d.px,'#e6eaf2',W,H,min,max);
+    // trigger markers
+    d.marks.forEach(m=>{ const cx=X(m.i), cy=Y(d.px[m.i]);
+      x.fillStyle=m.side==='B'?'#2fbf71':'#e5484d'; x.beginPath();
+      if(m.side==='B'){x.moveTo(cx,cy+16);x.lineTo(cx-5,cy+25);x.lineTo(cx+5,cy+25);}
+      else{x.moveTo(cx,cy-16);x.lineTo(cx-5,cy-25);x.lineTo(cx+5,cy-25);}
+      x.closePath(); x.fill(); });
+    this.yLabels(x,W,H,min,max);
+  },
+  threshLine(id,pts,color,thresholds){
+    const s=this.setup(id); if(!s)return; const{x,W,H}=s;
+    const min=0,max=Math.max(...pts,1);
+    this.grid(x,W,H,2);
+    (thresholds||[]).forEach(([v,c])=>{ const y=H-((v-min)/(max-min))*(H-16)-8;
+      x.strokeStyle=c; x.setLineDash([3,3]); x.beginPath(); x.moveTo(0,y); x.lineTo(W,y); x.stroke(); x.setLineDash([]); });
+    this.line(x,pts,color,W,H,min,max,null,color.replace(')',',.10)').replace('rgb','rgba'));
+    x.fillStyle='#5c6478'; x.font='10px SF Mono,Menlo,monospace'; x.textAlign='right';
+    x.fillText(max.toFixed(2),W-4,12); x.fillText('0',W-4,H-4);
+  },
+  spark(canvas,pts,color){
+    const W=canvas.clientWidth||150,H=26; canvas.width=W*2; canvas.height=H*2;
+    const x=canvas.getContext('2d'); x.scale(2,2);
+    const min=Math.min(...pts),max=Math.max(...pts);
+    this.line(x,pts,color,W,H,min,max,null,color.replace(')',',.12)').replace('rgb','rgba'));
+  },
+};
+
+/* ================= UI ================= */
+const UI = {
+  wizStep: 0,
+  wizChecks: {},
+  init(){
+    document.querySelectorAll('.nav-item').forEach(b=>b.onclick=()=>{
+      document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById('s-'+b.dataset.s).classList.add('active');
+      document.getElementById('drawer').classList.remove('open');
+      if(b.dataset.s==='parity') this.renderParity();
+      if(b.dataset.s==='research') this.renderPipeline();
+      if(b.dataset.s==='lab') this.renderLab();
+      if(b.dataset.s==='opt') this.renderOpt();
+      if(b.dataset.s==='orders') this.renderOrders();
+      if(b.dataset.s==='micro') this.renderMicro();
+      if(b.dataset.s==='lib') this.renderLib();
+      if(b.dataset.s==='desk') this.renderDesk();
+      if(b.dataset.s==='safe') this.renderSafe();
+    });
+    setInterval(()=>{document.getElementById('clock').textContent=new Date().toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});},1000);
+    document.getElementById('venueList').innerHTML = API.venues.map(v=>
+      `<div><span class="dot ${v.ok?'g':'a'}"></span>${v.name} <span style="color:var(--dim)">· ${v.env} · ${v.lat}</span></div>`).join('');
+    document.getElementById('feed').innerHTML = API.feed.map(([t,lv,m])=>
+      `<div><span class="t">${t}</span> <span class="lv-${lv}">${m}</span></div>`).join('');
+    this.renderSymbols(); this.renderDash(); this.setupAI();
+    this.renderPipeline(); this.renderJournal(); this.renderWizard();
+    const eq1=CH.equity(120,7,0.0009,0.006), eq2=CH.equity(120,7,0.001,0.004);
+    CH.multi('eqChart',[{pts:eq1.eq,color:'#2fbf71',fill:'rgba(47,191,113,.08)'},{pts:eq2.eq,color:'#4c8dff',dash:[5,4]}]);
+    this.renderParity();
+  },
+
+  /* ---- research: pipeline + journal ---- */
+  renderPipeline(){
+    const cols=['Idea','Research','LEAN Backtest','Parity Gate','Paper','Live'];
+    document.getElementById('pipeline').innerHTML = cols.map((c,ci)=>{
+      const items=API.ideas.filter(i=>i.stage===ci+1&&Filt.hit(i.syms));
+      return `<div class="pipe-col ${ci===3?'gatecol':''}"><h3>${c}${ci===3?' ⛩':''}<span>${items.length}</span></h3>${
+        items.map(i=>`<div class="idea ac-${i.ac}" onclick="UI.openIdea(${i.id})">
+          <div class="nm">${i.name}<span class="tag ${i.ac}">${{eq:'EQ',fut:'FUT',cry:'CRY',opt:'OPT'}[i.ac]}</span></div>
+          ${i.sharpe?`<canvas data-spark="${i.seed}"></canvas>`:''}
+          <div class="mt"><span>${i.sharpe?('SR '+i.sharpe):'no stats'}</span><span>${i.turn&&i.turn!=='TBD'?('turn '+i.turn):''}</span></div>
+          <div class="gate ${i.gate}">${i.gate==='pass'?'✓ gate passed':'⛔ '+(i.gateNote.split('—')[0].split(':')[0]||'blocked')}</div>
+        </div>`).join('')}</div>`;
+    }).join('');
+    // draw sparklines after DOM insert
+    requestAnimationFrame(()=>document.querySelectorAll('[data-spark]').forEach(c=>{
+      CH.spark(c, CH.equity(60, +c.dataset.spark, 0.0012, 0.01).eq, 'rgb(76,141,255)');
+    }));
+  },
+  renderJournal(){
+    document.getElementById('journalRows').innerHTML = API.ideas.filter(i=>Filt.hit(i.syms)).map(i=>
+      `<tr onclick="UI.openIdea(${i.id})" style="cursor:pointer">
+        <td>${i.name}</td>
+        <td class="s"><span class="tag ${i.ac}">${{eq:'EQ',fut:'FUT',cry:'CRY',opt:'OPT'}[i.ac]}</span></td>
+        <td class="s" style="max-width:300px">${i.hyp}</td>
+        <td>${i.sharpe??'—'}</td><td>${i.turn??'—'}</td><td class="s mut">${i.kill}</td>
+        <td class="s"><span class="tag ${i.stage>=6?'live':i.stage>=5?'paper':'off'}">${API.stages[i.stage]}</span></td></tr>`).join('');
+  },
+  openIdea(id){
+    const i=API.ideas.find(x=>x.id===id);
+    const d=document.getElementById('drawer');
+    const canPromote = i.gate==='pass' && i.stage<6;
+    // per-stage checkpoint rendering: stages below current = done, current = blocked/todo
+    const cps = Object.entries(API.checkpoints).slice(0,Math.min(i.stage,5)).map(([st,items])=>{
+      const stN=+st;
+      return `<div class="mut" style="margin:10px 0 2px;font-weight:600">${API.stages[stN]}</div>`+
+        items.map((it,k)=>{
+          const state = stN<i.stage ? 'done' : (i.gate==='pass'&&k===items.length-1?'done':(k===items.length-1?'blocked':'todo'));
+          return `<div class="cp ${state}"><span class="ck">${state==='done'?'✓':state==='blocked'?'!':'○'}</span>${it}</div>`;
+        }).join('');
+    }).join('');
+    const sr = i.sharpe? Math.min(i.sharpe/2,1)*100 : 0;
+    d.innerHTML=`<button class="close-x" onclick="document.getElementById('drawer').classList.remove('open')">✕</button>
+      <h3>${i.name}</h3>
+      <div class="flex" style="margin:6px 0"><span class="tag ${i.stage>=5?'paper':'off'}">${API.stages[i.stage]}</span>
+      <span class="tag ${i.ac}">${{eq:'Equities',fut:'Futures',cry:'Crypto',opt:'Options'}[i.ac]}</span></div>
+      ${i.sharpe?`<canvas id="drawerSpark" height="48" style="margin:10px 0"></canvas>`:''}
+      <div class="kv">
+        <span class="k">Hypothesis</span><span class="v" style="font-family:var(--sans)">${i.hyp}</span>
+        <span class="k">Universe</span><span class="v">${i.uni}</span>
+        <span class="k">Features</span><span class="v" style="font-family:var(--sans)">${i.feats||'—'}</span>
+        <span class="k">Kill criterion</span><span class="v" style="font-family:var(--sans)">${i.kill}</span>
+        <span class="k">Capacity est.</span><span class="v">${i.cap||'—'}</span>
+        <span class="k">Artifacts</span><span class="v">object-store://${i.name}/model.pkl</span>
+      </div>
+      <h2 style="margin-top:6px">In-sample stats</h2>
+      <div class="statrow"><span class="sl">Sharpe</span><div class="statbar"><i style="width:${sr}%;background:var(--blue)"></i></div><span class="sv">${i.sharpe??'—'}</span></div>
+      <div class="statrow"><span class="sl">Turnover</span><div class="statbar"><i style="width:${i.turn&&i.turn!=='TBD'?Math.min(parseFloat(i.turn)*8,100):0}%;background:var(--purple)"></i></div><span class="sv">${i.turn??'—'}</span></div>
+      <h2>Checkpoints</h2>
+      ${cps}
+      <div class="mut" style="margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:8px;color:${i.gate==='pass'?'var(--green)':'var(--amber)'}">${i.gate==='pass'?'✓ ':'⛔ '}${i.gateNote}</div>
+      <div class="flex" style="margin-top:14px">
+        <button class="btn primary" ${canPromote?'':'disabled'} onclick="UI.promote(${i.id})">Promote to ${API.stages[Math.min(i.stage+1,6)]} →</button>
+        <button class="btn" onclick="UI.toast('Opening research notebook (stub — launch lean research)','ok')">Open notebook</button>
+        ${i.stage===4?`<button class="btn" onclick="document.querySelector('[data-s=parity]').click()">View parity →</button>`:''}
+      </div>
+      ${canPromote?'':'<p class="mut" style="margin-top:12px">Promotion blocked — resolve the checkpoint above. Gates are hard: the GUI will not advance an idea past a failing checkpoint.</p>'}
+      ${i.stage===5?'<p class="mut" style="margin-top:12px">Promotion to Live routes through the Go-Live Wizard — it cannot happen from this drawer.</p>':''}`;
+    d.classList.add('open');
+    if(i.sharpe) requestAnimationFrame(()=>{const c=document.getElementById('drawerSpark'); if(c)CH.spark(c,CH.equity(90,i.seed,0.0012,0.01).eq,'rgb(76,141,255)');});
+  },
+  promote(id){
+    const i=API.ideas.find(x=>x.id===id);
+    if(i.stage===5){ this.toast('Live promotion must go through the Go-Live Wizard','err');
+      document.querySelector('[data-s=golive]').click(); return; }
+    i.stage++; i.gate='block'; i.gateNote='New stage — checkpoint not yet evaluated';
+    this.renderPipeline(); this.renderJournal();
+    document.getElementById('drawer').classList.remove('open');
+    this.toast(`${i.name} promoted to ${API.stages[i.stage]}`,'ok');
+  },
+
+  /* ---- new idea: proper form ---- */
+  newIdea(){
+    const box=document.getElementById('modalBox');
+    box.className='modal wide';
+    box.innerHTML=`<h3>New Alpha Idea</h3>
+      <p>A journal entry is the Phase 2 contract: hypothesis, universe, and a kill criterion are required before any code is written.</p>
+      <label class="fl">Idea slug <b>*</b></label>
+      <input type="text" id="f-name" placeholder="vwap-revert-v1 (kebab-case)">
+      <label class="fl">Asset class <b>*</b></label>
+      <div class="chips" id="f-ac">
+        <span class="chip" data-v="eq">Equities / ETFs</span><span class="chip" data-v="fut">Futures</span>
+        <span class="chip" data-v="cry">Crypto</span><span class="chip" data-v="opt">Options</span>
+      </div>
+      <label class="fl">Hypothesis — what edge, and why does it exist? <b>*</b></label>
+      <textarea id="f-hyp" placeholder="e.g. Retail flow overreacts to overnight gaps in high-ADV names; fading gaps > 1.5σ captures the reversion because…"></textarea>
+      <div class="f2">
+        <div><label class="fl">Universe <b>*</b></label><input type="text" id="f-uni" placeholder="9 SPDR sector ETFs"></div>
+        <div><label class="fl">Candidate features</label><input type="text" id="f-feats" placeholder="12-1 momentum, 20d vol, ADV"></div>
+        <div><label class="fl">Expected Sharpe</label><input type="number" id="f-sr" step="0.1" placeholder="1.2"></div>
+        <div><label class="fl">Expected turnover</label><input type="text" id="f-turn" placeholder="3× / yr"></div>
+        <div><label class="fl">Capacity estimate</label><input type="text" id="f-cap" placeholder="$2M"></div>
+        <div><label class="fl">Kill criterion — what invalidates this idea? <b>*</b></label><input type="text" id="f-kill" placeholder="rolling 6m IS Sharpe < 0.8"></div>
+      </div>
+      <div class="ferr" id="f-err"></div>
+      <div class="row"><button class="btn" onclick="UI.closeModal()">Cancel</button>
+      <button class="btn primary" onclick="UI.saveIdea()">Log idea to journal</button></div>`;
+    box.querySelectorAll('#f-ac .chip').forEach(ch=>ch.onclick=()=>{
+      box.querySelectorAll('#f-ac .chip').forEach(x=>x.classList.remove('sel')); ch.classList.add('sel');});
+    document.getElementById('overlay').classList.add('show');
+    setTimeout(()=>document.getElementById('f-name').focus(),50);
+  },
+  saveIdea(){
+    const g=id=>document.getElementById(id).value.trim();
+    const ac=document.querySelector('#f-ac .chip.sel');
+    const errs=[];
+    if(!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(g('f-name'))) errs.push('slug must be kebab-case');
+    if(API.ideas.some(i=>i.name===g('f-name'))) errs.push('slug already exists');
+    if(!ac) errs.push('pick an asset class');
+    if(g('f-hyp').length<20) errs.push('hypothesis too short — state the edge and why it exists');
+    if(!g('f-uni')) errs.push('universe required');
+    if(!g('f-kill')) errs.push('kill criterion required — every idea needs a pre-registered way to die');
+    const e=document.getElementById('f-err');
+    if(errs.length){ e.style.display='block'; e.textContent='⛔ '+errs.join(' · '); return; }
+    API.addIdea({name:g('f-name'), ac:ac.dataset.v, hyp:g('f-hyp'), uni:g('f-uni'), feats:g('f-feats')||'TBD',
+      sharpe:g('f-sr')?+g('f-sr'):null, turn:g('f-turn')||'TBD', cap:g('f-cap')||'TBD', kill:g('f-kill')});
+    this.closeModal(); this.renderPipeline(); this.renderJournal();
+    this.toast('Idea logged — appears in the Idea column with Phase 2 checkpoints pending','ok');
+  },
+
+  /* ---- backtest & parity tearsheet ---- */
+  renderParity(){
+    const k=document.getElementById('paritySel').value, p=API.parity[k];
+    // status badge
+    document.getElementById('parityBadge').innerHTML =
+      `<span class="tag ${p.pass?'ok':'fail'}" style="font-size:12px;padding:6px 14px">${p.pass?'✓ PARITY PASSED':'⛔ PARITY FAILED'}</span>`;
+    // KPI cards: LEAN big, Nautilus small, delta badge
+    const defs=[['CAGR','cagr'],['Sharpe','sharpe'],['Sortino','sortino'],['Max DD','dd'],['Win rate','win'],['Trades','trades']];
+    document.getElementById('tearKpis').innerHTML = defs.map(([lbl,key])=>{
+      const a=p.lean[key], b=p.naut[key];
+      const na=parseFloat(String(a).replace(/[^\d.\-]/g,'')), nb=parseFloat(String(b).replace(/[^\d.\-]/g,''));
+      const close=Math.abs(na-nb)/(Math.abs(na)||1)<0.05;
+      return `<div class="tk"><div class="l">${lbl}</div><div class="a">${a}</div>
+        <div class="b">NT ${b}</div><div class="d ${close?'ok':'bad'}">${close?'≈ match':'Δ diverges'}</div></div>`;
+    }).join('');
+    // charts
+    const n=180, lean=CH.equity(n,p.seed,0.00085,0.0075);
+    let naut;
+    if(p.div){ // diverging port: same path early, drift apart
+      const l2=CH.equity(n,p.seed,0.00085,0.0075), extra=CH.rng(p.seed+5);
+      naut={eq:l2.eq.map((v,i)=>v*(1-Math.min(i/n,1)*0.045*(1+extra()*0.3))), rets:l2.rets};
+    } else {
+      const jitter=CH.rng(p.seed+9);
+      naut={eq:lean.eq.map(v=>v*(1+(jitter()-0.5)*0.004)), rets:lean.rets};
+    }
+    CH.multi('parityChart',[
+      {pts:lean.eq.map(Math.log),color:'#4c8dff'},
+      {pts:naut.eq.map(Math.log),color:'#39c5cf',dash:[5,4]},
+    ],{labels:false});
+    CH.drawdown('ddChart',lean.eq,'#e5484d');
+    CH.rolling('rollChart',lean.rets,42,'#9d7bff');
+    CH.hist('histChart',lean.rets);
+    // heatmap
+    this.renderHeatmap(lean.rets, k==='momo'?2023:2022);
+    // tolerance
+    document.getElementById('tolTbl').innerHTML='<thead><tr><th>Metric</th><th>Observed</th><th>Tolerance</th><th>Result</th></tr></thead>'+
+      p.tol.map(t=>`<tr><td class="s">${t.m}</td><td>${t.v}</td><td>${t.lim}</td><td class="s"><span class="tag ${t.ok?'ok':'fail'}">${t.ok?'PASS':'FAIL'}</span></td></tr>`).join('');
+    document.getElementById('parityVerdict').innerHTML = p.pass
+      ? '<div class="verdict pass">✓ PARITY GATE PASSED — cleared for paper trading</div>'
+      : '<div class="verdict fail">⛔ PARITY GATE FAILED — promotion blocked until reconciled</div>';
+    // trade diff
+    document.getElementById('diffTbl').innerHTML='<thead><tr><th>Time</th><th>Symbol</th><th>LEAN</th><th>Nautilus</th><th>Diagnosis</th></tr></thead>'+
+      p.diffs.map(d=>`<tr><td>${d.t}</td><td>${d.sym}</td><td class="s">${d.lean}</td><td class="s">${d.naut}</td><td class="s ${d.d.startsWith('⚠')?'warn':'mut'}">${d.d}</td></tr>`).join('');
+    document.getElementById('diffNote').textContent=p.diffNote;
+  },
+  renderHeatmap(rets, startYear){
+    const months=['J','F','M','A','M','J','J','A','S','O','N','D'];
+    const perMonth=Math.floor(rets.length/36)||1;
+    let html='<div class="hl"></div>'+months.map(m=>`<div class="hc hh">${m}</div>`).join('');
+    for(let y=0;y<3;y++){
+      html+=`<div class="hl">${startYear+y}</div>`;
+      for(let m=0;m<12;m++){
+        const idx=(y*12+m)*perMonth, chunk=rets.slice(idx,idx+perMonth);
+        if(!chunk.length){ html+='<div class="hc" style="background:var(--bg)"></div>'; continue; }
+        const r=chunk.reduce((a,b)=>a+b,0)*100;
+        const a=Math.min(Math.abs(r)/4,1);
+        const bg = r>=0? `rgba(47,191,113,${0.15+a*0.55})` : `rgba(229,72,77,${0.15+a*0.55})`;
+        html+=`<div class="hc" style="background:${bg}">${r.toFixed(1)}</div>`;
+      }
+    }
+    document.getElementById('heatmap').innerHTML=html;
+  },
+
+  /* ---- symbol scope (global filter) ---- */
+  renderSymbols(){
+    const chips=[`<span class="symchip ${Filt.sym==='ALL'?'sel':''}" onclick="UI.pickSym('ALL')">ALL</span>`]
+      .concat(API.symbols.map(v=>
+        `<span class="symchip ${Filt.sym===v.s?'sel':''}" onclick="UI.pickSym('${v.s}')" title="${v.note}">
+         <span class="sp ${v.spine==='full'?'full':v.spine==='dl'?'dl':'part'}"></span>${v.s}
+         <span class="rm" onclick="event.stopPropagation();UI.rmSym('${v.s}')">✕</span></span>`));
+    document.getElementById('symChips').innerHTML=chips.join('');
+    document.getElementById('symScope').textContent = Filt.sym==='ALL'
+      ? 'Scope: all symbols' : `Scope: ${Filt.sym} — every screen is filtered`;
+  },
+  pickSym(sym){
+    Filt.sym=sym;
+    Filt.ac = sym==='ALL'?null:(API.symbols.find(v=>v.s===sym)||{}).ac||null;
+    this.renderSymbols(); this.rerender();
+  },
+  rmSym(sym){
+    if(!confirm(`Remove ${sym} from the workspace? (Spine data stays in the catalog)`))return;
+    API.symbols=API.symbols.filter(v=>v.s!==sym);
+    if(Filt.sym===sym)Filt.sym='ALL';
+    this.renderSymbols(); this.rerender();
+  },
+  rerender(){
+    const act=document.querySelector('.screen.active');
+    if(!act)return;
+    ({'s-dash':()=>this.renderDash(),
+      's-research':()=>{this.renderPipeline();this.renderJournal();},
+      's-orders':()=>this.renderOrders(),
+      's-micro':()=>this.renderMicro(),
+      's-lib':()=>this.renderLib(),
+      's-lab':()=>this.renderLab(),
+      's-parity':()=>this.renderParity(),
+    }[act.id]||(()=>{}))();
+  },
+  addSymbol(){
+    const box=document.getElementById('modalBox');
+    box.className='modal wide';
+    const tiers=API.spineTiers.map(([k,d,sz],i)=>
+      `<label class="check ${i<2?'done':''}"><input type="checkbox" ${i<2?'checked disabled':''} data-tier="${k}">
+       <div><div>${d}</div><div class="d">est. ${sz}${i<2?' · always included':''}</div></div></label>`).join('');
+    box.innerHTML=`<h3>Add symbol to the data spine</h3>
+      <p>Adding a symbol registers it platform-wide and queues the selected data tiers for download (LEAN library pull + catalog export + venue tick/L2 capture — Blueprint M10).</p>
+      <div class="f2">
+        <div><label class="fl">Symbol</label><input type="text" id="ns-sym" placeholder="NVDA / MNQ / SOLUSDT" style="text-transform:uppercase"></div>
+        <div><label class="fl">Asset class</label>
+          <div class="chips" id="ns-ac"><span class="chip sel" data-v="eq">Equity</span><span class="chip" data-v="fut">Futures</span><span class="chip" data-v="cry">Crypto</span><span class="chip" data-v="opt">Options</span></div></div>
+      </div>
+      <label class="fl" style="margin-top:16px">Data tiers</label>${tiers}
+      <div class="ferr" id="ns-err"></div>
+      <div class="row"><button class="btn" onclick="UI.closeModal()">Cancel</button>
+      <button class="btn primary" onclick="UI.queueSpine()">Queue download</button></div>`;
+    box.querySelectorAll('#ns-ac .chip').forEach(ch=>ch.onclick=()=>{
+      box.querySelectorAll('#ns-ac .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
+    document.getElementById('overlay').classList.add('show');
+    setTimeout(()=>document.getElementById('ns-sym').focus(),50);
+  },
+  queueSpine(){
+    const sym=document.getElementById('ns-sym').value.trim().toUpperCase();
+    const e=document.getElementById('ns-err');
+    if(!/^[A-Z0-9.]{1,10}$/.test(sym)){e.style.display='block';e.textContent='⛔ invalid symbol';return;}
+    if(API.symbols.some(v=>v.s===sym)){e.style.display='block';e.textContent='⛔ already in workspace';return;}
+    const ac=document.querySelector('#ns-ac .chip.sel').dataset.v;
+    const tiers=[...document.querySelectorAll('[data-tier]')].filter(c=>c.checked).map(c=>c.dataset.tier);
+    API.symbols.push({s:sym, ac, spine:'dl', note:'downloading: '+tiers.join(' · ')});
+    this.closeModal(); this.renderSymbols();
+    document.getElementById('feed').innerHTML=
+      `<div><span class="t">${new Date().toLocaleTimeString()}</span> <span class="lv-info">SPINE — ${sym} queued: ${tiers.join(', ')} (stub — wire to /api/spine)</span></div>`
+      +document.getElementById('feed').innerHTML;
+    this.toast(`${sym} queued — spine downloading ${tiers.length} tiers`,'ok');
+    setTimeout(()=>{ const v=API.symbols.find(x=>x.s===sym); if(v){v.spine=tiers.includes('l2')?'full':'part'; v.note=tiers.join(' · ')+' — complete'; this.renderSymbols();
+      this.toast(`${sym} spine complete — available on all screens`,'ok');} },3500);
+  },
+
+  /* ---- dashboard (now data-driven + filtered) ---- */
+  renderDash(){
+    document.getElementById('posRows').innerHTML=API.positions
+      .filter(x=>Filt.sym==='ALL'||x.sym===Filt.sym)
+      .map(x=>`<tr><td>${x.sym}</td><td class="s">${x.venue}</td><td>${x.qty}</td><td>${x.px}</td>
+        <td class="${x.pnl>=0?'up':'down'}">${x.pnl>=0?'+':'−'}$${Math.abs(x.pnl).toFixed(2)}</td><td class="s">${x.strat}</td></tr>`)
+      .join('')||'<tr><td colspan="6" class="s mut">No positions in scope</td></tr>';
+    document.getElementById('stratRows').innerHTML=API.strategies
+      .filter(x=>Filt.hit(x.syms))
+      .map(x=>`<tr><td class="s">${x.n}</td><td class="s"><span class="tag ${x.stage==='Paper'?'paper':'off'}">${x.stage}</span></td>
+        <td>${x.sr}</td><td class="s"><span class="tag ${x.c}">${x.st}</span></td></tr>`)
+      .join('')||'<tr><td colspan="4" class="s mut">No strategies in scope</td></tr>';
+  },
+
+  /* ---- microstructure (HFT) ---- */
+  renderMicro(){
+    const meta={AAPL:[254.80,0.01],SPY:[618.34,0.01],QQQ:[551.02,0.01],XLK:[241.20,0.01],
+      MES:[6412.25,0.25],BTCUSDT:[112480,0.1],ETHUSDT:[4182.1,0.05]};
+    const sym=(Filt.sym!=='ALL'&&meta[Filt.sym])?Filt.sym:'AAPL';
+    const [px,tick]=meta[sym];
+    document.getElementById('microSym').textContent='· '+sym;
+    document.getElementById('microFeedInfo').textContent=(API.symbols.find(v=>v.s===sym)||{}).note||'';
+    const r=CH.rng(sym.length*131+7);
+    // book ladder
+    let bids=[],asks=[],maxs=0;
+    for(let i=0;i<10;i++){
+      const bs=Math.round(200+r()*1800), as_=Math.round(200+r()*1800);
+      maxs=Math.max(maxs,bs,as_);
+      bids.push({p:px-tick*(i+1),s:bs}); asks.push({p:px+tick*(i+1),s:as_});
+    }
+    const fmt=v=>tick<0.05?v.toFixed(2):tick<1?v.toFixed(2):v.toFixed(2);
+    let rows='';
+    for(let i=9;i>=0;i--){ const a=asks[i];
+      rows+=`<div class="lrow"><span></span><span></span><span class="pxc" style="color:var(--red)">${fmt(a.p)}</span>
+        <span class="bar ba" style="width:${a.s/maxs*100}%"></span><span class="sz szr">${a.s}</span></div>`;}
+    rows+=`<div class="mid">${fmt(px)} · spread ${(tick).toFixed(2)} (${(tick/px*1e4).toFixed(2)} bps)</div>`;
+    for(let i=0;i<10;i++){ const b=bids[i];
+      rows+=`<div class="lrow"><span class="sz">${b.s}</span><span class="bar bb" style="width:${b.s/maxs*100}%"></span>
+        <span class="pxc" style="color:var(--green)">${fmt(b.p)}</span><span></span><span></span></div>`;}
+    document.getElementById('bookLadder').innerHTML=rows;
+    // KPIs
+    document.getElementById('mSpread').textContent=tick.toFixed(2);
+    document.getElementById('mSpreadBps').textContent=(tick/px*1e4).toFixed(2)+' bps · top depth '+(bids[0].s+asks[0].s);
+    document.getElementById('mMsg').textContent=Math.round(800+r()*4200).toLocaleString();
+    document.getElementById('mLat').textContent=Math.round(38+r()*40)+' µs';
+    document.getElementById('mLatNote').textContent='in-process · network adds '+(sym.includes('USDT')?'~40ms (venue RTT)':'~180ms (broker RTT)');
+    document.getElementById('mAdv').textContent='−'+(0.4+r()*1.2).toFixed(1)+' bp';
+    document.getElementById('mCancel').textContent=(78+r()*15).toFixed(0)+'%';
+    document.getElementById('mQueue').textContent='p'+(20+Math.round(r()*60))+' of queue';
+    document.getElementById('mFillR').textContent=(22+r()*20).toFixed(0)+'%';
+    document.getElementById('mMix').textContent=(60+Math.round(r()*30))+'% maker';
+    // charts: OFI (±), microprice-mid, latency hist
+    const n=140, ofi=[], mp=[]; let o=0;
+    for(let i=0;i<n;i++){ o=o*0.92+(r()-0.5)*0.8; ofi.push(o); mp.push(o*0.35+(r()-0.5)*0.15); }
+    CH.multi('ofiChart',[{pts:ofi,color:'#9d7bff',fill:'rgba(157,123,255,.10)'}],{labels:false});
+    CH.multi('mpChart',[{pts:mp,color:'#39c5cf',fill:'rgba(57,197,207,.10)'}],{labels:false});
+    const lat=[]; for(let i=0;i<400;i++){ lat.push(Math.log(1-r())* -22 + 30); }
+    CH.hist('latChart',lat.map(v=>v/1000));
+    // tape
+    let tp=''; let tpx=px;
+    for(let i=0;i<26;i++){ const side=r()>0.5; tpx+= (side?1:-1)*tick*(r()>0.7?1:0);
+      tp+=`<div><span class="t">${(10+Math.floor(r()*2))}:${String(30+Math.floor(r()*29)).padStart(2,'0')}:${String(Math.floor(r()*59)).padStart(2,'0')}.${String(Math.floor(r()*999)).padStart(3,'0')}</span>
+        <span class="${side?'b':'a'}">${side?'▲':'▼'} ${Math.round(50+r()*900)} @ ${fmt(tpx)}</span></div>`; }
+    document.getElementById('tape').innerHTML=tp;
+  },
+
+  /* ---- AI strategy builder ---- */
+  aiProvider:'builtin',
+  setupAI(){
+    document.querySelectorAll('#aiProv .chip').forEach(ch=>{
+      if(ch.dataset.p==='builtin')ch.classList.add('sel');
+      ch.onclick=()=>{ document.querySelectorAll('#aiProv .chip').forEach(x=>x.classList.remove('sel'));
+        ch.classList.add('sel'); this.aiProvider=ch.dataset.p;
+        document.getElementById('aiConn').style.display=ch.dataset.p==='builtin'?'none':'grid';
+        document.getElementById('aiStatus').textContent=ch.dataset.p==='builtin'?'':'stub — backend routes to this provider (Blueprint M12)';};
+    });
+  },
+  aiParse(){
+    const text=document.getElementById('aiText').value.trim();
+    if(text.length<30){this.toast('Describe the strategy in at least a sentence or two','err');return;}
+    const {spec,warns}=API.aiParse(text);
+    this._aiSpec=spec;
+    document.getElementById('aiSpec').textContent=JSON.stringify(spec,null,2);
+    document.getElementById('aiWarns').innerHTML=warns.map(w=>`<div class="warnrow">⚠ ${w}</div>`).join('')
+      ||'<div class="warnrow" style="color:var(--green)">✓ spec complete — ready for the journal</div>';
+    document.getElementById('aiLogBtn').disabled=false;
+    const prov=this.aiProvider==='builtin'?'built-in parser':this.aiProvider;
+    document.getElementById('aiStatus').textContent=`parsed via ${prov}`;
+  },
+  aiToJournal(){
+    const sp=this._aiSpec; if(!sp)return;
+    if(sp.kill_criterion.startsWith('<')){this.toast('⛔ Journal entry blocked: spec has no kill criterion. Add one to the description and re-parse.','err');return;}
+    if(sp.universe[0]==='<UNSPECIFIED>'){this.toast('⛔ Journal entry blocked: no universe/symbols in spec.','err');return;}
+    const acMap={market_making:'eq',order_flow:'eq',mean_reversion:'eq',momentum:'eq',unclassified:'eq'};
+    API.addIdea({name:sp.name, ac:(API.symbols.find(v=>v.s===sp.universe[0])||{}).ac||acMap[sp.class],
+      syms:sp.universe, hyp:document.getElementById('aiText').value.trim().slice(0,140),
+      uni:sp.universe.join(', '), feats:sp.entry.signal, sharpe:null, turn:'TBD', cap:'TBD', kill:sp.kill_criterion});
+    this.renderPipeline(); this.renderJournal();
+    this.toast(`${sp.name} logged to journal (Idea stage) — spec attached`,'ok');
+  },
+
+  /* ---- HFT library ---- */
+  libCls:'all',
+  renderLib(){
+    const classes=[['all','All'],['mm','Market Making'],['flow','Order Flow'],['arb','Arbitrage'],['event','Event'],['liq','Liquidity'],['scalp','Scalping']];
+    document.getElementById('libFilters').innerHTML=classes.map(([k,l])=>
+      `<span class="chip ${this.libCls===k?'sel':''}" onclick="UI.libCls='${k}';UI.renderLib()">${l}</span>`).join('');
+    const items=API.hftLib.filter(x=>(this.libCls==='all'||x.cls===this.libCls)&&Filt.hitAc(x.ac));
+    document.getElementById('libGrid').innerHTML=items.map(x=>
+      `<div class="lib" id="lib-${x.id}" onclick="document.getElementById('lib-${x.id}').classList.toggle('open')">
+        <div class="ln"><span>#${x.id} ${x.n}</span><span class="mono mut" style="font-size:11px">SR ${x.sr}</span></div>
+        <div class="lm"><span class="tag ${x.cls}">${x.cls}</span><span class="tag ${x.infra}">${x.infra==='colo'?'COLO':x.infra==='lowlat'?'LOW-LAT':'RETAIL'}</span>
+          ${x.ac.map(a=>`<span class="tag ${a}">${a.toUpperCase()}</span>`).join('')}<span class="tag off">${x.hold}</span></div>
+        <div class="le">${x.edge}</div>
+        <div class="spec"><div class="kv">
+          <span class="k">Signal</span><span class="v" style="font-family:var(--sans)">${x.sig}</span>
+          <span class="k">Entry</span><span class="v" style="font-family:var(--sans)">${x.entry}</span>
+          <span class="k">Exit</span><span class="v" style="font-family:var(--sans)">${x.exit}</span>
+          <span class="k">Sizing</span><span class="v" style="font-family:var(--sans)">${x.size}</span>
+          <span class="k">Risk</span><span class="v" style="font-family:var(--sans)">${x.risk}</span></div>
+          <button class="btn primary" onclick="event.stopPropagation();UI.libToJournal(${x.id})">＋ Add to journal</button>
+        </div></div>`).join('')||'<p class="mut">No strategies match this scope/class.</p>';
+  },
+  libToJournal(id){
+    const x=API.hftLib.find(v=>v.id===id);
+    const slug=x.n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')+'-v1';
+    if(API.ideas.some(i=>i.name===slug)){this.toast('Already in journal','err');return;}
+    API.addIdea({name:slug, ac:x.ac[0], syms:Filt.sym!=='ALL'?[Filt.sym]:[],
+      hyp:x.edge, uni:Filt.sym!=='ALL'?Filt.sym:x.ac.join('/').toUpperCase()+' — assign symbols',
+      feats:x.sig, sharpe:null, turn:'TBD', cap:'TBD',
+      kill:'Realized SR < 50% of library range ('+x.sr+') over 30 sessions'});
+    this.renderPipeline(); this.renderJournal();
+    this.toast(`${slug} added to journal — spec from library #${x.id}`,'ok');
+  },
+
+  /* ---- P&L & journal ---- */
+  renderDesk(){
+    document.getElementById('dNet').textContent='+$3,980';
+    document.getElementById('dNetNote').textContent='gross +$4,382 − costs $402 (YTD run-rate)';
+    document.getElementById('dCosts').textContent='$2,412';
+    document.getElementById('dAlpha').innerHTML='<span class="up">+1.4pp</span>';
+    document.getElementById('dReal').textContent='+$2,140';
+    document.getElementById('dWash').textContent='⚠ 1 potential wash sale: QQQ (Jun 12/Jun 30)';
+    // calendar
+    const pnl=API.dailyPnl(9);
+    const dow=['S','M','T','W','T','F','S'];
+    let html=dow.map(d=>`<div class="ch">${d}</div>`).join('');
+    const first=new Date(2026,6,1).getDay();
+    for(let i=0;i<first;i++)html+='<div class="cd off"></div>';
+    let today=5;
+    for(let d=1;d<=31;d++){ const v=pnl[d];
+      const future=d>today;
+      if(v===null){html+=`<div class="cd off"><span class="dn">${d}</span></div>`;continue;}
+      if(future){html+=`<div class="cd"><span class="dn">${d}</span></div>`;continue;}
+      const a2=Math.min(Math.abs(v)/600,1);
+      const bg=v>=0?`rgba(47,191,113,${0.10+a2*0.4})`:`rgba(229,72,77,${0.10+a2*0.4})`;
+      html+=`<div class="cd" style="background:${bg}"><span class="dn">${d}</span><div class="dv ${v>=0?'up':'down'}">${v>=0?'+':'−'}$${Math.abs(v)}</div></div>`;
+    }
+    document.getElementById('pnlCal').innerHTML=html;
+    // benchmark
+    const me=CH.equity(120,7,0.0009,0.006), spy=CH.equity(120,3,0.00075,0.010);
+    CH.multi('benchChart',[{pts:me.eq,color:'#2fbf71'},{pts:spy.eq,color:'#8b93a7',dash:[4,4]}]);
+    // notes + costs
+    document.getElementById('noteList').innerHTML=API.notes.map(n=>
+      `<div class="hb"><div class="hn"><b class="mono" style="font-size:11px">${n.d}</b> · <span class="mut">${n.s}</span><div style="margin-top:3px">${n.txt}</div></div>
+       <span class="tag ${n.tag==='incident'?'fail':n.tag==='discipline'?'warn':'off'}">${n.tag}</span></div>`).join('');
+    document.getElementById('costRows').innerHTML=API.costs.map(([k,v])=>
+      `<tr><td class="s">${k}</td><td style="text-align:right">${v}</td></tr>`).join('')
+      +'<tr><td class="s"><b>Total / month</b></td><td style="text-align:right"><b>$401.90</b></td></tr>';
+  },
+  addNote(){
+    const box=document.getElementById('modalBox'); box.className='modal';
+    box.innerHTML=`<h3>Journal note</h3>
+      <label class="fl">Strategy (or —)</label><input type="text" id="jn-s" placeholder="momo-etf-v3">
+      <label class="fl">Note</label><textarea id="jn-t" placeholder="What happened, and what will you change?"></textarea>
+      <label class="fl">Tag</label><div class="chips" id="jn-tag"><span class="chip sel" data-v="observation">observation</span><span class="chip" data-v="incident">incident</span><span class="chip" data-v="discipline">discipline</span></div>
+      <div class="row"><button class="btn" onclick="UI.closeModal()">Cancel</button>
+      <button class="btn primary" onclick="UI.saveNote()">Save</button></div>`;
+    box.querySelectorAll('#jn-tag .chip').forEach(ch=>ch.onclick=()=>{box.querySelectorAll('#jn-tag .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
+    document.getElementById('overlay').classList.add('show');
+  },
+  saveNote(){
+    const txt=document.getElementById('jn-t').value.trim(); if(!txt){this.toast('Empty note','err');return;}
+    API.notes.unshift({d:new Date().toLocaleDateString('en-US',{month:'short',day:'2-digit'}),
+      s:document.getElementById('jn-s').value.trim()||'—', txt, tag:document.querySelector('#jn-tag .chip.sel').dataset.v});
+    this.closeModal(); this.renderDesk(); this.toast('Note saved to journal','ok');
+  },
+  exportCSV(){
+    const rows=[['time','symbol','side_qty','fill_px','slippage','status'],
+      ...API.orderHist.map(o=>[o.t,o.sym,o.sq,o.px,o.slip,o.st])];
+    this._download('trades.csv', rows.map(r=>r.join(',')).join('\n'), 'text/csv');
+    this.toast('trades.csv downloaded','ok');
+  },
+  exportBackup(){
+    const data={exported:new Date().toISOString(), ideas:API.ideas, symbols:API.symbols, notes:API.notes, alerts:API.alerts};
+    this._download('quantdesk-backup.json', JSON.stringify(data,null,2), 'application/json');
+    this.toast('Full backup downloaded — store it off this machine','ok');
+  },
+  _download(name,content,type){
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  },
+
+  /* ---- accounts & safety ---- */
+  renderSafe(){
+    document.getElementById('acctRows').innerHTML=API.accounts.map(x=>
+      `<tr><td class="s">${x.n}</td><td>${x.eq}</td><td>${x.bp}</td><td>${x.mg}</td></tr>`).join('');
+    document.getElementById('econRows').innerHTML=API.econ.map(([d,e,g])=>
+      `<div class="hb"><span class="mono" style="width:96px;color:var(--muted);flex:none">${d}</span><span class="hn">${e}</span><span class="mut" style="font-size:11px">${g}</span></div>`).join('');
+    document.getElementById('alertRows').innerHTML=API.alerts.map((al,i)=>
+      `<div class="hb"><span class="hn">${al.r}<div class="mut" style="font-size:11px">${al.ch}</div></span>
+       <div class="switch ${al.on?'on':''}" onclick="API.alerts[${i}].on=!API.alerts[${i}].on;UI.renderSafe()"><i></i></div></div>`).join('');
+    document.getElementById('setupList').innerHTML=API.setup.map(([l,pc])=>
+      `<div class="setupbar"><span class="sbl">${l}</span>
+       <div class="bar-outer" style="flex:1;margin:0"><div class="bar-inner" style="width:${pc}%;background:${pc===100?'var(--green)':pc>0?'var(--blue)':'var(--border)'}"></div></div>
+       <span class="mono mut" style="width:40px;text-align:right">${pc}%</span></div>`).join('');
+    this._mktClock(); clearInterval(this._mkI); this._mkI=setInterval(()=>this._mktClock(),1000);
+  },
+  _mktClock(){
+    const el=document.getElementById('mktClock'); if(!el)return;
+    const now=new Date();
+    const et=new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
+    const wd=et.getDay(), mins=et.getHours()*60+et.getMinutes();
+    const open=wd>=1&&wd<=5&&mins>=570&&mins<960;
+    let msg;
+    if(open){ const left=960-mins; msg=`<span class="up">● NYSE OPEN</span> — closes in ${Math.floor(left/60)}h ${left%60}m`; }
+    else { msg=`<span class="down">● NYSE CLOSED</span> — crypto venues 24/7`; }
+    el.innerHTML=`${msg}<div class="mut" style="font-size:11px;margin-top:4px">ET ${et.toLocaleTimeString('en-US',{hour12:false})} · local ${now.toLocaleTimeString('en-US',{hour12:false})}</div>`;
+  },
+  toggleSwitch(el,name){
+    el.classList.toggle('on');
+    this.toast(`${name}: ${el.classList.contains('on')?'ARMED':'disarmed'} (stub — wire to node watchdog, Blueprint M14)`, el.classList.contains('on')?'ok':'err');
+  },
+  addAlert(){
+    const box=document.getElementById('modalBox'); box.className='modal';
+    box.innerHTML=`<h3>New alert</h3>
+      <label class="fl">Rule</label><input type="text" id="al-r" placeholder="SPY drops > 2% intraday">
+      <label class="fl">Channel</label><div class="chips" id="al-c"><span class="chip sel" data-v="email">email</span><span class="chip" data-v="telegram">telegram</span><span class="chip" data-v="toast">in-app</span></div>
+      <div class="row"><button class="btn" onclick="UI.closeModal()">Cancel</button>
+      <button class="btn primary" onclick="UI.saveAlert()">Create</button></div>`;
+    box.querySelectorAll('#al-c .chip').forEach(ch=>ch.onclick=()=>{box.querySelectorAll('#al-c .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
+    document.getElementById('overlay').classList.add('show');
+  },
+  saveAlert(){
+    const r=document.getElementById('al-r').value.trim(); if(!r){this.toast('Empty rule','err');return;}
+    API.alerts.unshift({r, ch:document.querySelector('#al-c .chip.sel').dataset.v, on:true});
+    this.closeModal(); this.renderSafe(); this.toast('Alert created (stub — evaluated server-side, Blueprint M14)','ok');
+  },
+
+  /* ---- strategy lab ---- */
+  renderLab(){
+    const seed=+document.getElementById('labSel').value;
+    const d=CH.labSeries(seed);
+    const last=d.px.length-1;
+    const regimeOn=d.regime[last], conf=d.conf[last], mom=d.mom[last], vol=d.vol[last], wt=d.wt[last];
+    // anatomy flow
+    const anat=[
+      ['Data','9 ETFs + SPY<br>daily bars', true],
+      ['History','380d warm-up<br>252 mom + 200 SMA', true],
+      ['Regime filter', regimeOn?'SPY &gt; SMA200<br><b style="color:var(--green)">RISK-ON</b>':'SPY &lt; SMA200<br><b style="color:var(--red)">RISK-OFF</b>', regimeOn],
+      ['Trigger', `12-1 momentum<br>${(mom*100).toFixed(1)}% vs 0% floor`, mom>0&&regimeOn],
+      ['Confidence', `sigmoid(mom z)<br><b>${conf.toFixed(2)}</b> / entry ≥ 0.50`, conf>=0.5],
+      ['Sizing', `vol-target 10%<br>σ=${(vol*100).toFixed(0)}% → wt ${(wt*100).toFixed(0)}%`, wt>0],
+      ['Risk layer','sanity band ±3%<br>notional ≤ $10k', true],
+      ['Order', d.inPos?'holding / rebal':'no order', d.inPos],
+    ];
+    document.getElementById('labAnat').innerHTML=anat.map(([t,v,on])=>
+      `<div class="an ${on?'on':'hold'}"><div class="t">${t}</div><div class="v">${v}</div></div>`).join('');
+    // charts
+    CH.labChart('labChart',d);
+    CH.threshLine('labConf',d.conf,'rgb(157,123,255)',[[0.5,'#2fbf71'],[0.25,'#e5484d']]);
+    CH.threshLine('labSize',d.wt,'rgb(76,141,255)',[[1.0,'#f5a623']]);
+    // trigger conditions
+    const conds=[
+      ['Regime: SPY close > SMA(200)', `${d.px[last].toFixed(2)} vs ${d.sma[last]?.toFixed(2)}`, regimeOn],
+      ['Momentum: 12-1 return > 0', `${(mom*100).toFixed(2)}%`, mom>0],
+      ['Confidence ≥ 0.50 (entry) / ≥ 0.25 (hold)', conf.toFixed(2), d.inPos?conf>=0.25:conf>=0.5],
+      ['Vol sizing: σ20d annualized', `${(vol*100).toFixed(1)}% → scale ${Math.min(0.10/vol,1.5).toFixed(2)}×`, true],
+      ['Risk layer: order within limits', 'pre-route validation', true],
+    ];
+    document.getElementById('labSigs').innerHTML=conds.map(([c,v,ok])=>
+      `<div class="sig"><span>${c}</span><span class="cond">${v}</span><span class="tag ${ok?'ok':'fail'}">${ok?'TRUE':'FALSE'}</span></div>`).join('');
+    const dec = !regimeOn ? ['FLAT — regime risk-off: liquidate & stand aside','fail']
+      : d.inPos ? [`HOLD / REBALANCE — target weight ${(wt*100).toFixed(0)}% of equity`,'ok']
+      : conf>=0.5 ? ['ENTER — all trigger conditions true','ok'] : ['WAIT — confidence below entry threshold','warn'];
+    document.getElementById('labDecision').innerHTML=
+      `<div class="verdict ${dec[1]==='ok'?'pass':'fail'}" style="margin-top:0">${dec[0]}</div>
+       <p class="mut" style="margin-top:10px">Every box above maps 1:1 to a code block in STRATEGY_GUIDE.md — same names, same thresholds. What you see here is what the backtest executes.</p>`;
+  },
+
+  /* ---- optimize & walk-forward ---- */
+  renderOpt(){
+    const looks=[126,168,210,252,294,336], vts=[6,8,10,12,14];
+    const r=CH.rng(11);
+    let html=`<div class="pc hd"></div>`+looks.map(l=>`<div class="pc hd">${l}d</div>`).join('');
+    let best={v:-9};
+    const cells=[];
+    vts.forEach((vt,vi)=>{ looks.forEach((lk,li)=>{
+      // smooth plateau around (252, 10) + deterministic noise
+      const sr=1.65 - Math.abs(lk-252)/252*0.9 - Math.abs(vt-10)/10*0.8 + (r()-0.5)*0.25;
+      cells.push({vi,li,vt,lk,sr}); if(sr>best.v)best={v:sr,vt,lk};
+    });});
+    vts.forEach(vt=>{ html+=`<div class="pc hd">${vt}%</div>`;
+      looks.forEach(lk=>{ const c=cells.find(z=>z.vt===vt&&z.lk===lk);
+        const a=Math.max(0,Math.min((c.sr-0.2)/1.5,1));
+        const bg=c.sr>=0?`rgba(47,191,113,${0.08+a*0.6})`:`rgba(229,72,77,.4)`;
+        const isBest=c.vt===best.vt&&c.lk===best.lk;
+        html+=`<div class="pc ${isBest?'best':''}" style="background:${bg}" title="lookback ${lk}d, vol target ${vt}%">${c.sr.toFixed(2)}</div>`;
+      });});
+    const g=document.getElementById('optGrid'); g.style.gridTemplateColumns=`44px repeat(${looks.length},1fr)`; g.innerHTML=html;
+    document.getElementById('optNote').innerHTML=`Best cell: <b class="mono">${best.lk}d / ${best.vt}%</b> (SR ${best.v.toFixed(2)}) — but the plateau spans 210–294d × 8–12%. Chosen: <b class="mono">252d / 10%</b> (plateau center). Rows = vol target, columns = momentum lookback.`;
+    document.getElementById('wfRows').innerHTML=API.wf.map((w,i)=>{
+      const isW=90+i*12;
+      return `<div class="wfrow"><span class="wl">W${i+1}</span>
+        <span class="wfseg" style="width:${isW}px;background:var(--blue-dim);color:var(--blue)">${w.is}</span>
+        <span class="wfseg" style="width:120px;background:${w.pass?'var(--green-dim)':'var(--red-dim)'};color:${w.pass?'var(--green)':'var(--red)'}">${w.oos} · SR ${w.sr}</span>
+        ${w.pass?'':'<span class="mut" style="margin-left:8px">2024-H1 chop — momentum flat; survived on regime filter (stayed 40% invested)</span>'}</div>`;
+    }).join('');
+  },
+
+  /* ---- orders ---- */
+  renderOrders(){
+    document.getElementById('openOrders').innerHTML=API.openOrders.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym)).map(o=>
+      `<tr><td>${o.id}</td><td>${o.sym}</td><td class="${o.side==='BUY'?'up':'down'}">${o.side}</td><td>${o.type}</td><td>${o.qty}</td><td>${o.px}</td><td class="s">${o.venue}</td>
+       <td class="s"><span class="tag warn">${o.state}</span></td>
+       <td><button class="btn" style="padding:3px 10px;font-size:11px" onclick="UI.toast('Cancel ${o.id} sent (stub — wire to TradingNode command bus)','ok')">✕</button></td></tr>`).join('');
+    document.getElementById('orderHist').innerHTML=API.orderHist.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym)).map(o=>
+      `<tr><td>${o.t}</td><td>${o.sym}</td><td>${o.sq}</td><td>${o.px}</td><td>${o.slip}</td>
+       <td class="s"><span class="tag ${o.st==='filled'?'ok':o.st==='rejected'?'fail':'off'}">${o.st}</span></td></tr>`).join('');
+  },
+
+  /* ---- wizard ---- */
+  wiz: [
+    {t:'Select scope', items:[]},
+    {t:'Pre-flight checklist', items:[
+      ['Live-scoped API keys created and stored in .env (never committed)','Paper keys will not work live; live keys must be scoped minimally.'],
+      ['Account funded and buying power verified','Confirm at the broker, not just locally.'],
+      ['Kill switch verified against LIVE endpoints','A paper-mode test does not count.'],
+      ['Monitoring dashboard + alerts verified live','Deliberately trigger a test alert.'],
+      ['First-trade size set deliberately small','Minimum size; you will watch it end to end.'],
+      ['Paper acceptance bar met (duration + P&L tracking)','Several weeks paper; results near backtest after slippage.'],
+    ]},
+    {t:'Risk sign-off', items:[
+      ['Daily loss limit configured for live account size',''],
+      ['Max-drawdown auto-halt configured',''],
+      ['Order validation layer active for this venue',''],
+      ['I understand live trading risks real capital loss','Not financial advice. Real money. Real risk.'],
+    ]},
+    {t:'Final confirmation', items:[]},
+  ],
+  renderWizard(){
+    const s=this.wizStep;
+    document.getElementById('wizSteps').innerHTML=this.wiz.map((w,i)=>
+      `<div class="step ${i<s?'done':i===s?'cur':''}"><div class="n">${i<s?'✓':i+1}</div>${w.t}</div>`).join('');
+    const body=document.getElementById('wizBody');
+    if(s===0){
+      body.innerHTML=`<h2 style="margin-top:0">Scope — one venue, one strategy</h2>
+        <div class="grid g2">
+          <div><label class="fl">Venue</label><select id="wizVenue" class="inp">
+            <option>IBKR</option><option>Binance</option><option>Bybit</option><option>Coinbase</option></select></div>
+          <div><label class="fl">Strategy (must be in Paper stage with gate passed)</label><select id="wizStrat" class="inp">
+            <option>momo-etf-v3</option><option>fut-carry-v1</option><option>crypto-mr-v2</option></select></div>
+        </div>
+        <p class="mut" style="margin-top:14px">Rolling out multiple venues or strategies simultaneously is not permitted by this wizard — run it once per pair.</p>`;
+    } else if(s===3){
+      const v=this.wizVenue||'IBKR', st=this.wizStrat||'momo-etf-v3';
+      body.innerHTML=`<h2 style="margin-top:0;color:var(--red)">Final human confirmation</h2>
+        <p class="mut">You are about to flip <b class="mono" style="color:var(--text)">${st}</b> on <b class="mono" style="color:var(--text)">${v}</b> from PAPER to <b style="color:var(--red)">LIVE</b>. This action is never automated. Type exactly:</p>
+        <p class="mono" style="background:var(--bg);padding:10px;border-radius:6px;margin:10px 0;border:1px solid var(--border)">${v} GO LIVE</p>
+        <input type="text" id="wizConfirm" placeholder="Type the confirmation phrase…" oninput="UI.checkConfirm()">
+        <button class="btn danger" id="wizGo" disabled style="margin-top:14px;width:100%" onclick="UI.goLive()">⚠ FLIP TO LIVE — ${st} on ${v}</button>`;
+    } else {
+      const key='s'+s;
+      this.wizChecks[key]=this.wizChecks[key]||new Array(this.wiz[s].items.length).fill(false);
+      body.innerHTML=`<h2 style="margin-top:0">${this.wiz[s].t}</h2>`+this.wiz[s].items.map((it,i)=>
+        `<label class="check ${this.wizChecks[key][i]?'done':''}"><input type="checkbox" ${this.wizChecks[key][i]?'checked':''} onchange="UI.wizCheck('${key}',${i},this.checked)">
+         <div><div>${it[0]}</div>${it[1]?`<div class="d">${it[1]}</div>`:''}</div></label>`).join('');
+    }
+    document.getElementById('wizBack').style.visibility=s===0?'hidden':'visible';
+    const next=document.getElementById('wizNext');
+    next.style.display=s===3?'none':'inline-block';
+    next.disabled = (s===1||s===2) && !(this.wizChecks['s'+s]||[]).every(Boolean) && this.wiz[s].items.length>0;
+  },
+  wizCheck(key,i,val){ this.wizChecks[key][i]=val; this.renderWizard(); },
+  wizNav(dir){
+    if(dir>0 && this.wizStep===0){ this.wizVenue=document.getElementById('wizVenue').value; this.wizStrat=document.getElementById('wizStrat').value; }
+    if(dir>0 && (this.wizStep===1||this.wizStep===2)){
+      const ok=(this.wizChecks['s'+this.wizStep]||[]).every(Boolean);
+      if(!ok){ this.toast('All items must be checked before continuing','err'); return; }
+    }
+    this.wizStep=Math.max(0,Math.min(3,this.wizStep+dir)); this.renderWizard();
+  },
+  checkConfirm(){
+    const v=this.wizVenue||'IBKR';
+    document.getElementById('wizGo').disabled = document.getElementById('wizConfirm').value !== (v+' GO LIVE');
+  },
+  goLive(){
+    const v=this.wizVenue, st=this.wizStrat, ts=new Date().toISOString();
+    document.getElementById('auditLog').innerHTML =
+      `<div><span class="t">${ts}</span> <span class="lv-err">GO-LIVE CONFIRMED</span> ${st} on ${v} — typed confirmation recorded, operator: local</div>`
+      + document.getElementById('auditLog').innerHTML;
+    document.getElementById('modebar').classList.add('live');
+    document.getElementById('modePill').textContent='LIVE';
+    document.getElementById('modeDesc').textContent=`${st} LIVE on ${v} — all other venues remain paper. Real capital at risk.`;
+    this.wizStep=0; this.wizChecks={}; this.renderWizard();
+    this.toast(`${st} is now LIVE on ${v}. Watch the first trade end to end.`,'err');
+  },
+
+  /* ---- kill switch ---- */
+  killSwitch(){
+    const box=document.getElementById('modalBox');
+    box.className='modal danger';
+    box.innerHTML=`<h3>⏻ Activate Kill Switch</h3>
+      <p>This will <b>flatten all positions on all venues</b> and disable new order submission until manually re-armed. Type <b class="mono">FLATTEN</b> to confirm.</p>
+      <input type="text" id="ksInput" placeholder="FLATTEN" oninput="document.getElementById('ksGo').disabled=this.value!=='FLATTEN'">
+      <div class="row"><button class="btn" onclick="UI.closeModal()">Cancel</button>
+      <button class="btn danger" id="ksGo" disabled onclick="UI.doKill()">FLATTEN ALL &amp; HALT</button></div>`;
+    document.getElementById('overlay').classList.add('show');
+    setTimeout(()=>document.getElementById('ksInput').focus(),50);
+  },
+  async doKill(){
+    this.closeModal();
+    const r=await API.killAll();
+    document.getElementById('feed').innerHTML =
+      `<div><span class="t">${new Date().toLocaleTimeString()}</span> <span class="lv-err">KILL SWITCH — ${r.flattened} positions flattened, order submission halted (${r.ms}ms)</span></div>`
+      + document.getElementById('feed').innerHTML;
+    this.toast(`Kill switch executed: ${r.flattened} positions flattened, halted in ${r.ms}ms`,'err');
+  },
+  closeModal(){ document.getElementById('overlay').classList.remove('show'); },
+
+  toast(msg,kind){
+    const t=document.getElementById('toast');
+    t.textContent=msg; t.className='show '+(kind||'');
+    clearTimeout(this._tt); this._tt=setTimeout(()=>t.className='',4200);
+  },
+};
+UI.init();
+window.addEventListener('resize',()=>{UI.renderParity();});
+</script>
+</body>
+</html>

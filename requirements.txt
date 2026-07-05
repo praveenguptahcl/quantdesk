@@ -1,0 +1,13 @@
+# The stdlib server (api/server.py) needs NOTHING from this file — it runs on bare python3.
+# These are for the M3+ upgrade path (FastAPI backend, Postgres, Redis) and later milestones:
+fastapi
+uvicorn[standard]
+pydantic
+sqlalchemy
+psycopg[binary]
+redis
+pyyaml
+pytest
+httpx
+lean            # M4
+nautilus_trader # M5
