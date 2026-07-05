@@ -239,6 +239,31 @@ def engine_b(inject_warmup_bug=False):
     return _run_portfolio(dates, closes, decide)
 
 
+# ------------------------------------------------------------------ real nautilus (M5)
+NAUT_PY = os.path.expanduser("~/.quantdesk/venv/bin/python")
+NAUT_SCRIPT = os.path.normpath(os.path.join(HERE, "..", "scripts", "nautilus_backtest.py"))
+
+
+def engine_nautilus():
+    """Run the REAL nautilus_trader backtest via the venv. Returns engine-metric
+    dict (same shape as engine_a/engine_b) or None if unavailable/failed."""
+    import subprocess
+    if not os.path.exists(NAUT_PY):
+        return None
+    try:
+        p = subprocess.run([NAUT_PY, NAUT_SCRIPT], capture_output=True, text=True, timeout=180)
+        line = p.stdout.strip().splitlines()[-1]
+        d = __import__("json").loads(line)
+        if "error" in d:
+            return None
+        d["trade_log"] = [tuple(t) for t in d.get("trade_log", [])]
+        d.setdefault("equity_monthly", [])
+        d.setdefault("window", "")
+        return d
+    except Exception:
+        return None
+
+
 # ------------------------------------------------------------------ parity
 def compute_parity(a, b, tol=None):
     tol = tol or {"total_return_diff_pp": 1.0, "sharpe_diff": 0.10,
@@ -289,9 +314,19 @@ def fmt_stats(m):
     }
 
 
-def run_parity_backtest(inject_warmup_bug=False, tolerances=None):
+def run_parity_backtest(inject_warmup_bug=False, tolerances=None, engine="auto"):
+    """engine: 'auto' tries REAL nautilus_trader first, falls back to internal engine B."""
     a = engine_a()
-    b = engine_b(inject_warmup_bug=inject_warmup_bug)
+    b = None
+    b_name = "internal-event-engine"
+    if engine in ("auto", "nautilus") and not inject_warmup_bug:
+        b = engine_nautilus()
+        if b is not None:
+            b_name = "nautilus_trader " + str(b.get("version", ""))
+    if b is None:
+        if engine == "nautilus":
+            return None
+        b = engine_b(inject_warmup_bug=inject_warmup_bug)
     if a is None or b is None:
         return None
     par = compute_parity(a, b, tolerances)
@@ -299,7 +334,8 @@ def run_parity_backtest(inject_warmup_bug=False, tolerances=None):
             if par["pass"] else
             "Divergence detected — first suspect: indicator warm-up length in the event-driven port.")
     return {
-        "window": a["window"] + f" · daily bars · fees {FEE_BPS:.0f}bp · data: {provenance()}",
+        "naut_engine": b_name,
+        "window": a["window"] + f" · daily bars · fees {FEE_BPS:.0f}bp · data: {provenance()} · naut leg: {b_name}",
         "lean": fmt_stats(a), "naut": fmt_stats(b),
         "tol": par["tol"], "pass": par["pass"],
         "diffs": par["diffs"], "diffNote": note,

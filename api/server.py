@@ -399,7 +399,8 @@ class Handler(BaseHTTPRequestHandler):
                               "sharpe_diff": t.get("sharpe_diff", 0.10),
                               "trade_count_diff_pct": t.get("trade_count_diff_pct", 2.0),
                               "max_dd_diff_pp": t.get("max_dd_diff_pp", 1.0)}
-        result = backtest.run_parity_backtest(inject_warmup_bug=bug, tolerances=tolerances)
+        result = backtest.run_parity_backtest(inject_warmup_bug=bug, tolerances=tolerances,
+                                              engine=(body or {}).get("engine", "auto"))
         if result is None:
             return self._err(503, "catalog data missing — run scripts/gen_synthetic_data.py or scripts/fetch_data.py")
         store.put_doc("backtests", "momo-etf-v3", result)
