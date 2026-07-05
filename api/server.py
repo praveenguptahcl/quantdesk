@@ -116,6 +116,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/data/inventory": self.g_data_inventory,
             "/api/equity/history": self.g_equity_history,
             "/api/quotes": lambda: self.g_quotes(q),
+            "/api/optimize": lambda: (lambda d: self._send(200, d) if d else self._err(
+                404, "not computed yet — press Compute on the Optimize screen"))(
+                store.get_doc("optimize", "momo-etf-v3")),
             "/api/signals": lambda: (lambda sig: self._send(200, sig) if sig else self._err(
                 503, "catalog data missing"))(backtest.current_signal()),
         }.get(path)
@@ -158,6 +161,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/orders/place": lambda: self.p_place_order(body),
             "/api/positions/close": lambda: self.p_close_position(body),
             "/api/node/rebalance": lambda: self.p_rebalance(body),
+            "/api/optimize/run": self.p_optimize_run,
             "/api/clientlog": lambda: (open(os.path.join(HERE, "..", "logs_and_artifacts",
                 "client_errors.log"), "a").write(
                 f"{time.strftime('%H:%M:%S')} {json.dumps(body)}\n"), self._send(200, {"ok": True}))[-1],
@@ -845,6 +849,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, plan)
         except subprocess.TimeoutExpired:
             self._err(504, "node timed out")
+
+    def p_optimize_run(self):
+        """Compute the REAL parameter sweep + walk-forward (~2-4s of actual backtests)."""
+        grid = backtest.optimize_grid()
+        wf = backtest.walkforward()
+        doc = {"grid": grid, "wf": wf, "computed_at": time.strftime("%Y-%m-%d %H:%M")}
+        store.put_doc("optimize", "momo-etf-v3", doc)
+        store.add_feed("info", f"OPTIMIZE — real sweep: {grid['n_backtests']} backtests in "
+                       f"{grid['runtime_s']}s; best SR {grid['best']['sharpe']} at "
+                       f"{grid['best']['look']}d/{int(grid['best']['vol_tgt']*100)}%")
+        self._send(200, doc)
 
     # ---------- helpers ----------
     @staticmethod

@@ -384,7 +384,18 @@ label.fl b{color:var(--red)}
     <!-- ======== BACKTEST & PARITY ======== -->
     <section class="screen" id="s-parity">
       <h1>Backtest &amp; Parity Gate</h1>
-      <div class="sub">Full tearsheet per strategy, then LEAN vs NautilusTrader reconciliation — the hard gate before paper trading.</div>
+      <div class="sub">Prove the strategy twice, then prove both versions agree — before any money (even paper) moves.</div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="anat" style="margin-bottom:8px">
+          <div class="an on"><div class="t">Step 1</div><div class="v"><b>Run dual backtest</b><br>research engine + Nautilus execution engine, same data</div></div>
+          <div class="an on"><div class="t">Step 2</div><div class="v"><b>Read the gate</b><br>4 tolerance checks below — all must PASS</div></div>
+          <div class="an on"><div class="t">Step 3 if PASS</div><div class="v"><b>Promote in Journal</b><br>strategy is cleared for paper trading</div></div>
+          <div class="an hold"><div class="t">Step 3 if FAIL</div><div class="v"><b>Read trade diff</b><br>find the porting bug (warm-up? fees? timing?)</div></div>
+        </div>
+        <p class="mut" style="margin:0">Why this exists: your research code and your execution code are two different programs.
+        If they don't produce the <b>same trades on the same data</b>, one of them is wrong — and you'd only find out with real orders.
+        This gate blocks Journal promotion <b>and</b> the Go-Live wizard until they reconcile. Try <b>⚠ Run with injected bug</b> to see a failure and its diagnosis.</p>
+      </div>
       <div class="flex" style="margin-bottom:16px;flex-wrap:wrap">
         <span class="mut">Strategy:</span>
         <select id="paritySel" class="inp" style="width:auto" onchange="UI.renderParity()">
@@ -401,10 +412,10 @@ label.fl b{color:var(--red)}
 
       <div class="grid g32">
         <div class="card">
-          <h2 style="margin-top:0">Equity — LEAN vs Nautilus (log scale)</h2>
+          <h2 style="margin-top:0">Equity — both engines overlaid</h2><p class="mut" style="margin:0 0 6px">Look for: two curves sitting on top of each other. Any visible gap = the engines disagree.</p>
           <canvas id="parityChart" height="200"></canvas>
           <div class="legend"><span><span class="dot" style="background:var(--blue)"></span>LEAN · QCAlgorithm</span><span><span class="dot" style="background:var(--cyan)"></span>Nautilus · Strategy</span></div>
-          <h2>Drawdown</h2>
+          <h2>Drawdown</h2><p class="mut" style="margin:0 0 6px">Deepest dip = worst peak-to-trough loss you would have sat through. Can you stomach it?</p>
           <canvas id="ddChart" height="90"></canvas>
         </div>
         <div class="card">
@@ -420,12 +431,12 @@ label.fl b{color:var(--red)}
 
       <div class="grid g2" style="margin-top:14px">
         <div class="card">
-          <h2 style="margin-top:0">Tolerance Check</h2>
+          <h2 style="margin-top:0">The Gate — 4 tolerance checks</h2><p class="mut" style="margin:0 0 8px">Small differences are normal (different fill models); big ones are bugs. Limits live in risk/limits.yaml.</p>
           <table id="tolTbl"></table>
           <div id="parityVerdict"></div>
         </div>
         <div class="card">
-          <h2 style="margin-top:0">Trade-Level Diff (first divergences)</h2>
+          <h2 style="margin-top:0">Where they first disagree (debugging table)</h2><p class="mut" style="margin:0 0 8px">The first divergent trade usually names the bug: same date+symbol but different action ⇒ check warm-up length, fee model, or bar timing.</p>
           <table id="diffTbl"></table>
           <p class="mut" id="diffNote" style="margin-top:10px"></p>
         </div>
@@ -693,28 +704,39 @@ label.fl b{color:var(--red)}
     <!-- ======== OPTIMIZE & WALK-FORWARD ======== -->
     <section class="screen" id="s-opt">
       <h1>Optimize &amp; Walk-Forward</h1>
-      <div class="sub">Parameter sweeps via <span class="mono">lean optimize</span>; robustness via walk-forward. A jagged heatmap = fragile parameters. A smooth plateau = robust region — pick the plateau's center, never the single best cell.</div>
-      <div class="grid g32">
-        <div class="card">
-          <h2 style="margin-top:0">Sharpe by parameter — momo-etf-v3 <span class="mut" style="text-transform:none">(momentum lookback × vol target)</span></h2>
-          <div class="pgrid" id="optGrid"></div>
-          <p class="mut" style="margin-top:10px" id="optNote"></p>
+      <div class="sub">Two questions every strategy must answer: <b>are the parameters robust</b> (not a lucky fluke), and <b>did it work out-of-sample</b>? Both computed from real backtests on your data.</div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="flex spread">
+          <div>
+            <h2 style="margin-top:0">Q1 — Is 252d / 10% a robust choice?</h2>
+            <p class="mut" style="margin:0">Press Compute: the platform runs the <b>actual strategy 30 times</b> (6 momentum lookbacks × 5 vol targets) on your real data and colors each cell by its Sharpe.</p>
+          </div>
+          <button class="btn primary" id="optBtn" onclick="UI.optCompute()">▶ Compute real sweep (30 backtests, ~3s)</button>
         </div>
-        <div class="card">
-          <h2 style="margin-top:0">Overfitting Guards</h2>
-          <div class="cp done"><span class="ck">✓</span>Parameter count ≤ 3 (currently 2)</div>
-          <div class="cp done"><span class="ck">✓</span>Chosen params on plateau, not peak</div>
-          <div class="cp done"><span class="ck">✓</span>OOS window never touched during tuning</div>
-          <div class="cp done"><span class="ck">✓</span>Backtest window frozen after selection</div>
-          <div class="cp blocked"><span class="ck">!</span>Deflated Sharpe ratio &gt; 0 — pending (run after WF)</div>
-          <p class="mut" style="margin-top:10px">Run: <span class="mono">lean optimize "momo-etf-v3" --strategy "Grid Search" --target "Sharpe Ratio"</span></p>
+        <div id="optMeta" class="mut" style="margin:10px 0 6px">not computed yet</div>
+        <div class="pgrid" id="optGrid"></div>
+        <div class="grid g2" style="margin-top:12px">
+          <p class="mut" style="margin:0"><b>How to read it:</b> a broad green <b>plateau</b> means many nearby parameters work — robust. A single bright cell in a sea of red means that one backtest got lucky — <b>overfit</b>. The frozen choice ◉ should sit on the plateau, not on a lone peak.</p>
+          <div id="optVerdict"></div>
         </div>
       </div>
-      <h2>Walk-Forward Windows — anchored, 12m in-sample / 6m out-of-sample</h2>
+
       <div class="card">
-        <div id="wfRows"></div>
-        <div class="legend" style="margin-top:12px"><span><span class="dot" style="background:var(--blue)"></span>In-sample (fit)</span><span><span class="dot g"></span>OOS pass (Sharpe ≥ 0.7)</span><span><span class="dot r"></span>OOS fail</span></div>
-        <div class="verdict pass" style="margin-top:14px">✓ WALK-FORWARD: 5 of 6 OOS windows pass · mean OOS Sharpe 1.21 · Phase 3 checkpoint satisfied</div>
+        <h2 style="margin-top:0">Q2 — Did it hold up out-of-sample?</h2>
+        <p class="mut" style="margin:0 0 10px">The real equity curve, cut into ~6-month segments (after warm-up). Each segment's Sharpe is computed independently — parameters were never fitted to any of them. Consistent green = the edge persists; one lucky year = it doesn't.</p>
+        <table><thead><tr><th>Segment</th><th>Return</th><th>Sharpe</th><th>Verdict</th></tr></thead>
+        <tbody id="wfRows2"><tr><td colspan="4" class="s mut">press Compute above</td></tr></tbody></table>
+        <div id="wfVerdict" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2 style="margin-top:0">Overfitting guards (the checklist behind the gate)</h2>
+        <div class="cp done"><span class="ck">✓</span>Parameter count ≤ 3 — this strategy tunes only 2</div>
+        <div class="cp done"><span class="ck">✓</span>Chosen params on plateau, not peak — verify on the heatmap above</div>
+        <div class="cp done"><span class="ck">✓</span>Out-of-sample segments never used for tuning — params frozen in git before this data existed</div>
+        <div class="cp todo"><span class="ck">○</span>Deflated Sharpe ratio — advanced check, see Docs &amp; Learn reference (Bailey &amp; López de Prado)</div>
+        <p class="mut" style="margin-top:8px">Want to experiment? The Strategy Lab's what-if editor changes parameters safely without touching the frozen strategy.</p>
       </div>
     </section>
 
@@ -1548,7 +1570,7 @@ const UI = {
       const na=parseFloat(String(a).replace(/[^\d.\-]/g,'')), nb=parseFloat(String(b).replace(/[^\d.\-]/g,''));
       const close=Math.abs(na-nb)/(Math.abs(na)||1)<0.05;
       return `<div class="tk"><div class="l">${lbl}</div><div class="a">${a}</div>
-        <div class="b">NT ${b}</div><div class="d ${close?'ok':'bad'}">${close?'≈ match':'Δ diverges'}</div></div>`;
+        <div class="b">Nautilus: ${b}</div><div class="d ${close?'ok':'bad'}">${close?'✓ engines match':'Δ diverges'}</div></div>`;
     }).join('');
     // charts — REAL backtest equity curves when the server has them
     if(p.eq_a&&p.eq_a.length>2){
@@ -2354,34 +2376,51 @@ const UI = {
     }catch(e){el.innerHTML='<p class="mut">signal fetch failed</p>';}
   },
 
-  /* ---- optimize & walk-forward ---- */
-  renderOpt(){
-    const looks=[126,168,210,252,294,336], vts=[6,8,10,12,14];
-    const r=CH.rng(11);
-    let html=`<div class="pc hd"></div>`+looks.map(l=>`<div class="pc hd">${l}d</div>`).join('');
-    let best={v:-9};
-    const cells=[];
-    vts.forEach((vt,vi)=>{ looks.forEach((lk,li)=>{
-      // smooth plateau around (252, 10) + deterministic noise
-      const sr=1.65 - Math.abs(lk-252)/252*0.9 - Math.abs(vt-10)/10*0.8 + (r()-0.5)*0.25;
-      cells.push({vi,li,vt,lk,sr}); if(sr>best.v)best={v:sr,vt,lk};
-    });});
-    vts.forEach(vt=>{ html+=`<div class="pc hd">${vt}%</div>`;
-      looks.forEach(lk=>{ const c=cells.find(z=>z.vt===vt&&z.lk===lk);
-        const a=Math.max(0,Math.min((c.sr-0.2)/1.5,1));
-        const bg=c.sr>=0?`rgba(47,191,113,${0.08+a*0.6})`:`rgba(229,72,77,.4)`;
-        const isBest=c.vt===best.vt&&c.lk===best.lk;
-        html+=`<div class="pc ${isBest?'best':''}" style="background:${bg}" title="lookback ${lk}d, vol target ${vt}%">${c.sr.toFixed(2)}</div>`;
+  /* ---- optimize & walk-forward (REAL computation) ---- */
+  async renderOpt(){
+    if(!QD.on){document.getElementById('optMeta').textContent='backend offline — python3 api/server.py';return;}
+    try{ const r=await fetch('/api/optimize');
+      if(r.ok){ this.drawOpt(await r.json()); return; } }catch(e){}
+    document.getElementById('optMeta').innerHTML='<span class="warn">Not computed yet — press the button. Results are cached until you recompute.</span>';
+    document.getElementById('optGrid').innerHTML=''; document.getElementById('optVerdict').innerHTML='';
+  },
+  async optCompute(){
+    const btn=document.getElementById('optBtn'); btn.disabled=true; btn.textContent='⏳ running 30 real backtests…';
+    const r=await QD.post('/api/optimize/run');
+    btn.disabled=false; btn.textContent='▶ Recompute sweep';
+    if(!r||r.err)return;
+    this.drawOpt(r);
+    this.toast(`Real sweep done: ${r.grid.n_backtests} backtests in ${r.grid.runtime_s}s`,'ok');
+  },
+  drawOpt(d){
+    const g=d.grid, wf=d.wf;
+    document.getElementById('optMeta').innerHTML=
+      `REAL — ${g.n_backtests} backtests in ${g.runtime_s}s · data: ${g.data_provenance} · computed ${d.computed_at}`;
+    const allv=g.cells.flat().filter(v=>v!==null);
+    const lo=Math.min(...allv), hi=Math.max(...allv);
+    let html='<div class="pc hd"></div>'+g.looks.map(l=>`<div class="pc hd">${l}d</div>`).join('');
+    g.vts.forEach((vt,vi)=>{ html+=`<div class="pc hd">${Math.round(vt*100)}%</div>`;
+      g.looks.forEach((lk,li)=>{ const v=g.cells[vi][li];
+        if(v===null){html+='<div class="pc" style="background:var(--bg)">—</div>';return;}
+        const a2=hi>lo?(v-lo)/(hi-lo):0.5;
+        const bg=v>=0?`rgba(47,191,113,${0.10+a2*0.6})`:`rgba(229,72,77,${0.15+(1-a2)*0.4})`;
+        const frozen=(lk===g.frozen.look&&vt===g.frozen.vol_tgt);
+        html+=`<div class="pc ${frozen?'best':''}" style="background:${bg}" title="${lk}d lookback, ${Math.round(vt*100)}% vol target">${frozen?'◉ ':''}${v.toFixed(2)}</div>`;
       });});
-    const g=document.getElementById('optGrid'); g.style.gridTemplateColumns=`44px repeat(${looks.length},1fr)`; g.innerHTML=html;
-    document.getElementById('optNote').innerHTML=`Best cell: <b class="mono">${best.lk}d / ${best.vt}%</b> (SR ${best.v.toFixed(2)}) — but the plateau spans 210–294d × 8–12%. Chosen: <b class="mono">252d / 10%</b> (plateau center). Rows = vol target, columns = momentum lookback.`;
-    document.getElementById('wfRows').innerHTML=API.wf.map((w,i)=>{
-      const isW=90+i*12;
-      return `<div class="wfrow"><span class="wl">W${i+1}</span>
-        <span class="wfseg" style="width:${isW}px;background:var(--blue-dim);color:var(--blue)">${w.is}</span>
-        <span class="wfseg" style="width:120px;background:${w.pass?'var(--green-dim)':'var(--red-dim)'};color:${w.pass?'var(--green)':'var(--red)'}">${w.oos} · SR ${w.sr}</span>
-        ${w.pass?'':'<span class="mut" style="margin-left:8px">2024-H1 chop — momentum flat; survived on regime filter (stayed 40% invested)</span>'}</div>`;
-    }).join('');
+    const grid=document.getElementById('optGrid');
+    grid.style.gridTemplateColumns=`44px repeat(${g.looks.length},1fr)`; grid.innerHTML=html;
+    const onPlateau=g.frozen.plateau_mean!==null&&g.frozen.sharpe!==null&&(g.frozen.sharpe-g.frozen.plateau_mean)<0.25;
+    document.getElementById('optVerdict').innerHTML=
+      `<div class="verdict ${onPlateau?'pass':'fail'}" style="margin:0">◉ frozen 252d/10%: SR ${g.frozen.sharpe}
+       · 3×3 neighborhood avg ${g.frozen.plateau_mean} → ${onPlateau?'ON THE PLATEAU (robust)':'stands alone — investigate'}</div>
+       <p class="mut" style="margin-top:6px">Grid best: SR ${g.best.sharpe} at ${g.best.look}d/${Math.round(g.best.vol_tgt*100)}% — chasing it is how overfitting starts.</p>`;
+    if(wf){
+      document.getElementById('wfRows2').innerHTML=wf.windows.map(w=>
+        `<tr><td>${w.from} → ${w.to}</td><td class="${w.ret_pct>=0?'up':'down'}">${w.ret_pct>=0?'+':''}${w.ret_pct}%</td>
+         <td>${w.sharpe}</td><td class="s"><span class="tag ${w.pass?'ok':'fail'}">${w.pass?'PROFITABLE':'LOST MONEY'}</span></td></tr>`).join('');
+      document.getElementById('wfVerdict').innerHTML=
+        `<div class="verdict ${wf.n_pass>=wf.n_total*0.6?'pass':'fail'}" style="margin:0">${wf.verdict} · full-period Sharpe ${wf.overall_sharpe} (real ${wf.data_provenance} data)</div>`;
+    }
   },
 
   /* ---- orders ---- */
