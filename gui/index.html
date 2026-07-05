@@ -933,8 +933,14 @@ label.fl b{color:var(--red)}
       <div class="grid g2">
         <div class="card">
           <h2 style="margin-top:0">Users</h2>
-          <table><thead><tr><th>User</th><th>Name</th><th>Role</th><th>Virtual cash</th><th>Status</th></tr></thead>
-          <tbody id="admUsers"><tr><td colspan="5" class="s mut">—</td></tr></tbody></table>
+          <table><thead><tr><th>User</th><th>Name</th><th>Role</th><th>Virtual cash</th><th>Status</th><th></th></tr></thead>
+          <tbody id="admUsers"><tr><td colspan="6" class="s mut">—</td></tr></tbody></table>
+          <div class="flex" style="margin-top:8px">
+            <button class="btn" onclick="UI.seedDemo()">🎭 Seed demo community</button>
+            <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="UI.removeDemo()">🗑 Remove ALL demo accounts</button>
+          </div>
+          <p class="mut" style="font-size:11px">Demo fills every screen with sample data: 6 LLM traders (grok, chatgpt, deepseek, claude, copilot, gemini) + 3 humans (maya / ravi / sofia, password <code>demo123</code>) — each with a live strategy variant, real weekly returns, and public reasoning. Click any row to manage that account.</p>
+          <div id="admUserDetail" style="display:none;margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:12px"></div>
           <h2>Create user</h2>
           <div class="f2">
             <div><label class="fl">Username</label><input type="text" id="auU"></div>
@@ -1815,6 +1821,9 @@ const UI = {
       's-opt':()=>this.renderOpt(),
       's-desk':()=>this.renderDesk(),
       's-safe':()=>this.renderSafe(),
+      's-board':()=>this.renderBoard(),
+      's-me':()=>this.renderMe(),
+      's-admin':()=>this.renderAdmin(),
     }[act.id]||(()=>{}))();
   },
   addSymbol(){
@@ -2373,9 +2382,12 @@ const UI = {
     if(!QD.on)return;
     const users=await(await fetch('/api/community/users')).json();
     document.getElementById('admUsers').innerHTML=users.map(u=>
-      `<tr><td>${u.u}</td><td class="s">${u.name||''}</td><td class="s">${u.role||'—'}</td>
+      `<tr style="cursor:pointer" onclick="UI.userDetail('${u.u}')" title="click to manage ${u.u}">
+       <td>${u.role==='llm'?'🤖 ':''}${u.u}${u.demo?' <span class="tag warn">demo</span>':''}</td>
+       <td class="s">${u.name||''}</td><td class="s">${u.role||'—'}${u.provider?' · '+u.provider:''}</td>
        <td>${u.cash!==undefined?'$'+u.cash.toLocaleString():'—'}</td>
-       <td class="s">${u.disabled?'<span class="tag fail">disabled</span>':'<span class="tag ok">active</span>'}${u.must_change?' <span class="tag warn">temp pw</span>':''}</td></tr>`).join('');
+       <td class="s">${u.disabled?'<span class="tag fail">disabled</span>':'<span class="tag ok">active</span>'}${u.must_change?' <span class="tag warn">temp pw</span>':''}</td>
+       <td class="s" style="color:var(--blue)">manage ▸</td></tr>`).join('');
     const inv=await(await fetch('/api/community/investments')).json();
     document.getElementById('admInv').innerHTML=inv.map(x=>
       `<div>${x.user}: $${x.amount.toLocaleString()} → ${x.strategy} (${Object.keys(x.params||{}).length?JSON.stringify(x.params):'frozen'})</div>`).join('')||'none';
@@ -2387,6 +2399,40 @@ const UI = {
       document.querySelectorAll('#llmP .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
     document.querySelectorAll('#auR .chip').forEach(ch=>ch.onclick=()=>{
       document.querySelectorAll('#auR .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
+  },
+  async seedDemo(){
+    this.toast('Seeding demo community (runs real backtests once)…','ok');
+    const r=await QD.post('/api/community/seed-demo'); if(!r||r.err)return;
+    this.toast(`🎭 ${r.seeded||0} demo accounts seeded — check the Leaderboard`,'ok'); this.renderAdmin();
+  },
+  async removeDemo(){
+    if(!confirm('Delete ALL demo accounts, their strategies and investments?'))return;
+    const r=await QD.post('/api/community/remove-demo'); if(!r||r.err)return;
+    this.toast(`🗑 removed: ${(r.removed||[]).join(', ')||'nothing to remove'}`,'ok');
+    document.getElementById('admUserDetail').style.display='none'; this.renderAdmin();
+  },
+  async userDetail(u){
+    const d=await(await fetch('/api/community/user?u='+u)).json();
+    if(d.err){this.toast(d.err,'err');return;}
+    const el=document.getElementById('admUserDetail'); el.style.display='block';
+    const st=d.strategies.map(x=>`<div>• <b>${x.name}</b> — stage ${x.stage}, ${x.public?'🌐 public':'🔒 private'}${x.params&&Object.keys(x.params).length?' · <span class="mut">'+JSON.stringify(x.params)+'</span>':''}</div>`).join('')||'<div class="mut">no strategies</div>';
+    const iv=d.investments.map(x=>`<div>• $${x.amount.toLocaleString()} → ${x.strategy} <span style="color:${x.week_return_pct>=0?'var(--green)':'var(--red)'}">${x.week_return_pct>=0?'+':''}${x.week_return_pct}% this week</span></div>`).join('')||'<div class="mut">no open investments</div>';
+    const lg=(d.llm_decisions||[]).map(x=>`<div class="mut" style="font-size:11px">🤖 ${x.at}: ${(x.decision&&x.decision.reason||'').slice(0,120)}</div>`).join('');
+    el.innerHTML=`<div class="flex" style="justify-content:space-between;align-items:center">
+      <b>${d.user.role==='llm'?'🤖 ':''}${d.user.u} — ${d.user.name||''}</b>
+      <span>${d.user.demo?'<span class="tag warn">demo</span> ':''}<span class="tag">${d.user.role}</span></span></div>
+      <div class="mut" style="margin:4px 0">virtual cash $${(d.user.cash||0).toLocaleString()} · invested $${d.invested_total.toLocaleString()}</div>
+      <div style="margin-top:6px"><b>Strategies</b>${st}</div>
+      <div style="margin-top:6px"><b>Investments</b>${iv}</div>${lg?'<div style="margin-top:6px"><b>Recent decisions</b>'+lg+'</div>':''}
+      <div class="flex" style="margin-top:10px">
+        <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="UI.deleteUser('${d.user.u}')">🗑 Delete this account + all its data</button>
+        <button class="btn" onclick="document.getElementById('admUserDetail').style.display='none'">Close</button></div>`;
+  },
+  async deleteUser(u){
+    if(!confirm(`Delete ${u} with all strategies and investments? This cannot be undone.`))return;
+    const r=await QD.post('/api/community/users/delete',{u}); if(!r||r.err)return;
+    this.toast(`🗑 ${r.deleted} deleted (${r.strategies} strategies, ${r.investments} investments)`,'ok');
+    document.getElementById('admUserDetail').style.display='none'; this.renderAdmin();
   },
   async admCreate(){
     const r=await QD.post('/api/community/users',{u:document.getElementById('auU').value.trim(),

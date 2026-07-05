@@ -105,7 +105,7 @@ def invest(store, user, idea_id, amount, params=None):
     forced = not idea.get("public")
     idea["public"] = True
     store.put_doc("ideas", idea_id, idea)
-    udoc = store.get_doc("users", user["u"]) if enabled() else None
+    udoc = store.get_doc("users", user["u"])  # deduct in solo mode too (demo accounts)
     if udoc:
         udoc["cash"] -= amount
         store.put_doc("users", user["u"], udoc)
@@ -152,13 +152,24 @@ def week_deadline_str():
     return "Saturday 23:59 ET"
 
 
+_WR_CACHE = {}  # params-json -> (date, value); real returns only move with new bars
+
+
 def _strategy_week_return(params):
-    """REAL last-5-trading-day return of the strategy variant (engine_a)."""
+    """REAL last-5-trading-day return of the strategy variant (engine_a). Cached per
+    calendar day so a demo-filled leaderboard doesn't rerun 10+ backtests per view."""
+    key = json.dumps(params or {}, sort_keys=True)
+    today = datetime.date.today().isoformat()
+    hit = _WR_CACHE.get(key)
+    if hit and hit[0] == today:
+        return hit[1]
     r = backtest.engine_a(params or None)
     if not r or len(r["equity_daily"]) < 6:
         return 0.0
     eq = r["equity_daily"]
-    return eq[-1] / eq[-6] - 1
+    val = eq[-1] / eq[-6] - 1
+    _WR_CACHE[key] = (today, val)
+    return val
 
 
 def standings(store):
@@ -330,6 +341,147 @@ def run_llm_traders(store, runnable):
                        + (err or f"${amount:,.0f} → {decision.get('reason','')[:110]}"))
         results.append(entry)
     return results
+
+
+# ---------------- demo community (sample accounts, admin-deletable) ----------------
+DEMO_BOTS = [  # username, display, engine-param variant, one-line style
+    ("grok",     "Grok",     {"mom": 126, "top_n": 2, "vol_tgt": 0.14}, "aggressive 6-month momentum, concentrated top-2, hot vol target"),
+    ("chatgpt",  "ChatGPT",  {"vol_tgt": 0.10, "top_n": 3},             "trusts the frozen momo defaults — plateau over drama"),
+    ("deepseek", "DeepSeek", {"mom": 189, "skip": 10, "vol_tgt": 0.12}, "9-month lookback with a short 10-day skip window"),
+    ("claude",   "Claude",   {"vol_tgt": 0.08, "top_n": 4},             "low-vol, diversified top-4 — steady compounding"),
+    ("copilot",  "Copilot",  {"sma_n": 150, "vol_tgt": 0.11},           "faster SMA-150 regime filter, quicker to re-risk"),
+    ("gemini",   "Gemini",   {"mom": 63, "top_n": 2, "vol_tgt": 0.15},  "3-month sprint momentum — rides whatever is hot now"),
+]
+DEMO_HUMANS = [("maya", "Maya Patel"), ("ravi", "Ravi Sharma"), ("sofia", "Sofia Chen")]
+
+
+def _demo_idea(store, owner, name, params, hyp):
+    import logic
+    doc = logic.new_idea({
+        "name": name, "ac": "eq", "syms": ["SPY", "XLK"], "owner": owner,
+        "hyp": f"[DEMO] {hyp}", "uni": "SPY + 9 sector ETFs",
+        "feats": "12-1 momentum family (parameterized engine)",
+        "kill": "underperforms frozen momo-etf-v3 by 20% over 8 weeks",
+        "engine_params": params, "public": True, "demo": True})
+    doc["stage"] = 5
+    doc["gateNote"] = "Paper stage — demo account strategy (sample data)"
+    store.put_doc("ideas", doc["id"], doc)
+    return doc
+
+
+def seed_demo(store, force=False):
+    """Fill the community with sample LLM + human accounts so every screen has
+    something to look at. Everything is tagged demo:True and admin-deletable."""
+    if store.get_kv("demo:seeded") and not force:
+        return {"seeded": 0, "note": "already seeded"}
+    n = 0
+    amounts = {"grok": 30000, "chatgpt": 22000, "deepseek": 18000,
+               "claude": 25000, "copilot": 15000, "gemini": 28000}
+    for u, name, params, style in DEMO_BOTS:
+        if store.get_doc("users", u):
+            continue
+        doc, _ = create_llm_user(store, u, name, "builtin")
+        doc["demo"] = True
+        store.put_doc("users", u, doc)
+        idea = _demo_idea(store, u, f"{u}-momo", params, f"{name}: {style}")
+        amt = amounts.get(u, 20000)
+        user_view = {"u": u, "cash": doc["cash"], "role": "llm"}
+        invest(store, user_view, idea["id"], amt, params)
+        log = store.get_doc("static", "llm_log") or []
+        log.insert(0, {"user": u, "provider": "builtin", "week": current_week_id(),
+                       "demo": True,
+                       "decision": {"action": "switch", "strategy_id": idea["id"],
+                                    "reason": f"[DEMO] {style}"},
+                       "freed": 0, "invested": amt,
+                       "at": datetime.datetime.now().isoformat()[:16]})
+        store.put_doc("static", "llm_log", log[:60])
+        n += 1
+    human_params = {"maya": {"vol_tgt": 0.09},
+                    "ravi": {"mom": 210, "top_n": 3},
+                    "sofia": {"sma_n": 220, "vol_tgt": 0.12}}
+    for u, name in DEMO_HUMANS:
+        if store.get_doc("users", u):
+            continue
+        doc, _ = create_user(store, u, "demo123", name)
+        doc["demo"] = True
+        store.put_doc("users", u, doc)
+        idea = _demo_idea(store, u, f"{u}-variant", human_params[u],
+                          f"{name}'s hand-tuned momentum variant (login {u}/demo123)")
+        user_view = {"u": u, "cash": doc["cash"], "role": "user"}
+        invest(store, user_view, idea["id"], 12000, human_params[u])
+        n += 1
+    # cross-pollination: maya copies claude's strategy, ravi invests in chatgpt's book
+    claude_idea = next((i for i in store.list_docs("ideas") if i.get("owner") == "claude"), None)
+    maya = store.get_doc("users", "maya")
+    if claude_idea and maya:
+        cp, _ = copy_strategy(store, {"u": "maya"}, claude_idea["id"])
+        if cp:
+            cp["demo"] = True
+            store.put_doc("ideas", cp["id"], cp)
+    gpt_idea = next((i for i in store.list_docs("ideas") if i.get("owner") == "chatgpt"), None)
+    ravi = store.get_doc("users", "ravi")
+    if gpt_idea and ravi:
+        invest(store, {"u": "ravi", "cash": ravi["cash"], "role": "user"},
+               gpt_idea["id"], 8000, gpt_idea.get("engine_params"))
+    store.set_kv("demo:seeded", "1")
+    store.add_feed("info", f"🎭 DEMO COMMUNITY SEEDED — {n} sample accounts "
+                   "(6 LLM traders + 3 humans) with live strategies; admin can delete any of them")
+    return {"seeded": n}
+
+
+def user_detail(store, username):
+    """Everything about one account — the admin per-user management view."""
+    u = store.get_doc("users", username)
+    if not u:
+        return None
+    ideas = [{"id": i["id"], "name": i["name"], "stage": i.get("stage", 1),
+              "public": bool(i.get("public")), "demo": bool(i.get("demo")),
+              "params": i.get("engine_params")}
+             for i in store.list_docs("ideas") if i.get("owner") == username]
+    invs = [{"id": inv["id"], "strategy": inv["strategy"], "amount": inv["amount"],
+             "week_return_pct": round(_strategy_week_return(inv.get("params")) * 100, 2),
+             "opened": inv.get("opened")}
+            for inv in store.list_docs("investments") if inv["user"] == username]
+    log = [e for e in (store.get_doc("static", "llm_log") or []) if e["user"] == username][:5]
+    return {"user": {k: u.get(k) for k in ("u", "name", "role", "cash", "disabled",
+                                           "demo", "provider", "must_change")},
+            "strategies": ideas, "investments": invs, "llm_decisions": log,
+            "invested_total": round(sum(i["amount"] for i in invs), 2)}
+
+
+def delete_user(store, username):
+    """Admin: remove an account and all its data (strategies, investments, log)."""
+    if username == "admin":
+        return None, "the seed admin cannot be deleted"
+    u = store.get_doc("users", username)
+    if not u:
+        return None, "user not found"
+    n_inv = n_ideas = 0
+    for inv in list(store.list_docs("investments")):
+        if inv["user"] == username:
+            store.delete_doc("investments", inv["id"])
+            n_inv += 1
+    for idea in list(store.list_docs("ideas")):
+        if idea.get("owner") == username:
+            store.delete_doc("ideas", idea["id"])
+            n_ideas += 1
+    log = store.get_doc("static", "llm_log") or []
+    store.put_doc("static", "llm_log", [e for e in log if e["user"] != username])
+    store.delete_doc("users", username)
+    store.add_feed("warn", f"🗑 ACCOUNT DELETED by admin: {username} "
+                   f"({n_ideas} strategies, {n_inv} investments removed)")
+    return {"deleted": username, "strategies": n_ideas, "investments": n_inv}, None
+
+
+def remove_demo(store):
+    """Admin: wipe every demo-tagged account and its data in one click."""
+    removed = []
+    for u in list(store.list_docs("users")):
+        if u.get("demo"):
+            delete_user(store, u["u"])
+            removed.append(u["u"])
+    store.set_kv("demo:seeded", "")
+    return {"removed": removed}
 
 
 # ---------------- LLM chatbot ----------------

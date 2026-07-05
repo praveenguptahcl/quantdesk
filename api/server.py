@@ -49,6 +49,15 @@ PORT = int(os.environ.get("QD_PORT", "8700"))
 
 store = Store()
 community.ensure_seed_admin(store)
+if os.environ.get("QD_NO_DEMO", "0") != "1":
+    try:
+        community.seed_demo(store)
+    except Exception as e:
+        print("demo seed skipped:", e)
+# warm the weekly-return cache in the background so the first Leaderboard
+# view is instant (one real backtest per distinct param set, cached per day)
+import threading  # noqa: E402
+threading.Thread(target=lambda: community.standings(store), daemon=True).start()
 
 
 # --------------------------------------------------------------------------
@@ -124,6 +133,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/community/llmlog": lambda: self._send(
                 200, store.get_doc("static", "llm_log") or []),
             "/api/community/users": self.g_users,
+            "/api/community/user": lambda: self.g_user_detail(q),
             "/api/community/public": lambda: self._send(200, [
                 {k: i.get(k) for k in ("id", "name", "owner", "hyp", "kill", "copied_from", "stage")}
                 for i in store.list_docs("ideas") if i.get("public")]),
@@ -196,6 +206,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/community/finalize": lambda: self.p_finalize(),
             "/api/community/llm-users": lambda: self.p_llm_user(body),
             "/api/community/llm-run": lambda: self.p_llm_run(),
+            "/api/community/seed-demo": lambda: self.p_seed_demo(),
+            "/api/community/remove-demo": lambda: self.p_remove_demo(),
+            "/api/community/users/delete": lambda: self.p_delete_user(body),
             "/api/chat": lambda: self.p_chat(body),
             "/api/strategies/adopt": lambda: self.p_adopt(body),
             "/api/ideas": lambda: self.p_idea(body),
@@ -1011,14 +1024,50 @@ class Handler(BaseHTTPRequestHandler):
         results = community.run_llm_traders(store, self._runnable_list())
         self._send(200, {"ran": len(results), "results": results})
 
+    def g_user_detail(self, q):
+        u = self._user()
+        m = re.search(r"u=(\w+)", q or "")
+        target = m.group(1) if m else None
+        if not u or not target:
+            return self._err(422, "u= required")
+        if u.get("role") != "admin" and u["u"] != target:
+            return self._err(403, "admins only (or your own account)")
+        d = community.user_detail(store, target)
+        if not d:
+            return self._err(404, "user not found")
+        self._send(200, d)
+
+    def p_seed_demo(self):
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        self._send(200, community.seed_demo(store, force=True))
+
+    def p_remove_demo(self):
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        self._send(200, community.remove_demo(store))
+
+    def p_delete_user(self, body):
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        res, err = community.delete_user(store, (body or {}).get("u", ""))
+        if err:
+            return self._err(422, err)
+        self._send(200, res)
+
     # ---------- community handlers ----------
     def g_users(self):
         u = self._user()
         rows = store.list_docs("users")
         if not u or u.get("role") != "admin":
-            rows = [{"u": r["u"], "name": r["name"]} for r in rows if not r.get("disabled")]
+            rows = [{"u": r["u"], "name": r["name"], "role": r.get("role"),
+                     "demo": bool(r.get("demo"))} for r in rows if not r.get("disabled")]
         else:
-            rows = [{k: r.get(k) for k in ("u", "name", "role", "disabled", "cash", "must_change")}
+            rows = [{k: r.get(k) for k in ("u", "name", "role", "disabled", "cash",
+                                           "must_change", "demo", "provider")}
                     for r in rows]
         self._send(200, rows)
 
