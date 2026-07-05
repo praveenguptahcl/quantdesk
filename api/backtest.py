@@ -257,7 +257,7 @@ def engine_b(inject_warmup_bug=False):
 
 
 # ------------------------------------------------------------------ REAL optimizer + walk-forward
-def optimize_grid():
+def optimize_grid(base=None, name="momo-etf-v3"):
     """Run the ACTUAL strategy across a momentum-lookback x vol-target grid.
     30 real backtests on the catalog data (~2s total). Returns sharpes + plateau info."""
     import time as _t
@@ -268,29 +268,33 @@ def optimize_grid():
     for vt in vts:
         row = []
         for lk in looks:
-            r = engine_a({"mom": lk, "vol_tgt": vt})
+            r = engine_a({**(base or {}), "mom": lk, "vol_tgt": vt})
             row.append(round(r["sharpe"], 2) if r else None)
         cells.append(row)
     flat = [(cells[vi][li], vts[vi], looks[li]) for vi in range(len(vts)) for li in range(len(looks))
             if cells[vi][li] is not None]
     best = max(flat) if flat else (0, 0, 0)
     # plateau score of the FROZEN cell: mean of its 3x3 neighborhood
-    fi, fj = vts.index(0.10), looks.index(252)
+    bp = _params(base)
+    f_look = min(looks, key=lambda x: abs(x - bp["mom"]))
+    f_vt = min(vts, key=lambda x: abs(x - bp["vol_tgt"]))
+    fi, fj = vts.index(f_vt), looks.index(f_look)
     neigh = [cells[i2][j2] for i2 in range(max(0, fi - 1), min(len(vts), fi + 2))
              for j2 in range(max(0, fj - 1), min(len(looks), fj + 2)) if cells[i2][j2] is not None]
     return {"looks": looks, "vts": vts, "cells": cells,
             "best": {"sharpe": best[0], "vol_tgt": best[1], "look": best[2]},
-            "frozen": {"look": 252, "vol_tgt": 0.10, "sharpe": cells[fi][fj],
+            "strategy": name,
+            "frozen": {"look": f_look, "vol_tgt": f_vt, "sharpe": cells[fi][fj],
                        "plateau_mean": round(sum(neigh) / len(neigh), 2) if neigh else None},
             "runtime_s": round(_t.time() - t0, 1), "n_backtests": len(flat),
             "data_provenance": provenance()}
 
 
-def walkforward():
+def walkforward(base=None):
     """REAL out-of-sample stability: one frozen-params backtest, equity split into
     ~6-month segments, Sharpe per segment. (Params are fixed, so this is an OOS
     stability check — the honest version of walk-forward for a no-fit strategy.)"""
-    r = engine_a()
+    r = engine_a(base)
     if not r:
         return None
     eq, dts = r["equity_daily"], r["dates_daily"]
@@ -315,10 +319,11 @@ def walkforward():
 
 
 # ------------------------------------------------------------------ live signal (transparency)
-def current_signal():
+def current_signal(overrides=None):
     """Today's signal with EVERY intermediate value exposed — this is the
     authoritative answer to 'how are signals generated'. Same math as the
     backtest engines and the paper node; docs/SIGNALS.md walks through it."""
+    P = _params(overrides)
     spy = load_bars("SPY")
     data = {s: load_bars(s) for s in ETFS}
     if spy is None or any(v is None for v in data.values()):
@@ -326,17 +331,17 @@ def current_signal():
     n = min(len(spy), *(len(v) for v in data.values()))
     i = n - 1
     spy_c = [spy[j][1] for j in range(n)]
-    sma200 = sum(spy_c[i - SMA_N + 1: i + 1]) / SMA_N
+    sma200 = sum(spy_c[i - P['sma_n'] + 1: i + 1]) / P['sma_n']
     risk_on = spy_c[i] > sma200
     rows = []
     for sym in ETFS:
         c = [data[sym][j][1] for j in range(n)]
-        mom_full = c[i] / c[i - MOM] - 1
-        mom_recent = c[i] / c[i - SKIP] - 1
+        mom_full = c[i] / c[i - P['mom']] - 1
+        mom_recent = c[i] / c[i - P['skip']] - 1
         mom_12_1 = mom_full - mom_recent
-        rets = [c[j] / c[j - 1] - 1 for j in range(i - VOLW + 1, i + 1)]
-        mu = sum(rets) / VOLW
-        vol_ann = max(math.sqrt(sum((r - mu) ** 2 for r in rets) / VOLW) * math.sqrt(252), 0.02)
+        rets = [c[j] / c[j - 1] - 1 for j in range(i - P['volw'] + 1, i + 1)]
+        mu = sum(rets) / P['volw']
+        vol_ann = max(math.sqrt(sum((r - mu) ** 2 for r in rets) / P['volw']) * math.sqrt(252), 0.02)
         conf = 0.0 if not risk_on else 1.0 / (1.0 + math.exp(-3.0 * (mom_12_1 / 0.08)))
         rows.append({"sym": sym, "close": round(c[i], 2),
                      "mom_12m_pct": round(mom_full * 100, 2),
@@ -344,14 +349,14 @@ def current_signal():
                      "mom_12_1_pct": round(mom_12_1 * 100, 2),
                      "vol_ann_pct": round(vol_ann * 100, 1),
                      "confidence": round(conf, 3),
-                     "vol_scalar": round(min(VOL_TGT / vol_ann, VOL_CAP), 2)})
+                     "vol_scalar": round(min(P['vol_tgt'] / vol_ann, P['vol_cap']), 2)})
     rows.sort(key=lambda r: r["mom_12_1_pct"], reverse=True)
     for rank, r in enumerate(rows, 1):
         r["rank"] = rank
-        r["in_top3"] = rank <= TOP_N
-        r["passes_entry"] = r["in_top3"] and r["confidence"] >= ENTRY_CONF
+        r["in_top3"] = rank <= P['top_n']
+        r["passes_entry"] = r["in_top3"] and r["confidence"] >= P['entry']
         r["target_weight_pct"] = round(
-            (r["confidence"] * r["vol_scalar"] / TOP_N) * 100, 1) if r["passes_entry"] and risk_on else 0.0
+            (r["confidence"] * r["vol_scalar"] / P['top_n']) * 100, 1) if r["passes_entry"] and risk_on else 0.0
     gross = sum(r["target_weight_pct"] for r in rows)
     if gross > 100:
         for r in rows:
@@ -368,10 +373,10 @@ def current_signal():
         "regime": {"spy_close": round(spy_c[i], 2), "sma200": round(sma200, 2),
                    "risk_on": risk_on,
                    "rule": "risk_on = SPY_close > SMA200; if false -> liquidate everything"},
-        "params": {"momentum_lookback_days": MOM, "momentum_skip_days": SKIP,
-                   "regime_sma_days": SMA_N, "vol_window_days": VOLW,
-                   "vol_target": VOL_TGT, "entry_confidence": ENTRY_CONF,
-                   "exit_confidence": EXIT_CONF, "top_n": TOP_N},
+        "params": {"momentum_lookback_days": P['mom'], "momentum_skip_days": P['skip'],
+                   "regime_sma_days": P['sma_n'], "vol_window_days": P['volw'],
+                   "vol_target": P['vol_tgt'], "entry_confidence": P['entry'],
+                   "exit_confidence": P['exit'], "top_n": P['top_n']},
         "table": rows,
         "decision": ("FLAT — regime risk-off" if not risk_on else
                      "HOLD/REBALANCE to targets: " + ", ".join(

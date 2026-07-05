@@ -118,6 +118,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/me": lambda: self._send(200, self._user() or {"anon": True,
                 "multiuser": community.enabled()}),
             "/api/leaderboard": lambda: self._send(200, community.standings(store)),
+            "/api/strategies/runnable": self.g_runnable,
             "/api/community/users": self.g_users,
             "/api/community/public": lambda: self._send(200, [
                 {k: i.get(k) for k in ("id", "name", "owner", "hyp", "kill", "copied_from", "stage")}
@@ -155,9 +156,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/quotes": lambda: self.g_quotes(q),
             "/api/optimize": lambda: (lambda d: self._send(200, d) if d else self._err(
                 404, "not computed yet — press Compute on the Optimize screen"))(
-                store.get_doc("optimize", "momo-etf-v3")),
-            "/api/signals": lambda: (lambda sig: self._send(200, sig) if sig else self._err(
-                503, "catalog data missing"))(backtest.current_signal()),
+                store.get_doc("optimize", self._sid_name(q))),
+            "/api/signals": lambda: self.g_signals(q),
         }.get(path)
         if r:
             return r()
@@ -191,6 +191,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/community/copy": lambda: self.p_copy(body),
             "/api/community/finalize": lambda: self.p_finalize(),
             "/api/chat": lambda: self.p_chat(body),
+            "/api/strategies/adopt": lambda: self.p_adopt(body),
             "/api/ideas": lambda: self.p_idea(body),
             "/api/ideas/from-spec": lambda: self.p_idea_from_spec(body),
             "/api/kill": lambda: self.p_kill(body),
@@ -208,7 +209,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/orders/place": lambda: self.p_place_order(body),
             "/api/positions/close": lambda: self.p_close_position(body),
             "/api/node/rebalance": lambda: self.p_rebalance(body),
-            "/api/optimize/run": self.p_optimize_run,
+            "/api/optimize/run": lambda: self.p_optimize_run(body),
             "/api/clientlog": lambda: (open(os.path.join(HERE, "..", "logs_and_artifacts",
                 "client_errors.log"), "a").write(
                 f"{time.strftime('%H:%M:%S')} {json.dumps(body)}\n"), self._send(200, {"ok": True}))[-1],
@@ -897,16 +898,94 @@ class Handler(BaseHTTPRequestHandler):
         except subprocess.TimeoutExpired:
             self._err(504, "node timed out")
 
-    def p_optimize_run(self):
-        """Compute the REAL parameter sweep + walk-forward (~2-4s of actual backtests)."""
-        grid = backtest.optimize_grid()
-        wf = backtest.walkforward()
-        doc = {"grid": grid, "wf": wf, "computed_at": time.strftime("%Y-%m-%d %H:%M")}
-        store.put_doc("optimize", "momo-etf-v3", doc)
+    def p_optimize_run(self, body=None):
+        """Compute the REAL parameter sweep + walk-forward for the selected strategy."""
+        params, name = self._sid_params(body or {})
+        grid = backtest.optimize_grid(params, name)
+        wf = backtest.walkforward(params)
+        doc = {"grid": grid, "wf": wf, "strategy": name,
+               "computed_at": time.strftime("%Y-%m-%d %H:%M")}
+        store.put_doc("optimize", name, doc)
         store.add_feed("info", f"OPTIMIZE — real sweep: {grid['n_backtests']} backtests in "
                        f"{grid['runtime_s']}s; best SR {grid['best']['sharpe']} at "
                        f"{grid['best']['look']}d/{int(grid['best']['vol_tgt']*100)}%")
         self._send(200, doc)
+
+    # ---------- runnable strategies (selectable everywhere) ----------
+    def _runnable_list(self):
+        """Visibility rule: YOUR strategies at Research stage (2)+, plus EVERYONE'S
+        public strategies once they reach Paper stage (5)+."""
+        u = self._user() or {"u": "solo", "role": "admin"}
+        out = []
+        for i in store.list_docs("ideas"):
+            mine = i.get("owner", "solo") in (u["u"], None) or u.get("role") == "admin"
+            visible = (mine and i.get("stage", 1) >= 2) or                       (i.get("public") and i.get("stage", 1) >= 5)
+            if not visible:
+                continue
+            out.append({"id": i["id"], "name": i["name"], "owner": i.get("owner", "solo"),
+                        "stage": logic.STAGES[i.get("stage", 1)], "mine": mine,
+                        "public": bool(i.get("public")),
+                        "params": i.get("engine_params") or ({} if i["name"] == "momo-etf-v3" else None)})
+        # momo always runnable (frozen defaults)
+        if not any(o["name"] == "momo-etf-v3" for o in out):
+            out.insert(0, {"id": 1, "name": "momo-etf-v3", "owner": "solo",
+                           "stage": "Paper", "mine": True, "public": True, "params": {}})
+        return out
+
+    def g_runnable(self):
+        self._send(200, self._runnable_list())
+
+    def _sid_params(self, q_or_body):
+        """Resolve ?sid= / {'strategy_id'} to that strategy's engine params (or None)."""
+        sid = None
+        if isinstance(q_or_body, str):
+            m = re.search(r"sid=(\d+)", q_or_body)
+            sid = m.group(1) if m else None
+        else:
+            sid = (q_or_body or {}).get("strategy_id")
+        if not sid:
+            return None, "momo-etf-v3"
+        idea = store.get_doc("ideas", sid)
+        if not idea:
+            return None, "momo-etf-v3"
+        return idea.get("engine_params") or None, idea["name"]
+
+    def _sid_name(self, q):
+        return self._sid_params(q)[1]
+
+    def g_signals(self, q):
+        params, name = self._sid_params(q)
+        sig = backtest.current_signal(params)
+        if not sig:
+            return self._err(503, "catalog data missing")
+        sig["strategy"] = name
+        if params:
+            sig["engine_params"] = params
+        self._send(200, sig)
+
+    def p_adopt(self, body):
+        """Save a what-if as a NEW runnable strategy (Research stage, yours, private)."""
+        u = self._user() or {"u": "solo"}
+        name = (body.get("name") or "").strip()
+        params = body.get("params") or {}
+        errs = logic.validate_idea({"name": name, "hyp": body.get("hyp", "parameter variant"),
+                                    "uni": "SPY + 9 sector ETFs", "kill": "x"},
+                                   {i["name"] for i in store.list_docs("ideas")})
+        errs = [e for e in errs if "hypothesis" not in e and "kill" not in e]
+        if errs:
+            return self._err(422, "; ".join(errs))
+        doc = logic.new_idea({
+            "name": name, "ac": "eq", "syms": ["SPY", "XLK"], "owner": u["u"],
+            "hyp": body.get("hyp") or f"Momentum-family variant: {json.dumps(params)}",
+            "uni": "SPY + 9 sector ETFs", "feats": "12-1 momentum family (parameterized engine)",
+            "kill": body.get("kill") or "underperforms frozen momo-etf-v3 by 20% over 8 weeks",
+            "engine_params": params, "public": False,
+        })
+        doc["stage"] = 2
+        doc["gateNote"] = "Research stage — runnable (parameterized engine); backtest + parity next"
+        store.put_doc("ideas", doc["id"], doc)
+        store.add_feed("info", f"STRATEGY ADOPTED — {name} by {u['u']} (Research stage, runnable)")
+        self._send(201, doc)
 
     # ---------- community handlers ----------
     def g_users(self):

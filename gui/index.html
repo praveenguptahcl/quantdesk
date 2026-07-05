@@ -583,7 +583,7 @@ label.fl b{color:var(--red)}
     <section class="screen" id="s-lab">
       <div class="flex spread"><div><h1>Strategy Lab</h1>
       <div class="sub">The anatomy of a strategy — every stage of the decision chain, live. This is what the code in STRATEGY_GUIDE.md produces.</div></div>
-      <span class="tag paper" style="font-size:12px;padding:6px 14px">momo-etf-v3</span></div>
+      <select id="labStrat" class="inp" style="width:auto" onchange="UI.onStratChange()"></select></div>
       <input type="hidden" id="labSel" value="11">
 
       <div class="anat" id="labAnat"></div>
@@ -645,7 +645,8 @@ label.fl b{color:var(--red)}
           </div>
           <div class="flex" style="margin-top:12px">
             <button class="btn primary" onclick="UI.labWhatIf()">▶ Recompute what-if</button>
-            <button class="btn" onclick="UI.labReset()">Reset to frozen params</button>
+            <button class="btn" onclick="UI.labReset()">Reset to strategy params</button>
+            <button class="btn" style="border-color:var(--green);color:var(--green)" onclick="UI.adoptWhatIf()">💾 Save as new strategy</button>
           </div>
           <p class="mut" style="margin-top:8px">⚠ What-ifs are experiments — they never change the frozen strategy. To adopt new parameters: Optimize screen → plateau check → freeze in git → re-run parity.</p>
         </div>
@@ -710,8 +711,8 @@ label.fl b{color:var(--red)}
     <section class="screen" id="s-opt">
       <div class="flex spread"><div><h1>Optimize &amp; Walk-Forward</h1>
       <div class="sub">Two questions every strategy must answer: <b>are the parameters robust</b> (not a lucky fluke), and <b>did it work out-of-sample</b>? Both computed from real backtests on your data.</div></div>
-      <span class="tag paper" style="font-size:12px;padding:6px 14px;flex:none">STRATEGY: MOMO-ETF-V3</span></div>
-      <p class="mut" style="margin:-8px 0 16px">Why only this strategy? Optimization requires a <b>runnable implementation</b>, and momo-etf-v3 is currently the only journal strategy implemented in the backtest engine — the sweep re-runs it 30 times varying its two tunable parameters. Other journal ideas and library entries are specs awaiting implementation (Learning Path Week 7 walks you through implementing one); once a strategy is coded and passes parity, it becomes sweepable here.</p>
+      <select id="optStrat" class="inp" style="width:auto;flex:none" onchange="UI.renderOpt()"></select></div>
+      <p class="mut" style="margin:-8px 0 16px">Pick any <b>runnable</b> strategy: yours from Research stage up, plus anyone's public strategies once they reach Paper (community visibility rule). Runnable = has engine parameters — create new ones from the Strategy Lab's what-if editor ("Save as new strategy") or by copying from the Leaderboard.</p>
 
       <div class="card" style="margin-bottom:14px">
         <div class="flex spread">
@@ -2428,15 +2429,54 @@ const UI = {
   },
 
   /* ---- strategy lab ---- */
-  _labHist:null, _labParams:null,
+  _labHist:null, _labParams:null, _runnable:[], _stratParams:{},
+  async loadRunnable(){
+    if(!QD.on)return;
+    try{
+      this._runnable=await(await fetch('/api/strategies/runnable')).json();
+      const opts=this._runnable.map(r=>
+        `<option value="${r.id}" ${r.params===null?'disabled':''}>${r.name}${r.mine?'':' · @'+r.owner}${r.params===null?' (needs implementation)':''} · ${r.stage}</option>`).join('');
+      ['labStrat','optStrat'].forEach(id=>{const el=document.getElementById(id);
+        if(el){const cur=el.value; el.innerHTML=opts; if(cur&&[...el.options].some(o=>o.value===cur))el.value=cur;}});
+      this._syncStratParams();
+    }catch(e){}
+  },
+  _sid(){const el=document.getElementById('labStrat'); return el&&el.value?el.value:'';},
+  _optSid(){const el=document.getElementById('optStrat'); return el&&el.value?el.value:'';},
+  _syncStratParams(){
+    const r=this._runnable.find(x=>String(x.id)===this._sid());
+    this._stratParams=(r&&r.params)||{};
+    // prefill what-if editor with the strategy's own params
+    const map={sma_n:'pe-sma',regime_band_pct:'pe-band',mom:'pe-mom',skip:'pe-skip',
+      entry:'pe-entry',exit:'pe-exit',vol_tgt:'pe-vt',top_n:'pe-topn'};
+    const defs={sma_n:200,regime_band_pct:0,mom:252,skip:21,entry:0.5,exit:0.25,vol_tgt:0.10,top_n:3};
+    for(const k in map){const el=document.getElementById(map[k]);
+      if(el)el.value=this._stratParams[k]!==undefined?this._stratParams[k]:defs[k];}
+  },
+  onStratChange(){ this._labParams=null; this._syncStratParams(); this.renderLab(); },
+  async adoptWhatIf(){
+    const name=prompt('Name for your new strategy (kebab-case, e.g. fast-momo-v1):');
+    if(!name)return;
+    const g=id=>parseFloat(document.getElementById(id).value);
+    const params={sma_n:g('pe-sma'),regime_band_pct:g('pe-band'),mom:g('pe-mom'),skip:g('pe-skip'),
+      entry:g('pe-entry'),exit:g('pe-exit'),vol_tgt:g('pe-vt'),top_n:g('pe-topn')};
+    const r=await QD.post('/api/strategies/adopt',{name,params});
+    if(!r||r.err)return;
+    API.ideas.push(r); this.renderPipeline(); this.renderJournal();
+    await this.loadRunnable();
+    const el=document.getElementById('labStrat'); if(el)el.value=String(r.id);
+    this.onStratChange();
+    this.toast(`${name} created (Research stage, yours, private) — now selectable in Lab & Optimize; backtest and publish when ready`,'ok');
+  },
   async loadLabHistory(){
     if(!QD.on){ this.renderLabSynthFallback(); return; }
     const sym=document.getElementById('labEtf').value;
     document.getElementById('labEtfName').textContent=sym;
     try{
+      const merged=Object.assign({},this._stratParams,this._labParams||{});
       let r;
-      if(this._labParams) r=await fetch('/api/signals/history',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({sym,params:this._labParams})});
+      if(Object.keys(merged).length) r=await fetch('/api/signals/history',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({sym,params:merged})});
       else r=await fetch('/api/signals/history?sym='+sym);
       if(!r.ok)throw 0;
       this._labHist=await r.json();
@@ -2492,13 +2532,9 @@ const UI = {
     this.toast('What-if recomputed — charts show experimental parameters (frozen strategy unchanged)','ok');
   },
   labReset(){
-    this._labParams=null;
-    document.getElementById('pe-sma').value=200; document.getElementById('pe-band').value=0;
-    document.getElementById('pe-mom').value=252; document.getElementById('pe-skip').value=21;
-    document.getElementById('pe-entry').value=0.50; document.getElementById('pe-exit').value=0.25;
-    document.getElementById('pe-vt').value=0.10; document.getElementById('pe-topn').value=3;
+    this._labParams=null; this._syncStratParams();
     this.loadLabHistory();
-    this.toast('Back to frozen parameters','ok');
+    this.toast("Back to the selected strategy's own parameters",'ok');
   },
   renderLabSynthFallback(){
     document.getElementById('labMeta').textContent='backend offline — start it for real charts (python3 api/server.py)';
@@ -2512,7 +2548,7 @@ const UI = {
     document.getElementById('labRegimeStats').innerHTML='<p class="mut">connect the backend for real regime statistics</p>';
   },
   renderLab(){
-    this.renderLiveSignal();
+    this.loadRunnable().then(()=>this.renderLiveSignal());
     this.loadLabHistory();
     const seed=+document.getElementById('labSel').value;
     const d=CH.labSeries(seed);
@@ -2554,7 +2590,7 @@ const UI = {
     const el=document.getElementById('liveSig'); if(!el)return;
     if(!QD.on){document.getElementById('sigMeta').textContent='backend offline — run: python3 api/server.py';return;}
     try{
-      const d=await(await fetch('/api/signals')).json();
+      const d=await(await fetch('/api/signals?sid='+this._sid())).json();
       if(d.error){el.innerHTML='<p class="mut">'+d.error+'</p>';return;}
       document.getElementById('sigMeta').textContent=`as of ${d.as_of} · data: ${d.data_provenance}`;
       const reg=d.regime;
@@ -2616,14 +2652,15 @@ const UI = {
   /* ---- optimize & walk-forward (REAL computation) ---- */
   async renderOpt(){
     if(!QD.on){document.getElementById('optMeta').textContent='backend offline — python3 api/server.py';return;}
-    try{ const r=await fetch('/api/optimize');
+    await this.loadRunnable();
+    try{ const r=await fetch('/api/optimize?sid='+this._optSid());
       if(r.ok){ this.drawOpt(await r.json()); return; } }catch(e){}
     document.getElementById('optMeta').innerHTML='<span class="warn">Not computed yet — press the button. Results are cached until you recompute.</span>';
     document.getElementById('optGrid').innerHTML=''; document.getElementById('optVerdict').innerHTML='';
   },
   async optCompute(){
     const btn=document.getElementById('optBtn'); btn.disabled=true; btn.textContent='⏳ running 30 real backtests…';
-    const r=await QD.post('/api/optimize/run');
+    const r=await QD.post('/api/optimize/run',{strategy_id:this._optSid()});
     btn.disabled=false; btn.textContent='▶ Recompute sweep';
     if(!r||r.err)return;
     this.drawOpt(r);
@@ -2632,7 +2669,7 @@ const UI = {
   drawOpt(d){
     const g=d.grid, wf=d.wf;
     document.getElementById('optMeta').innerHTML=
-      `REAL — ${g.n_backtests} backtests in ${g.runtime_s}s · data: ${g.data_provenance} · computed ${d.computed_at}`;
+      `<b>${d.strategy||g.strategy||'momo-etf-v3'}</b> · REAL — ${g.n_backtests} backtests in ${g.runtime_s}s · data: ${g.data_provenance} · computed ${d.computed_at}`;
     const allv=g.cells.flat().filter(v=>v!==null);
     const lo=Math.min(...allv), hi=Math.max(...allv);
     let html='<div class="pc hd"></div>'+g.looks.map(l=>`<div class="pc hd">${l}d</div>`).join('');
@@ -2648,7 +2685,7 @@ const UI = {
     grid.style.gridTemplateColumns=`44px repeat(${g.looks.length},1fr)`; grid.innerHTML=html;
     const onPlateau=g.frozen.plateau_mean!==null&&g.frozen.sharpe!==null&&(g.frozen.sharpe-g.frozen.plateau_mean)<0.25;
     document.getElementById('optVerdict').innerHTML=
-      `<div class="verdict ${onPlateau?'pass':'fail'}" style="margin:0">◉ frozen 252d/10%: SR ${g.frozen.sharpe}
+      `<div class="verdict ${onPlateau?'pass':'fail'}" style="margin:0">◉ this strategy ${g.frozen.look}d/${Math.round(g.frozen.vol_tgt*100)}%: SR ${g.frozen.sharpe}
        · 3×3 neighborhood avg ${g.frozen.plateau_mean} → ${onPlateau?'ON THE PLATEAU (robust)':'stands alone — investigate'}</div>
        <p class="mut" style="margin-top:6px">Grid best: SR ${g.best.sharpe} at ${g.best.look}d/${Math.round(g.best.vol_tgt*100)}% — chasing it is how overfitting starts.</p>`;
     if(wf){
