@@ -1,0 +1,1386 @@
+{
+ "ideas": [
+  {
+   "id": 1,
+   "name": "momo-etf-v3",
+   "ac": "eq",
+   "syms": [
+    "SPY",
+    "QQQ",
+    "XLK"
+   ],
+   "stage": 5,
+   "hyp": "12-1 momentum on liquid sector ETFs, weekly rebalance, vol-scaled",
+   "uni": "9 SPDR sectors",
+   "feats": "12-1 mom, 20d realized vol, ADV",
+   "sharpe": 1.62,
+   "turn": "3.1×",
+   "cap": "$5M",
+   "kill": "IS Sharpe < 0.8 on rolling 6m",
+   "gate": "pass",
+   "gateNote": "Parity passed 2026-05-14 · tol 0.9%",
+   "seed": 11
+  },
+  {
+   "id": 2,
+   "name": "fut-carry-v1",
+   "ac": "fut",
+   "syms": [
+    "MES"
+   ],
+   "stage": 5,
+   "hyp": "Roll-yield carry on MES/MNQ term structure",
+   "uni": "MES, MNQ",
+   "feats": "front-back spread, roll calendar",
+   "sharpe": 1.1,
+   "turn": "1.4×",
+   "cap": "$2M",
+   "kill": "Carry signal decay > 50%",
+   "gate": "pass",
+   "gateNote": "Parity passed 2026-06-02 · tol 1.4%",
+   "seed": 22
+  },
+  {
+   "id": 3,
+   "name": "crypto-mr-v2",
+   "ac": "cry",
+   "syms": [
+    "BTCUSDT",
+    "ETHUSDT"
+   ],
+   "stage": 5,
+   "hyp": "Overnight mean-reversion on BTC/ETH funding extremes",
+   "uni": "BTCUSDT, ETHUSDT",
+   "feats": "funding rate z, OI delta, 4h RSI",
+   "sharpe": 1.35,
+   "turn": "6.0×",
+   "cap": "$800k",
+   "kill": "2 consecutive months paper Sharpe < 0",
+   "gate": "pass",
+   "gateNote": "Parity passed 2026-06-20 · tol 1.1%",
+   "seed": 33
+  },
+  {
+   "id": 4,
+   "name": "pairs-stat-v1",
+   "ac": "eq",
+   "syms": [
+    "AAPL",
+    "QQQ"
+   ],
+   "stage": 4,
+   "hyp": "Cointegrated pairs in mega-cap tech, z-score entry/exit",
+   "uni": "8 pairs, US tech",
+   "feats": "coint z-score, half-life, beta",
+   "sharpe": 1.48,
+   "turn": "8.4×",
+   "cap": "$3M",
+   "kill": "Half-life > 12 days",
+   "gate": "block",
+   "gateNote": "BLOCKED: trade-count diff 6.2% > 2% tolerance — suspect indicator warm-up mismatch",
+   "seed": 44
+  },
+  {
+   "id": 5,
+   "name": "gap-fade-v1",
+   "ac": "eq",
+   "syms": [
+    "AAPL",
+    "SPY"
+   ],
+   "stage": 3,
+   "hyp": "Fade opening gaps > 1.5σ in high-ADV equities",
+   "uni": "Russell 200 subset",
+   "feats": "gap σ, pre-mkt vol, sector beta",
+   "sharpe": 1.21,
+   "turn": "12×",
+   "cap": "$1.5M",
+   "kill": "Win rate < 52% OOS",
+   "gate": "block",
+   "gateNote": "Awaiting walk-forward validation (Phase 3 checkpoint)",
+   "seed": 55
+  },
+  {
+   "id": 6,
+   "name": "vol-premium-v1",
+   "ac": "opt",
+   "syms": [
+    "SPY"
+   ],
+   "stage": 2,
+   "hyp": "Systematic short vol via defined-risk option structures",
+   "uni": "SPX weeklies",
+   "feats": "IV-RV spread, term slope, skew",
+   "sharpe": null,
+   "turn": "2×",
+   "cap": "TBD",
+   "kill": "Any tail event loss > 3× premium",
+   "gate": "block",
+   "gateNote": "In-sample significance checks not yet run",
+   "seed": 66
+  },
+  {
+   "id": 7,
+   "name": "flow-imbalance",
+   "ac": "fut",
+   "syms": [
+    "MES"
+   ],
+   "stage": 1,
+   "hyp": "Order-flow imbalance predicts 5-min drift in ES",
+   "uni": "ES",
+   "feats": "TBD",
+   "sharpe": null,
+   "turn": "TBD",
+   "cap": "TBD",
+   "kill": "TBD",
+   "gate": "block",
+   "gateNote": "Hypothesis logged — research not started",
+   "seed": 77
+  }
+ ],
+ "symbols": [
+  {
+   "s": "SPY",
+   "ac": "eq",
+   "spine": "full",
+   "note": "daily 10y · minute 5y · L1 2y · L2 90d"
+  },
+  {
+   "s": "QQQ",
+   "ac": "eq",
+   "spine": "full",
+   "note": "daily 10y · minute 5y · L1 2y · L2 90d"
+  },
+  {
+   "s": "AAPL",
+   "ac": "eq",
+   "spine": "full",
+   "note": "daily 10y · minute 5y · L1 2y · L2 90d"
+  },
+  {
+   "s": "XLK",
+   "ac": "eq",
+   "spine": "part",
+   "note": "daily 10y · minute 5y — no tick tier"
+  },
+  {
+   "s": "MES",
+   "ac": "fut",
+   "spine": "full",
+   "note": "minute 5y · L1 2y · L2 60d"
+  },
+  {
+   "s": "BTCUSDT",
+   "ac": "cry",
+   "spine": "full",
+   "note": "hour 7y · L1 1y · L2 180d"
+  },
+  {
+   "s": "ETHUSDT",
+   "ac": "cry",
+   "spine": "part",
+   "note": "hour 7y · L1 1y — L2 queued"
+  }
+ ],
+ "spineTiers": [
+  [
+   "ref",
+   "Reference data (listing, ticks size, sessions)",
+   "~1 MB"
+  ],
+  [
+   "daily",
+   "Daily bars, 10y (LEAN library)",
+   "~2 MB"
+  ],
+  [
+   "minute",
+   "Minute bars, 5y (LEAN library → catalog export)",
+   "~400 MB"
+  ],
+  [
+   "l1",
+   "L1 quotes/trades ticks, 2y (vendor/venue)",
+   "~15 GB"
+  ],
+  [
+   "l2",
+   "L2 depth snapshots+deltas, 90d (venue direct)",
+   "~60 GB"
+  ]
+ ],
+ "venues": [
+  {
+   "name": "IBKR Gateway",
+   "env": "paper",
+   "lat": "12ms",
+   "ok": true
+  },
+  {
+   "name": "Alpaca",
+   "env": "paper (LEAN)",
+   "lat": "41ms",
+   "ok": true
+  },
+  {
+   "name": "Binance",
+   "env": "testnet",
+   "lat": "88ms",
+   "ok": true
+  },
+  {
+   "name": "Bybit",
+   "env": "testnet",
+   "lat": "104ms",
+   "ok": false
+  },
+  {
+   "name": "Coinbase",
+   "env": "sandbox",
+   "lat": "67ms",
+   "ok": true
+  }
+ ],
+ "positions": [
+  {
+   "sym": "SPY",
+   "venue": "IBKR",
+   "qty": "+42",
+   "px": "618.34",
+   "pnl": 312.4,
+   "strat": "momo-etf-v3"
+  },
+  {
+   "sym": "QQQ",
+   "venue": "IBKR",
+   "qty": "−15",
+   "px": "551.02",
+   "pnl": -88.15,
+   "strat": "momo-etf-v3"
+  },
+  {
+   "sym": "AAPL",
+   "venue": "IBKR",
+   "qty": "+120",
+   "px": "254.80",
+   "pnl": 96.2,
+   "strat": "ofi-scalp-v1"
+  },
+  {
+   "sym": "MES",
+   "venue": "IBKR",
+   "qty": "+2",
+   "px": "6,412.25",
+   "pnl": 145,
+   "strat": "fut-carry-v1"
+  },
+  {
+   "sym": "BTCUSDT",
+   "venue": "Binance·TN",
+   "qty": "+0.18",
+   "px": "112,480",
+   "pnl": 204.66,
+   "strat": "crypto-mr-v2"
+  },
+  {
+   "sym": "ETHUSDT",
+   "venue": "Bybit·TN",
+   "qty": "−1.40",
+   "px": "4,182.10",
+   "pnl": -41.02,
+   "strat": "crypto-mr-v2"
+  }
+ ],
+ "strategies": [
+  {
+   "n": "momo-etf-v3",
+   "syms": [
+    "SPY",
+    "QQQ",
+    "XLK"
+   ],
+   "stage": "Paper",
+   "sr": "1.41",
+   "st": "Running",
+   "c": "ok"
+  },
+  {
+   "n": "ofi-scalp-v1",
+   "syms": [
+    "AAPL"
+   ],
+   "stage": "Paper",
+   "sr": "2.32",
+   "st": "Running · HFT",
+   "c": "ok"
+  },
+  {
+   "n": "fut-carry-v1",
+   "syms": [
+    "MES"
+   ],
+   "stage": "Paper",
+   "sr": "0.92",
+   "st": "Running",
+   "c": "ok"
+  },
+  {
+   "n": "crypto-mr-v2",
+   "syms": [
+    "BTCUSDT",
+    "ETHUSDT"
+   ],
+   "stage": "Paper",
+   "sr": "1.18",
+   "st": "Degraded",
+   "c": "warn"
+  },
+  {
+   "n": "pairs-stat-v1",
+   "syms": [
+    "AAPL",
+    "QQQ"
+   ],
+   "stage": "Parity",
+   "sr": "—",
+   "st": "Gate blocked",
+   "c": "off"
+  }
+ ],
+ "stages": [
+  "—",
+  "Idea",
+  "Research",
+  "LEAN Backtest",
+  "Parity Gate",
+  "Paper",
+  "Live"
+ ],
+ "checkpoints": {
+  "1": [
+   "Hypothesis written with economic rationale",
+   "Universe & data availability confirmed",
+   "Kill criterion defined"
+  ],
+  "2": [
+   "Features engineered in QuantBook",
+   "In-sample significance checks pass",
+   "Model artifact saved to Object Store"
+  ],
+  "3": [
+   "QCAlgorithm implemented & frozen in git",
+   "LEAN tearsheet meets bar (Sharpe/DD/capacity)",
+   "Out-of-sample / walk-forward validation passed"
+  ],
+  "4": [
+   "Strategy ported to Nautilus",
+   "Identical-window backtest run",
+   "Parity within tolerance (hard gate)"
+  ],
+  "5": [
+   "All venue adapters connected (paper)",
+   "Min. paper duration met",
+   "Paper P&L tracks backtest within slippage assumptions"
+  ],
+  "6": [
+   "Go-Live Wizard completed with typed confirmation"
+  ]
+ },
+ "parity": {
+  "momo": {
+   "window": "2023-01-02 → 2025-12-31 · daily bars · fees: IB tiered",
+   "lean": {
+    "cagr": "11.4%",
+    "sharpe": 1.62,
+    "sortino": 2.21,
+    "dd": "−9.1%",
+    "win": "58.2%",
+    "trades": 412,
+    "turn": "3.1×",
+    "fees": "$1,842",
+    "ret": "+38.4%"
+   },
+   "naut": {
+    "cagr": "11.2%",
+    "sharpe": 1.59,
+    "sortino": 2.16,
+    "dd": "−9.4%",
+    "win": "57.9%",
+    "trades": 409,
+    "turn": "3.1×",
+    "fees": "$1,867",
+    "ret": "+37.9%"
+   },
+   "tol": [
+    {
+     "m": "Total return diff",
+     "v": "0.50pp",
+     "lim": "≤ 1.00pp",
+     "ok": true
+    },
+    {
+     "m": "Sharpe diff",
+     "v": "0.03",
+     "lim": "≤ 0.10",
+     "ok": true
+    },
+    {
+     "m": "Trade count diff",
+     "v": "0.7%",
+     "lim": "≤ 2.0%",
+     "ok": true
+    },
+    {
+     "m": "Max DD diff",
+     "v": "0.3pp",
+     "lim": "≤ 1.0pp",
+     "ok": true
+    }
+   ],
+   "diffs": [
+    {
+     "t": "2023-03-14 09:31",
+     "sym": "XLK",
+     "lean": "BUY 118 @ 142.31",
+     "naut": "BUY 118 @ 142.33",
+     "d": "+2bp px (queue model)"
+    },
+    {
+     "t": "2024-08-05 09:31",
+     "sym": "XLE",
+     "lean": "SELL 84 @ 91.02",
+     "naut": "SELL 84 @ 91.02",
+     "d": "match"
+    },
+    {
+     "t": "2025-02-03 09:31",
+     "sym": "XLF",
+     "lean": "BUY 210 @ 48.11",
+     "naut": "— (skipped)",
+     "d": "ADV filter rounding"
+    }
+   ],
+   "diffNote": "3 of 412 trades diverge; all attributable to fill-price model differences. Within tolerance.",
+   "pass": true,
+   "seed": 11,
+   "div": 0
+  },
+  "pairs": {
+   "window": "2022-06-01 → 2025-12-31 · minute bars · fees: IB tiered",
+   "lean": {
+    "cagr": "10.2%",
+    "sharpe": 1.48,
+    "sortino": 1.94,
+    "dd": "−11.3%",
+    "win": "54.7%",
+    "trades": 1204,
+    "turn": "8.4×",
+    "fees": "$6,110",
+    "ret": "+41.2%"
+   },
+   "naut": {
+    "cagr": "8.9%",
+    "sharpe": 1.29,
+    "sortino": 1.66,
+    "dd": "−13.0%",
+    "win": "53.1%",
+    "trades": 1279,
+    "turn": "8.9×",
+    "fees": "$6,488",
+    "ret": "+35.6%"
+   },
+   "tol": [
+    {
+     "m": "Total return diff",
+     "v": "5.6pp",
+     "lim": "≤ 1.00pp",
+     "ok": false
+    },
+    {
+     "m": "Sharpe diff",
+     "v": "0.19",
+     "lim": "≤ 0.10",
+     "ok": false
+    },
+    {
+     "m": "Trade count diff",
+     "v": "6.2%",
+     "lim": "≤ 2.0%",
+     "ok": false
+    },
+    {
+     "m": "Max DD diff",
+     "v": "1.7pp",
+     "lim": "≤ 1.0pp",
+     "ok": false
+    }
+   ],
+   "diffs": [
+    {
+     "t": "2022-06-13 10:04",
+     "sym": "MSFT/GOOG",
+     "lean": "ENTRY z=−2.1",
+     "naut": "no signal (z=−1.8)",
+     "d": "⚠ warm-up: 30 bars short"
+    },
+    {
+     "t": "2022-06-13 11:22",
+     "sym": "AAPL/MSFT",
+     "lean": "no signal",
+     "naut": "ENTRY z=−2.0",
+     "d": "⚠ rolling window off-by-one"
+    },
+    {
+     "t": "2022-06-14 09:47",
+     "sym": "NVDA/AMD",
+     "lean": "EXIT z=0.1",
+     "naut": "EXIT z=0.4 (late 6 bars)",
+     "d": "⚠ indicator update ordering"
+    }
+   ],
+   "diffNote": "First divergence at bar 1 of live signals — indicator warm-up in the Nautilus port is 30 bars shorter than LEAN’s. Fix the warm-up, re-run, and expect trade diffs to collapse.",
+   "pass": false,
+   "seed": 44,
+   "div": 1
+  }
+ },
+ "feed": [
+  [
+   "10:41:02",
+   "fill",
+   "FILL BTCUSDT +0.05 @ 112,391 (Binance·TN) crypto-mr-v2"
+  ],
+  [
+   "10:38:44",
+   "info",
+   "momo-etf-v3 weekly rebalance computed — 3 orders queued"
+  ],
+  [
+   "10:38:45",
+   "fill",
+   "FILL SPY +12 @ 618.90 (IBKR paper)"
+  ],
+  [
+   "10:35:12",
+   "warn",
+   "Bybit·TN websocket reconnect (attempt 2) — degraded"
+  ],
+  [
+   "10:22:07",
+   "info",
+   "Risk check passed: gross exposure 17.5% < 40% cap"
+  ],
+  [
+   "09:30:01",
+   "info",
+   "US cash session open — 3 strategies active"
+  ],
+  [
+   "08:00:00",
+   "info",
+   "TradingNode healthy · Redis OK · Postgres OK"
+  ]
+ ],
+ "openOrders": [
+  {
+   "id": "O-8841",
+   "sym": "XLK",
+   "side": "BUY",
+   "type": "LMT",
+   "qty": 64,
+   "px": "241.10",
+   "venue": "IBKR",
+   "state": "Working"
+  },
+  {
+   "id": "O-8842",
+   "sym": "BTCUSDT",
+   "side": "SELL",
+   "type": "LMT",
+   "qty": 0.05,
+   "px": "113,900",
+   "venue": "Binance·TN",
+   "state": "Working"
+  },
+  {
+   "id": "O-8836",
+   "sym": "MES SEP26",
+   "side": "SELL",
+   "type": "STP",
+   "qty": 2,
+   "px": "6,350.00",
+   "venue": "IBKR",
+   "state": "Working"
+  }
+ ],
+ "orderHist": [
+  {
+   "t": "10:38:45",
+   "sym": "SPY",
+   "sq": "BUY 12",
+   "px": "618.90",
+   "slip": "+1.1bp",
+   "st": "filled"
+  },
+  {
+   "t": "10:38:45",
+   "sym": "XLE",
+   "sq": "SELL 40",
+   "px": "89.42",
+   "slip": "+0.8bp",
+   "st": "filled"
+  },
+  {
+   "t": "10:41:02",
+   "sym": "BTCUSDT",
+   "sq": "BUY 0.05",
+   "px": "112,391",
+   "slip": "+2.4bp",
+   "st": "filled"
+  },
+  {
+   "t": "10:12:20",
+   "sym": "QQQ",
+   "sq": "BUY 8",
+   "px": "—",
+   "slip": "—",
+   "st": "canceled"
+  },
+  {
+   "t": "09:47:13",
+   "sym": "ETHUSDT",
+   "sq": "SELL 0.6",
+   "px": "4,190.55",
+   "slip": "+3.1bp",
+   "st": "filled"
+  },
+  {
+   "t": "09:31:04",
+   "sym": "QQQ",
+   "sq": "BUY 30",
+   "px": "—",
+   "slip": "—",
+   "st": "rejected"
+  },
+  {
+   "t": "09:30:22",
+   "sym": "XLV",
+   "sq": "BUY 55",
+   "px": "148.02",
+   "slip": "+0.9bp",
+   "st": "filled"
+  }
+ ],
+ "wf": [
+  {
+   "is": "2022-01→2022-12",
+   "oos": "2023-01→2023-06",
+   "sr": 1.34,
+   "pass": true
+  },
+  {
+   "is": "2022-01→2023-06",
+   "oos": "2023-07→2023-12",
+   "sr": 1.52,
+   "pass": true
+  },
+  {
+   "is": "2022-01→2023-12",
+   "oos": "2024-01→2024-06",
+   "sr": 0.44,
+   "pass": false
+  },
+  {
+   "is": "2022-01→2024-06",
+   "oos": "2024-07→2024-12",
+   "sr": 1.18,
+   "pass": true
+  },
+  {
+   "is": "2022-01→2024-12",
+   "oos": "2025-01→2025-06",
+   "sr": 1.41,
+   "pass": true
+  },
+  {
+   "is": "2022-01→2025-06",
+   "oos": "2025-07→2025-12",
+   "sr": 1.35,
+   "pass": true
+  }
+ ],
+ "hftLib": [
+  {
+   "id": 1,
+   "n": "AS Inventory Market Making",
+   "cls": "mm",
+   "ac": [
+    "eq",
+    "cry"
+   ],
+   "hold": "ms–min",
+   "infra": "colo",
+   "sr": "2–6",
+   "edge": "Quote both sides around a reservation price skewed by inventory (Avellaneda–Stoikov); earn spread minus adverse selection.",
+   "sig": "resv px = mid − q·γσ²τ; spread = γσ²τ + (2/γ)ln(1+γ/κ)",
+   "entry": "post bid/ask around reservation price",
+   "exit": "inventory bounds ±Qmax; EOD flat",
+   "size": "per-quote size s.t. inventory ≤ 2% ADV",
+   "risk": "pull quotes on vol spike >3σ or news flag"
+  },
+  {
+   "id": 2,
+   "n": "Multi-Venue MM w/ Netting",
+   "cls": "mm",
+   "ac": [
+    "cry"
+   ],
+   "hold": "ms–min",
+   "infra": "lowlat",
+   "sr": "2–5",
+   "edge": "Quote the same pair on 2–3 crypto venues; net inventory across venues; capture venue-specific spreads.",
+   "sig": "per-venue fair value from consolidated book",
+   "entry": "post at consolidated fair ± venue offset",
+   "exit": "net inventory bounds; hedge residual on deepest venue",
+   "size": "per-venue caps + global net cap",
+   "risk": "venue outage → cancel-all on siblings"
+  },
+  {
+   "id": 3,
+   "n": "Queue-Position MM",
+   "cls": "mm",
+   "ac": [
+    "eq",
+    "fut"
+   ],
+   "hold": "s–min",
+   "infra": "colo",
+   "sr": "2–5",
+   "edge": "Join deep queues early for priority; cancel when queue ahead depletes abnormally (toxicity).",
+   "sig": "queue depletion rate + trade-through prob",
+   "entry": "join best when queue > K× avg",
+   "exit": "cancel on depletion threshold; EOD flat",
+   "size": "1-lot ladders",
+   "risk": "max open orders; venue cancel-ratio budget"
+  },
+  {
+   "id": 4,
+   "n": "Delta-Hedged Options MM",
+   "cls": "mm",
+   "ac": [
+    "opt"
+   ],
+   "hold": "min–hr",
+   "infra": "colo",
+   "sr": "2–4",
+   "edge": "Quote options where market deviates from fitted vol surface; hedge delta instantly in underlying.",
+   "sig": "fitted surface vs market quotes",
+   "entry": "quote when |mkt−fit| > edge",
+   "exit": "auto delta-hedge; unwind at fair",
+   "size": "contracts s.t. greeks within caps",
+   "risk": "vega/gamma caps; pull on refit failure"
+  },
+  {
+   "id": 5,
+   "n": "Funding-Aware Perp MM",
+   "cls": "mm",
+   "ac": [
+    "cry"
+   ],
+   "hold": "min–hr",
+   "infra": "lowlat",
+   "sr": "1.5–4",
+   "edge": "Skew perp quotes by predicted funding; collect spread + favorable funding accrual.",
+   "sig": "funding prediction from premium-index EMA",
+   "entry": "asymmetric quotes tilted to funding side",
+   "exit": "inventory bounds; funding flip",
+   "size": "inventory ≤ funding-adjusted cap",
+   "risk": "liquidation buffer ≥5×; kill on basis blowout"
+  },
+  {
+   "id": 6,
+   "n": "Order Flow Imbalance Momentum",
+   "cls": "flow",
+   "ac": [
+    "eq",
+    "fut",
+    "cry"
+   ],
+   "hold": "100ms–30s",
+   "infra": "lowlat",
+   "sr": "2–5",
+   "edge": "OFI (Cont et al.) predicts short-horizon moves; trade with the imbalance.",
+   "sig": "OFI = Σ(ΔbidSz@touch − ΔaskSz@touch), 200ms–1s window",
+   "entry": "OFI z > 2 sustained 500ms AND spread ≤ 1 tick",
+   "exit": "+4bps / −2bps stop / 30s timeout",
+   "size": "f(z, book depth); ≤ 5% top-of-book",
+   "risk": "no entries 5min post-open; halt after 3 straight stops"
+  },
+  {
+   "id": 7,
+   "n": "Tape-Aggressor Momentum",
+   "cls": "flow",
+   "ac": [
+    "eq",
+    "cry"
+   ],
+   "hold": "1–60s",
+   "infra": "lowlat",
+   "sr": "1.5–4",
+   "edge": "Aggressor-side trade imbalance continues short-term.",
+   "sig": "signed volume ratio, rolling 2s",
+   "entry": "ratio > 0.75 with volume > 3× avg",
+   "exit": "ratio → 0.5 or ±bps bracket",
+   "size": "vol-scaled; participation ≤ 2% of tape",
+   "risk": "skip scheduled-news windows"
+  },
+  {
+   "id": 8,
+   "n": "Depth-Imbalance Reversion",
+   "cls": "flow",
+   "ac": [
+    "eq",
+    "fut"
+   ],
+   "hold": "1–20s",
+   "infra": "colo",
+   "sr": "2–4",
+   "edge": "Extreme one-sided depth without price follow-through mean-reverts (spoof-prone; fade it).",
+   "sig": "L2 depth ratio (5 lvls), persistence-filtered",
+   "entry": "ratio > 85th pctile AND price static 2s",
+   "exit": "ratio normalizes / 20s timeout",
+   "size": "small, fixed",
+   "risk": "strict stop; gated by #13 anomaly filter"
+  },
+  {
+   "id": 9,
+   "n": "Microprice Reversion",
+   "cls": "flow",
+   "ac": [
+    "eq",
+    "cry"
+   ],
+   "hold": "100ms–5s",
+   "infra": "colo",
+   "sr": "2–5",
+   "edge": "Mid converges to depth-weighted microprice when they deviate.",
+   "sig": "micro = (Pa·Qb+Pb·Qa)/(Qa+Qb) vs mid",
+   "entry": "|micro−mid| > 0.4 tick, passive on micro side",
+   "exit": "convergence or queue loss",
+   "size": "1–2 lots per signal",
+   "risk": "maker-only; cancel on book flip"
+  },
+  {
+   "id": 10,
+   "n": "Sweep Follow-Through",
+   "cls": "flow",
+   "ac": [
+    "eq",
+    "fut"
+   ],
+   "hold": "1–30s",
+   "infra": "lowlat",
+   "sr": "1.5–3.5",
+   "edge": "Multi-level sweeps signal informed flow; follow before book refills.",
+   "sig": "single-event take-out of ≥3 levels",
+   "entry": "market order within 50ms, sweep direction",
+   "exit": "+6bps / −3bps / refill detected",
+   "size": "fixed small clip",
+   "risk": "max 1 concurrent; tight daily loss cap"
+  },
+  {
+   "id": 11,
+   "n": "Iceberg Detection Fade",
+   "cls": "flow",
+   "ac": [
+    "eq",
+    "fut"
+   ],
+   "hold": "10s–5min",
+   "infra": "lowlat",
+   "sr": "1.5–3",
+   "edge": "Hidden size refilling at a level is a wall; fade approaches into it.",
+   "sig": "repeated same-price refills > 4× displayed",
+   "entry": "passive in front of detected iceberg",
+   "exit": "flat when refills stop (exhaustion)",
+   "size": "≤ 20% of est. hidden size",
+   "risk": "stop just through the level"
+  },
+  {
+   "id": 12,
+   "n": "Cross-Asset Lead-Lag (ES→NQ)",
+   "cls": "flow",
+   "ac": [
+    "fut"
+   ],
+   "hold": "100ms–10s",
+   "infra": "colo",
+   "sr": "2–4",
+   "edge": "ES micro-moves lead NQ by ms–s (regime-dependent); trade the laggard.",
+   "sig": "rolling Hayashi–Yoshida lead-lag estimator",
+   "entry": "leader moves > k ticks, laggard static",
+   "exit": "catch-up or 5s timeout",
+   "size": "1–2 contracts",
+   "risk": "disable when correlation < 0.7"
+  },
+  {
+   "id": 13,
+   "n": "Book-Anomaly Filter (meta)",
+   "cls": "flow",
+   "ac": [
+    "eq",
+    "fut",
+    "cry"
+   ],
+   "hold": "—",
+   "infra": "lowlat",
+   "sr": "n/a",
+   "edge": "Not standalone alpha: detects layering/quote-stuffing patterns and gates other strategies OFF — raises realized SR of #6–#12.",
+   "sig": "cancel-burst rate, depth-flicker entropy",
+   "entry": "—",
+   "exit": "—",
+   "size": "—",
+   "risk": "output = trade/no-trade flag"
+  },
+  {
+   "id": 14,
+   "n": "ETF–Basket Arbitrage",
+   "cls": "arb",
+   "ac": [
+    "eq"
+   ],
+   "hold": "s–min",
+   "infra": "colo",
+   "sr": "3–6",
+   "edge": "ETF vs replicated basket NAV divergence; trade rich/cheap leg. Full create/redeem arb needs AP status — retail trades the signal only.",
+   "sig": "ETF mid − Σwᵢ·midᵢ real-time",
+   "entry": "|premium| > costs + k·σ",
+   "exit": "convergence to fair",
+   "size": "basket-hedged pairs",
+   "risk": "hedge-leg fill risk; constituent-halt halt"
+  },
+  {
+   "id": 15,
+   "n": "Futures–ETF Basis (ES vs SPY)",
+   "cls": "arb",
+   "ac": [
+    "eq",
+    "fut"
+   ],
+   "hold": "s–min",
+   "infra": "colo",
+   "sr": "2–5",
+   "edge": "Same index, two instruments; short-lived basis deviations revert.",
+   "sig": "carry-adjusted basis z",
+   "entry": "z > 2.5, both legs simultaneous",
+   "exit": "z < 0.5",
+   "size": "notional-matched pairs",
+   "risk": "leg-out limit 200ms; flat at session breaks"
+  },
+  {
+   "id": 16,
+   "n": "Cross-Venue Crypto Arb",
+   "cls": "arb",
+   "ac": [
+    "cry"
+   ],
+   "hold": "ms–s",
+   "infra": "lowlat",
+   "sr": "2–6",
+   "edge": "Same pair priced differently across venues; taker-taker when spread > fees+slip.",
+   "sig": "bid(A) > ask(B) + total costs",
+   "entry": "simultaneous IOC both venues",
+   "exit": "immediate (atomic intent)",
+   "size": "min(depth both sides)",
+   "risk": "pre-funded both venues; withdrawal-freeze monitor"
+  },
+  {
+   "id": 17,
+   "n": "Triangular Crypto Arb",
+   "cls": "arb",
+   "ac": [
+    "cry"
+   ],
+   "hold": "ms–s",
+   "infra": "lowlat",
+   "sr": "1.5–4",
+   "edge": "A→B→C→A cycle mispricing on one venue — no transfer risk.",
+   "sig": "cycle rate product − 1 > fees",
+   "entry": "3-leg IOC sequence",
+   "exit": "cycle completion",
+   "size": "smallest-leg depth bound",
+   "risk": "partial-fill unwind logic mandatory"
+  },
+  {
+   "id": 18,
+   "n": "Perp–Spot Basis Capture",
+   "cls": "arb",
+   "ac": [
+    "cry"
+   ],
+   "hold": "hr–days",
+   "infra": "retail",
+   "sr": "1.5–3",
+   "edge": "Long spot + short perp when funding rich; delta-neutral funding carry.",
+   "sig": "annualized funding > threshold",
+   "entry": "paired entry, delta-neutral",
+   "exit": "funding normalizes",
+   "size": "≤ 30% of sleeve per pair",
+   "risk": "liquidation buffer; per-exchange counterparty cap"
+  },
+  {
+   "id": 19,
+   "n": "HF Pairs Convergence (1s bars)",
+   "cls": "arb",
+   "ac": [
+    "eq"
+   ],
+   "hold": "min–hr",
+   "infra": "lowlat",
+   "sr": "1.5–3",
+   "edge": "Tight cointegrated pairs (share classes, dual listings) deviate intraday and converge.",
+   "sig": "spread z on 1s bars, 90d coint window",
+   "entry": "z > 2.2, both legs",
+   "exit": "z < 0.3 / half-life timeout",
+   "size": "beta-weighted pairs",
+   "risk": "daily coint re-test; kill if half-life > 12d"
+  },
+  {
+   "id": 20,
+   "n": "Index Rebalance Micro-Drift",
+   "cls": "arb",
+   "ac": [
+    "eq"
+   ],
+   "hold": "min–hr",
+   "infra": "retail",
+   "sr": "1–2.5",
+   "edge": "Announced index adds/deletes drift into effective date on predictable tracking flow.",
+   "sig": "announced changes + est. flow",
+   "entry": "day-before, flow direction",
+   "exit": "at rebalance close print",
+   "size": "ADV-capped",
+   "risk": "crowding monitor; size down on spread widening"
+  },
+  {
+   "id": 21,
+   "n": "Calendar-Spread Scalping",
+   "cls": "arb",
+   "ac": [
+    "fut"
+   ],
+   "hold": "s–min",
+   "infra": "colo",
+   "sr": "2–4",
+   "edge": "Front/back spread book is thin and mean-reverts in a band intraday.",
+   "sig": "spread vs rolling VWAP band",
+   "entry": "band edge, passive",
+   "exit": "band mid",
+   "size": "1–2 spreads",
+   "risk": "roll-period rules; news flat"
+  },
+  {
+   "id": 22,
+   "n": "Opening Auction Imbalance",
+   "cls": "event",
+   "ac": [
+    "eq"
+   ],
+   "hold": "min",
+   "infra": "lowlat",
+   "sr": "1.5–3",
+   "edge": "Exchange-published auction imbalance predicts post-open drift.",
+   "sig": "imbalance/ADV at 9:28",
+   "entry": "MOO or first-minute, imbalance direction",
+   "exit": "+15min timeout or ±bps bracket",
+   "size": "imbalance-scaled, ADV cap",
+   "risk": "skip halted/news names"
+  },
+  {
+   "id": 23,
+   "n": "Closing Auction (MOC) Imbalance",
+   "cls": "event",
+   "ac": [
+    "eq"
+   ],
+   "hold": "min",
+   "infra": "lowlat",
+   "sr": "1.5–3.5",
+   "edge": "3:50pm MOC imbalance publication → drift into close.",
+   "sig": "published imbalance vs 20d norm",
+   "entry": "3:50–3:55, imbalance direction",
+   "exit": "MOC order at close print",
+   "size": "≤ 1% of imbalance",
+   "risk": "earnings-day exclusion"
+  },
+  {
+   "id": 24,
+   "n": "Macro-Release Momentum",
+   "cls": "event",
+   "ac": [
+    "fut"
+   ],
+   "hold": "100ms–5min",
+   "infra": "colo",
+   "sr": "2–5",
+   "edge": "CPI/NFP surprise direction persists minutes; the race is decided in ~10ms (machine-readable feeds + colo only — listed for completeness).",
+   "sig": "release vs consensus, ms-parsed",
+   "entry": "surprise > threshold, market order",
+   "exit": "2–5min momentum decay",
+   "size": "fixed contracts",
+   "risk": "pre-release straddle-width sanity check"
+  },
+  {
+   "id": 25,
+   "n": "Halt-Resumption Volatility",
+   "cls": "event",
+   "ac": [
+    "eq"
+   ],
+   "hold": "s–min",
+   "infra": "lowlat",
+   "sr": "1.5–3",
+   "edge": "LULD reopen overshoots then reverts; fade the reopening extreme.",
+   "sig": "reopen print vs pre-halt VWAP",
+   "entry": "fade if gap > 2× band width",
+   "exit": "VWAP touch or ±bracket",
+   "size": "small fixed, wide stop",
+   "risk": "one attempt per halt; skip news-pending T1 halts"
+  },
+  {
+   "id": 26,
+   "n": "Inverted-Venue Rebate Capture",
+   "cls": "liq",
+   "ac": [
+    "eq"
+   ],
+   "hold": "s–min",
+   "infra": "colo",
+   "sr": "1–2.5",
+   "edge": "Post on taker-rebate venues; earn rebate on flow that would cross anyway.",
+   "sig": "crossing-probability model per venue",
+   "entry": "passive at NBBO on inverted venue",
+   "exit": "fill (rebate) or cancel",
+   "size": "odd lots, high count",
+   "risk": "per-venue adverse-selection markout monitor"
+  },
+  {
+   "id": 27,
+   "n": "Midpoint Dark Liquidity",
+   "cls": "liq",
+   "ac": [
+    "eq"
+   ],
+   "hold": "s–min",
+   "infra": "lowlat",
+   "sr": "1–2.5",
+   "edge": "Rest midpoint pegs in dark pools/IEX; capture half-spread with low impact.",
+   "sig": "urgency model routes lit vs dark",
+   "entry": "midpoint peg resting",
+   "exit": "fill or reroute after T",
+   "size": "child slices of parent order",
+   "risk": "venue toxicity scores; min-quantity flags"
+  },
+  {
+   "id": 28,
+   "n": "VWAP-Band Reversion Scalp",
+   "cls": "scalp",
+   "ac": [
+    "eq",
+    "cry"
+   ],
+   "hold": "min",
+   "infra": "retail",
+   "sr": "1–2.5",
+   "edge": "Liquid names oscillate around session VWAP absent news; fade band extremes.",
+   "sig": "price vs VWAP ± 1.5σ band",
+   "entry": "band touch + tape deceleration",
+   "exit": "VWAP touch / −0.75σ stop",
+   "size": "vol-scaled",
+   "risk": "trend-day (ADX) gate — the failure mode"
+  },
+  {
+   "id": 29,
+   "n": "Opening-Range Breakout Scalp",
+   "cls": "scalp",
+   "ac": [
+    "eq",
+    "fut"
+   ],
+   "hold": "min–hr",
+   "infra": "retail",
+   "sr": "1–2",
+   "edge": "First-15min range break with volume continues; decayed classic — needs strict filters.",
+   "sig": "OR high/low ± buffer + volume confirm",
+   "entry": "stop order through range ± buffer",
+   "exit": "1R/2R bracket, EOD flat",
+   "size": "fixed risk 0.25%/trade",
+   "risk": "skip inside-day opens; one shot per side"
+  },
+  {
+   "id": 30,
+   "n": "Stop-Run Fade",
+   "cls": "scalp",
+   "ac": [
+    "fut",
+    "cry"
+   ],
+   "hold": "s–min",
+   "infra": "lowlat",
+   "sr": "1.5–3",
+   "edge": "Stop-hunt flushes through swing levels revert when depth refills; fade the flush.",
+   "sig": "sharp move through level on thin book + instant refill",
+   "entry": "fade on refill confirmation",
+   "exit": "50% retrace / beyond-flush stop",
+   "size": "small fixed",
+   "risk": "never fade news moves — #13 gate + calendar"
+  }
+ ],
+ "accounts": [
+  {
+   "n": "IBKR margin (U***4821)",
+   "eq": "$104,382",
+   "bp": "$208,764",
+   "mg": "8.2%"
+  },
+  {
+   "n": "Alpaca paper (PA***93)",
+   "eq": "$25,000",
+   "bp": "$50,000",
+   "mg": "0%"
+  },
+  {
+   "n": "Binance testnet",
+   "eq": "$18,240",
+   "bp": "spot only",
+   "mg": "—"
+  },
+  {
+   "n": "Bybit testnet",
+   "eq": "$9,980",
+   "bp": "spot only",
+   "mg": "—"
+  }
+ ],
+ "costs": [
+  [
+   "IB market data (L1 bundles)",
+   "$14.50"
+  ],
+  [
+   "Databento equities ticks",
+   "$199.00"
+  ],
+  [
+   "VPS (NY4-adjacent)",
+   "$42.00"
+  ],
+  [
+   "QuantConnect tier",
+   "$60.00"
+  ],
+  [
+   "Commissions (30d act.)",
+   "$86.40"
+  ]
+ ],
+ "econ": [
+  [
+   "Jul 15 08:30",
+   "CPI (Jun)",
+   "halt: crypto-mr, vwap-band"
+  ],
+  [
+   "Jul 28–29",
+   "FOMC",
+   "halt: all mean-reversion"
+  ],
+  [
+   "Aug 07 08:30",
+   "NFP (Jul)",
+   "halt: fut-carry entries"
+  ],
+  [
+   "Aug 19",
+   "MES roll week",
+   "fut-carry roll rules"
+  ]
+ ],
+ "notes": [
+  {
+   "d": "Jul 03",
+   "s": "crypto-mr-v2",
+   "txt": "Bybit ws degraded 10:35 — strategy kept quoting on stale book for ~4s. Added staleness guard to backlog.",
+   "tag": "incident"
+  },
+  {
+   "d": "Jul 01",
+   "s": "momo-etf-v3",
+   "txt": "Rebalance skipped XLE despite rank 2 — vol filter working as designed. Good.",
+   "tag": "observation"
+  },
+  {
+   "d": "Jun 27",
+   "s": "—",
+   "txt": "Overrode system, closed MES early before weekend. Cost 0.8R of profit. Stop doing this.",
+   "tag": "discipline"
+  }
+ ],
+ "alerts": [
+  {
+   "r": "Daily P&L < −$1,000",
+   "ch": "email + toast",
+   "on": true
+  },
+  {
+   "r": "Any venue disconnected > 60s",
+   "ch": "email",
+   "on": true
+  },
+  {
+   "r": "BTCUSDT moves > 3% in 15min",
+   "ch": "email",
+   "on": true
+  },
+  {
+   "r": "Strategy Sharpe(20d) < 0",
+   "ch": "weekly digest",
+   "on": false
+  }
+ ],
+ "setup": [
+  [
+   "Accounts connected (paper)",
+   100
+  ],
+  [
+   "Data spine: core symbols",
+   86
+  ],
+  [
+   "First LEAN backtest",
+   100
+  ],
+  [
+   "Parity gate passed (1 strategy)",
+   100
+  ],
+  [
+   "Paper trading 2+ weeks",
+   60
+  ],
+  [
+   "Risk drills (kill switch, breach)",
+   50
+  ],
+  [
+   "Dead-man switch + backups verified",
+   25
+  ],
+  [
+   "Go-live checklist",
+   0
+  ]
+ ]
+}

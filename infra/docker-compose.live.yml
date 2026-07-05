@@ -1,0 +1,7 @@
+# LIVE overlay (M8). NEVER started automatically. The go-live wizard stages config;
+# a HUMAN runs: docker compose -f infra/docker-compose.yml -f infra/docker-compose.live.yml --env-file .env.live up -d
+# One venue enabled at a time via QD_LIVE_VENUE.
+services:
+  trading-node:
+    environment: {QD_MODE: live, QD_LIVE_VENUE: "${QD_LIVE_VENUE:?set exactly one venue}", QD_FIRST_TRADE_MIN_SIZE: "1"}
+    env_file: [../.env.live]

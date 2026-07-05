@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #22
+schema: quantdesk.strategy.v1
+id: 22
+name: opening-auction-imbalance
+display_name: "Opening Auction Imbalance"
+class: event
+asset_classes: [eq]
+holding_period: "min"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3"  # literature/practitioner attribution — not a promise
+edge: "Exchange-published auction imbalance predicts post-open drift."
+signal: "imbalance/ADV at 9:28"
+entry: "MOO or first-minute, imbalance direction"
+exit: "+15min timeout or ±bps bracket"
+sizing: "imbalance-scaled, ADV cap"
+risk: "skip halted/news names"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

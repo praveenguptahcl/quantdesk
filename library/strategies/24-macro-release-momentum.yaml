@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #24
+schema: quantdesk.strategy.v1
+id: 24
+name: macro-release-momentum
+display_name: "Macro-Release Momentum"
+class: event
+asset_classes: [fut]
+holding_period: "100ms–5min"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "2–5"  # literature/practitioner attribution — not a promise
+edge: "CPI/NFP surprise direction persists minutes; the race is decided in ~10ms (machine-readable feeds + colo only — listed for completeness)."
+signal: "release vs consensus, ms-parsed"
+entry: "surprise > threshold, market order"
+exit: "2–5min momentum decay"
+sizing: "fixed contracts"
+risk: "pre-release straddle-width sanity check"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

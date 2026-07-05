@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #7
+schema: quantdesk.strategy.v1
+id: 7
+name: tape-aggressor-momentum
+display_name: "Tape-Aggressor Momentum"
+class: flow
+asset_classes: [eq, cry]
+holding_period: "1–60s"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–4"  # literature/practitioner attribution — not a promise
+edge: "Aggressor-side trade imbalance continues short-term."
+signal: "signed volume ratio, rolling 2s"
+entry: "ratio > 0.75 with volume > 3× avg"
+exit: "ratio → 0.5 or ±bps bracket"
+sizing: "vol-scaled; participation ≤ 2% of tape"
+risk: "skip scheduled-news windows"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

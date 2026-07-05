@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #14
+schema: quantdesk.strategy.v1
+id: 14
+name: etf-basket-arbitrage
+display_name: "ETF–Basket Arbitrage"
+class: arb
+asset_classes: [eq]
+holding_period: "s–min"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "3–6"  # literature/practitioner attribution — not a promise
+edge: "ETF vs replicated basket NAV divergence; trade rich/cheap leg. Full create/redeem arb needs AP status — retail trades the signal only."
+signal: "ETF mid − Σwᵢ·midᵢ real-time"
+entry: "|premium| > costs + k·σ"
+exit: "convergence to fair"
+sizing: "basket-hedged pairs"
+risk: "hedge-leg fill risk; constituent-halt halt"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

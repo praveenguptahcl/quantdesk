@@ -361,8 +361,8 @@ label.fl b{color:var(--red)}
           <option value="momo">momo-etf-v3 · 2023-01 → 2025-12</option>
           <option value="pairs">pairs-stat-v1 · 2022-06 → 2025-12</option>
         </select>
-        <button class="btn" onclick="UI.toast('Re-running LEAN backtest… (stub — wire to lean backtest)','ok')">↻ LEAN leg</button>
-        <button class="btn" onclick="UI.toast('Re-running Nautilus backtest… (stub — wire to BacktestNode)','ok')">↻ Nautilus leg</button>
+        <button class="btn primary" onclick="UI.runParityBacktest(false)">▶ Run dual backtest</button>
+        <button class="btn" onclick="UI.runParityBacktest(true)" title="Shortens engine B's warm-up by 20 bars to demo a parity failure">⚠ Run with injected bug</button>
         <span style="flex:1"></span>
         <span id="parityBadge"></span>
       </div>
@@ -1264,11 +1264,13 @@ const UI = {
     d.classList.add('open');
     if(i.sharpe) requestAnimationFrame(()=>{const c=document.getElementById('drawerSpark'); if(c)CH.spark(c,CH.equity(90,i.seed,0.0012,0.01).eq,'rgb(76,141,255)');});
   },
-  promote(id){
+  async promote(id){
     const i=API.ideas.find(x=>x.id===id);
     if(i.stage===5){ this.toast('Live promotion must go through the Go-Live Wizard','err');
       document.querySelector('[data-s=golive]').click(); return; }
-    i.stage++; i.gate='block'; i.gateNote='New stage — checkpoint not yet evaluated';
+    if(QD.on){ const r=await QD.post(`/api/ideas/${id}/promote`);
+      if(!r||r.err)return; Object.assign(i,r); }
+    else { i.stage++; i.gate='block'; i.gateNote='New stage — checkpoint not yet evaluated'; }
     this.renderPipeline(); this.renderJournal();
     document.getElementById('drawer').classList.remove('open');
     this.toast(`${i.name} promoted to ${API.stages[i.stage]}`,'ok');
@@ -1317,10 +1319,26 @@ const UI = {
     if(!g('f-kill')) errs.push('kill criterion required — every idea needs a pre-registered way to die');
     const e=document.getElementById('f-err');
     if(errs.length){ e.style.display='block'; e.textContent='⛔ '+errs.join(' · '); return; }
-    API.addIdea({name:g('f-name'), ac:ac.dataset.v, hyp:g('f-hyp'), uni:g('f-uni'), feats:g('f-feats')||'TBD',
-      sharpe:g('f-sr')?+g('f-sr'):null, turn:g('f-turn')||'TBD', cap:g('f-cap')||'TBD', kill:g('f-kill')});
+    const ideaDoc={name:g('f-name'), ac:ac.dataset.v, hyp:g('f-hyp'), uni:g('f-uni'), feats:g('f-feats')||'TBD',
+      sharpe:g('f-sr')?+g('f-sr'):null, turn:g('f-turn')||'TBD', cap:g('f-cap')||'TBD', kill:g('f-kill')};
+    if(QD.on){ QD.post('/api/ideas',ideaDoc).then(r=>{ if(r&&!r.err){API.ideas.push(r);UI.renderPipeline();UI.renderJournal();} }); }
+    else API.addIdea(ideaDoc);
     this.closeModal(); this.renderPipeline(); this.renderJournal();
     this.toast('Idea logged — appears in the Idea column with Phase 2 checkpoints pending','ok');
+  },
+
+  /* ---- real dual backtest (M4/M5) ---- */
+  async runParityBacktest(bug){
+    if(!QD.on){ this.toast('Backend offline — showing embedded demo data. Run: python3 api/server.py','err'); return; }
+    this.toast(bug?'Running dual backtest with injected warm-up bug…':'Running dual backtest (engine A + engine B) on catalog data…','ok');
+    const r=await QD.post('/api/backtests/run/momo-etf-v3',{bug:!!bug});
+    if(!r||r.err)return;
+    API.parity.momo=Object.assign({},API.parity.momo,r.parity);
+    document.getElementById('paritySel').value='momo';
+    this.renderParity();
+    // refresh journal gates (server synced momo's gate to the computed verdict)
+    try{ API.ideas=await(await fetch('/api/ideas')).json(); this.renderPipeline(); this.renderJournal(); }catch(e){}
+    this.toast('Parity '+(r.parity.pass?'PASSED — engines reconciled':'FAILED — see trade-level diff'),r.parity.pass?'ok':'err');
   },
 
   /* ---- backtest & parity tearsheet ---- */
@@ -1449,6 +1467,7 @@ const UI = {
     if(API.symbols.some(v=>v.s===sym)){e.style.display='block';e.textContent='⛔ already in workspace';return;}
     const ac=document.querySelector('#ns-ac .chip.sel').dataset.v;
     const tiers=[...document.querySelectorAll('[data-tier]')].filter(c=>c.checked).map(c=>c.dataset.tier);
+    if(QD.on)QD.post('/api/spine',{symbol:sym, ac, tiers});
     API.symbols.push({s:sym, ac, spine:'dl', note:'downloading: '+tiers.join(' · ')});
     this.closeModal(); this.renderSymbols();
     document.getElementById('feed').innerHTML=
@@ -1536,10 +1555,13 @@ const UI = {
         document.getElementById('aiStatus').textContent=ch.dataset.p==='builtin'?'':'stub — backend routes to this provider (Blueprint M12)';};
     });
   },
-  aiParse(){
+  async aiParse(){
     const text=document.getElementById('aiText').value.trim();
     if(text.length<30){this.toast('Describe the strategy in at least a sentence or two','err');return;}
-    const {spec,warns}=API.aiParse(text);
+    let spec,warns;
+    if(QD.on){ const r=await QD.post('/api/ai/parse',{text,provider:this.aiProvider});
+      if(r&&!r.err){spec=r.spec;warns=r.warns;} }
+    if(!spec){ const local=API.aiParse(text); spec=local.spec; warns=local.warns; }
     this._aiSpec=spec;
     document.getElementById('aiSpec').textContent=JSON.stringify(spec,null,2);
     document.getElementById('aiWarns').innerHTML=warns.map(w=>`<div class="warnrow">⚠ ${w}</div>`).join('')
@@ -1552,6 +1574,9 @@ const UI = {
     const sp=this._aiSpec; if(!sp)return;
     if(sp.kill_criterion.startsWith('<')){this.toast('⛔ Journal entry blocked: spec has no kill criterion. Add one to the description and re-parse.','err');return;}
     if(sp.universe[0]==='<UNSPECIFIED>'){this.toast('⛔ Journal entry blocked: no universe/symbols in spec.','err');return;}
+    if(QD.on){ QD.post('/api/ideas/from-spec',{spec:sp,text:document.getElementById('aiText').value.trim()})
+      .then(r=>{ if(r&&!r.err){API.ideas.push(r);UI.renderPipeline();UI.renderJournal();UI.toast(`${sp.name} logged to journal (Idea stage) — spec attached`,'ok');} });
+      return; }
     const acMap={market_making:'eq',order_flow:'eq',mean_reversion:'eq',momentum:'eq',unclassified:'eq'};
     API.addIdea({name:sp.name, ac:(API.symbols.find(v=>v.s===sp.universe[0])||{}).ac||acMap[sp.class],
       syms:sp.universe, hyp:document.getElementById('aiText').value.trim().slice(0,140),
@@ -1642,8 +1667,9 @@ const UI = {
   },
   saveNote(){
     const txt=document.getElementById('jn-t').value.trim(); if(!txt){this.toast('Empty note','err');return;}
-    API.notes.unshift({d:new Date().toLocaleDateString('en-US',{month:'short',day:'2-digit'}),
-      s:document.getElementById('jn-s').value.trim()||'—', txt, tag:document.querySelector('#jn-tag .chip.sel').dataset.v});
+    const noteDoc={s:document.getElementById('jn-s').value.trim()||'—', txt, tag:document.querySelector('#jn-tag .chip.sel').dataset.v};
+    if(QD.on)QD.post('/api/notes',noteDoc);
+    API.notes.unshift({d:new Date().toLocaleDateString('en-US',{month:'short',day:'2-digit'}),...noteDoc});
     this.closeModal(); this.renderDesk(); this.toast('Note saved to journal','ok');
   },
   exportCSV(){
@@ -1705,7 +1731,9 @@ const UI = {
   },
   saveAlert(){
     const r=document.getElementById('al-r').value.trim(); if(!r){this.toast('Empty rule','err');return;}
-    API.alerts.unshift({r, ch:document.querySelector('#al-c .chip.sel').dataset.v, on:true});
+    const alertDoc={r, ch:document.querySelector('#al-c .chip.sel').dataset.v};
+    if(QD.on)QD.post('/api/alerts',alertDoc);
+    API.alerts.unshift({...alertDoc, on:true});
     this.closeModal(); this.renderSafe(); this.toast('Alert created (stub — evaluated server-side, Blueprint M14)','ok');
   },
 
@@ -1856,8 +1884,13 @@ const UI = {
     const v=this.wizVenue||'IBKR';
     document.getElementById('wizGo').disabled = document.getElementById('wizConfirm').value !== (v+' GO LIVE');
   },
-  goLive(){
+  async goLive(){
     const v=this.wizVenue, st=this.wizStrat, ts=new Date().toISOString();
+    if(QD.on){
+      const checklist=[...(this.wizChecks.s1||[]),...(this.wizChecks.s2||[])];
+      const r=await QD.post('/api/golive',{venue:v,strategy:st,confirm:v+' GO LIVE',checklist});
+      if(!r||r.err)return;   // server rejected (parity gate, checklist, phrase) — toast already shown
+    }
     document.getElementById('auditLog').innerHTML =
       `<div><span class="t">${ts}</span> <span class="lv-err">GO-LIVE CONFIRMED</span> ${st} on ${v} — typed confirmation recorded, operator: local</div>`
       + document.getElementById('auditLog').innerHTML;
@@ -1882,7 +1915,9 @@ const UI = {
   },
   async doKill(){
     this.closeModal();
-    const r=await API.killAll();
+    let r;
+    if(QD.on){ r=await QD.post('/api/kill',{confirm:'FLATTEN'}); if(!r||r.err)return; }
+    else r=await API.killAll();
     document.getElementById('feed').innerHTML =
       `<div><span class="t">${new Date().toLocaleTimeString()}</span> <span class="lv-err">KILL SWITCH — ${r.flattened} positions flattened, order submission halted (${r.ms}ms)</span></div>`
       + document.getElementById('feed').innerHTML;
@@ -1896,7 +1931,48 @@ const UI = {
     clearTimeout(this._tt); this._tt=setTimeout(()=>t.className='',4200);
   },
 };
+/* =====================================================================
+   QD — backend bridge (Blueprint M2).
+   On load: GET /api/bootstrap and merge server state into the API object,
+   then re-render. All mutations POST to the server when connected.
+   ?mock=1 (or no backend running) => pure offline demo on embedded mocks.
+===================================================================== */
+const QD={on:false};
+QD.post=async function(path,body){
+  if(!QD.on)return null;
+  try{ const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ UI.toast('⛔ server: '+(d.error||r.status),'err'); return {err:d.error||String(r.status)}; }
+    return d;
+  }catch(e){ UI.toast('backend unreachable — working offline','err'); QD.on=false; return null; }
+};
+QD.sync=async function(){
+  if(new URLSearchParams(location.search).get('mock')==='1')return;
+  try{
+    const r=await fetch('/api/bootstrap'); if(!r.ok)throw 0;
+    const d=await r.json();
+    Object.assign(API,{ideas:d.ideas,symbols:d.symbols,venues:d.venues,positions:d.positions,
+      strategies:d.strategies,feed:d.feed,openOrders:d.openOrders,orderHist:d.orderHist,
+      accounts:d.accounts,costs:d.costs,econ:d.econ,setup:d.setup,notes:d.notes,alerts:d.alerts});
+    QD.on=true;
+    if(d.mode==='live'){document.getElementById('modebar').classList.add('live');
+      document.getElementById('modePill').textContent='LIVE';}
+    document.getElementById('feed').innerHTML=API.feed.map(([t,lv,m])=>
+      `<div><span class="t">${t}</span> <span class="lv-${lv}">${m}</span></div>`).join('');
+    document.getElementById('venueList').innerHTML=API.venues.map(v=>
+      `<div><span class="dot ${v.ok?'g':'a'}"></span>${v.name} <span style="color:var(--dim)">· ${v.env} · ${v.lat}</span></div>`).join('');
+    UI.renderSymbols(); UI.renderDash(); UI.renderPipeline(); UI.renderJournal(); UI.rerender();
+    UI.toast('Connected to backend — live state loaded','ok');
+    // light polling for feed/state
+    setInterval(async()=>{ if(!QD.on)return;
+      try{ const f=await(await fetch('/api/feed?limit=50')).json(); API.feed=f;
+        const el=document.getElementById('feed');
+        if(el)el.innerHTML=f.map(([t,lv,m])=>`<div><span class="t">${t}</span> <span class="lv-${lv}">${m}</span></div>`).join('');
+      }catch(e){} },5000);
+  }catch(e){ /* offline demo mode */ }
+};
 UI.init();
+QD.sync();
 window.addEventListener('resize',()=>{UI.renderParity();});
 </script>
 </body>

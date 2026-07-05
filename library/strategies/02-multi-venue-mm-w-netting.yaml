@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #2
+schema: quantdesk.strategy.v1
+id: 2
+name: multi-venue-mm-w-netting
+display_name: "Multi-Venue MM w/ Netting"
+class: mm
+asset_classes: [cry]
+holding_period: "ms–min"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "2–5"  # literature/practitioner attribution — not a promise
+edge: "Quote the same pair on 2–3 crypto venues; net inventory across venues; capture venue-specific spreads."
+signal: "per-venue fair value from consolidated book"
+entry: "post at consolidated fair ± venue offset"
+exit: "net inventory bounds; hedge residual on deepest venue"
+sizing: "per-venue caps + global net cap"
+risk: "venue outage → cancel-all on siblings"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #17
+schema: quantdesk.strategy.v1
+id: 17
+name: triangular-crypto-arb
+display_name: "Triangular Crypto Arb"
+class: arb
+asset_classes: [cry]
+holding_period: "ms–s"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–4"  # literature/practitioner attribution — not a promise
+edge: "A→B→C→A cycle mispricing on one venue — no transfer risk."
+signal: "cycle rate product − 1 > fees"
+entry: "3-leg IOC sequence"
+exit: "cycle completion"
+sizing: "smallest-leg depth bound"
+risk: "partial-fill unwind logic mandatory"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

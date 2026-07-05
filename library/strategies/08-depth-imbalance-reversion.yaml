@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #8
+schema: quantdesk.strategy.v1
+id: 8
+name: depth-imbalance-reversion
+display_name: "Depth-Imbalance Reversion"
+class: flow
+asset_classes: [eq, fut]
+holding_period: "1–20s"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "2–4"  # literature/practitioner attribution — not a promise
+edge: "Extreme one-sided depth without price follow-through mean-reverts (spoof-prone; fade it)."
+signal: "L2 depth ratio (5 lvls), persistence-filtered"
+entry: "ratio > 85th pctile AND price static 2s"
+exit: "ratio normalizes / 20s timeout"
+sizing: "small, fixed"
+risk: "strict stop; gated by #13 anomaly filter"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

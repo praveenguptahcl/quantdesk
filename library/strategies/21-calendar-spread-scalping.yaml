@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #21
+schema: quantdesk.strategy.v1
+id: 21
+name: calendar-spread-scalping
+display_name: "Calendar-Spread Scalping"
+class: arb
+asset_classes: [fut]
+holding_period: "s–min"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "2–4"  # literature/practitioner attribution — not a promise
+edge: "Front/back spread book is thin and mean-reverts in a band intraday."
+signal: "spread vs rolling VWAP band"
+entry: "band edge, passive"
+exit: "band mid"
+sizing: "1–2 spreads"
+risk: "roll-period rules; news flat"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

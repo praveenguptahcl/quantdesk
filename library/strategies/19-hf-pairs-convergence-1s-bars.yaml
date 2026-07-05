@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #19
+schema: quantdesk.strategy.v1
+id: 19
+name: hf-pairs-convergence-1s-bars
+display_name: "HF Pairs Convergence (1s bars)"
+class: arb
+asset_classes: [eq]
+holding_period: "min–hr"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3"  # literature/practitioner attribution — not a promise
+edge: "Tight cointegrated pairs (share classes, dual listings) deviate intraday and converge."
+signal: "spread z on 1s bars, 90d coint window"
+entry: "z > 2.2, both legs"
+exit: "z < 0.3 / half-life timeout"
+sizing: "beta-weighted pairs"
+risk: "daily coint re-test; kill if half-life > 12d"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

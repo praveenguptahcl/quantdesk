@@ -2,6 +2,42 @@
 
 Personal quant platform: **QuantConnect/LEAN** for research, **NautilusTrader** for execution, and a local **control-plane GUI** tying the workflow together.
 
+## Run it now (zero installs)
+
+```bash
+python3 api/server.py        # or: make dev
+# open http://127.0.0.1:8700
+```
+
+That's the whole thing — the backend is pure Python stdlib (no pip install), binds to localhost only, and persists to `~/.quantdesk/quantdesk.db`. The GUI auto-connects on load ("Connected to backend" toast); ideas, journal notes, alerts, symbol-spine additions, kill-switch activations and go-live confirmations all persist across restarts. Open with `?mock=1` for the offline demo instead.
+
+Tests: `make test` (28 tests — promotion 409s, go-live validation incl. parity blocking, kill confirmation, AI-spec blockers, wash-sale detection, dual-engine reconciliation, warm-up-bug gate failure, order-validation limits).
+
+## Real backtests + the parity gate, working today
+
+The Backtest & Parity screen's **▶ Run dual backtest** button runs two independent
+implementations of momo-etf-v3 (array-precomputed "LEAN-style" and event-driven
+"Nautilus-style" — `api/backtest.py`) over `data/catalog/` bars, computes the parity
+verdict against `risk/limits.yaml` tolerances, syncs the journal gate, and updates
+setup progress. **⚠ Run with injected bug** shortens engine B's warm-up by 20 bars
+to show a realistic parity failure with trade-level diffs — and while it's failing,
+the go-live endpoint refuses that strategy.
+
+Data: synthetic bars ship by default (`scripts/gen_synthetic_data.py`, labeled as such
+in the parity window header). Get **real history** in one command on your machine:
+
+```bash
+python3 scripts/fetch_data.py     # pulls SPY + 9 sector ETFs from Stooq (free, no key)
+```
+
+Restart the backend, hit Run dual backtest again — real results. Pre-route order
+validation is live too: `POST /api/orders/validate` enforces the YAML limits
+(notional caps, price sanity band, per-class position limits) and logs rejects to the feed.
+
+What still needs your accounts/Docker (blueprint M4–M8): actual LEAN CLI + NautilusTrader
+runs (the engines here implement the same rules and swap out behind the same interface),
+broker paper connections, and live trading. Strategy source is ready in `strategies/`.
+
 ## What's here
 
 | File | Purpose |

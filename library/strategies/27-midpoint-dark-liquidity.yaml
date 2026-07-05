@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #27
+schema: quantdesk.strategy.v1
+id: 27
+name: midpoint-dark-liquidity
+display_name: "Midpoint Dark Liquidity"
+class: liq
+asset_classes: [eq]
+holding_period: "s–min"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1–2.5"  # literature/practitioner attribution — not a promise
+edge: "Rest midpoint pegs in dark pools/IEX; capture half-spread with low impact."
+signal: "urgency model routes lit vs dark"
+entry: "midpoint peg resting"
+exit: "fill or reroute after T"
+sizing: "child slices of parent order"
+risk: "venue toxicity scores; min-quantity flags"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

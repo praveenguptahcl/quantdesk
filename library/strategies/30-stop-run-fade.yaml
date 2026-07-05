@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #30
+schema: quantdesk.strategy.v1
+id: 30
+name: stop-run-fade
+display_name: "Stop-Run Fade"
+class: scalp
+asset_classes: [fut, cry]
+holding_period: "s–min"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3"  # literature/practitioner attribution — not a promise
+edge: "Stop-hunt flushes through swing levels revert when depth refills; fade the flush."
+signal: "sharp move through level on thin book + instant refill"
+entry: "fade on refill confirmation"
+exit: "50% retrace / beyond-flush stop"
+sizing: "small fixed"
+risk: "never fade news moves — #13 gate + calendar"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

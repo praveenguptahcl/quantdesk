@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #12
+schema: quantdesk.strategy.v1
+id: 12
+name: cross-asset-lead-lag-es-nq
+display_name: "Cross-Asset Lead-Lag (ES→NQ)"
+class: flow
+asset_classes: [fut]
+holding_period: "100ms–10s"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "2–4"  # literature/practitioner attribution — not a promise
+edge: "ES micro-moves lead NQ by ms–s (regime-dependent); trade the laggard."
+signal: "rolling Hayashi–Yoshida lead-lag estimator"
+entry: "leader moves > k ticks, laggard static"
+exit: "catch-up or 5s timeout"
+sizing: "1–2 contracts"
+risk: "disable when correlation < 0.7"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

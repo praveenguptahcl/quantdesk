@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #5
+schema: quantdesk.strategy.v1
+id: 5
+name: funding-aware-perp-mm
+display_name: "Funding-Aware Perp MM"
+class: mm
+asset_classes: [cry]
+holding_period: "min–hr"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–4"  # literature/practitioner attribution — not a promise
+edge: "Skew perp quotes by predicted funding; collect spread + favorable funding accrual."
+signal: "funding prediction from premium-index EMA"
+entry: "asymmetric quotes tilted to funding side"
+exit: "inventory bounds; funding flip"
+sizing: "inventory ≤ funding-adjusted cap"
+risk: "liquidation buffer ≥5×; kill on basis blowout"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

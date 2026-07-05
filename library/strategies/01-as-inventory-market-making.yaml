@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #1
+schema: quantdesk.strategy.v1
+id: 1
+name: as-inventory-market-making
+display_name: "AS Inventory Market Making"
+class: mm
+asset_classes: [eq, cry]
+holding_period: "ms–min"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "2–6"  # literature/practitioner attribution — not a promise
+edge: "Quote both sides around a reservation price skewed by inventory (Avellaneda–Stoikov); earn spread minus adverse selection."
+signal: "resv px = mid − q·γσ²τ; spread = γσ²τ + (2/γ)ln(1+γ/κ)"
+entry: "post bid/ask around reservation price"
+exit: "inventory bounds ±Qmax; EOD flat"
+sizing: "per-quote size s.t. inventory ≤ 2% ADV"
+risk: "pull quotes on vol spike >3σ or news flag"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

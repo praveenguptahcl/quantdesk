@@ -1,0 +1,11 @@
+# Paper overlay (M6): docker compose -f infra/docker-compose.yml -f infra/docker-compose.paper.yml up
+services:
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    environment: {TWS_USERID: "${IB_USERNAME:?}", TWS_PASSWORD: "${IB_PASSWORD:?}", TRADING_MODE: paper}
+    ports: ["127.0.0.1:4002:4002"]
+  trading-node:
+    build: {context: .., dockerfile: infra/Dockerfile.node}
+    environment: {QD_MODE: paper}
+    env_file: [../.env]
+    depends_on: [ib-gateway, redis]

@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #23
+schema: quantdesk.strategy.v1
+id: 23
+name: closing-auction-moc-imbalance
+display_name: "Closing Auction (MOC) Imbalance"
+class: event
+asset_classes: [eq]
+holding_period: "min"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3.5"  # literature/practitioner attribution — not a promise
+edge: "3:50pm MOC imbalance publication → drift into close."
+signal: "published imbalance vs 20d norm"
+entry: "3:50–3:55, imbalance direction"
+exit: "MOC order at close print"
+sizing: "≤ 1% of imbalance"
+risk: "earnings-day exclusion"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

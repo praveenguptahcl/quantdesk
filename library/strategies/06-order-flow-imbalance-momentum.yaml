@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #6
+schema: quantdesk.strategy.v1
+id: 6
+name: order-flow-imbalance-momentum
+display_name: "Order Flow Imbalance Momentum"
+class: flow
+asset_classes: [eq, fut, cry]
+holding_period: "100ms–30s"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "2–5"  # literature/practitioner attribution — not a promise
+edge: "OFI (Cont et al.) predicts short-horizon moves; trade with the imbalance."
+signal: "OFI = Σ(ΔbidSz@touch − ΔaskSz@touch), 200ms–1s window"
+entry: "OFI z > 2 sustained 500ms AND spread ≤ 1 tick"
+exit: "+4bps / −2bps stop / 30s timeout"
+sizing: "f(z, book depth); ≤ 5% top-of-book"
+risk: "no entries 5min post-open; halt after 3 straight stops"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

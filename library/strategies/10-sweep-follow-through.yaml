@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #10
+schema: quantdesk.strategy.v1
+id: 10
+name: sweep-follow-through
+display_name: "Sweep Follow-Through"
+class: flow
+asset_classes: [eq, fut]
+holding_period: "1–30s"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3.5"  # literature/practitioner attribution — not a promise
+edge: "Multi-level sweeps signal informed flow; follow before book refills."
+signal: "single-event take-out of ≥3 levels"
+entry: "market order within 50ms, sweep direction"
+exit: "+6bps / −3bps / refill detected"
+sizing: "fixed small clip"
+risk: "max 1 concurrent; tight daily loss cap"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

@@ -1,0 +1,30 @@
+# QuantDesk risk limits — enforced by the pre-route validation layer (M7),
+# independent of any strategy logic. Edit + hot-reload; every change is
+# written to the parameter changelog.
+global:
+  daily_loss_limit_usd: -2000
+  max_drawdown_halt_pct: -8.0
+  price_sanity_band_pct: 3.0
+  max_single_order_notional_usd: 10000
+  kill_switch_max_flatten_ms: 2000
+equities:
+  max_position_usd_per_symbol: 15000
+  max_gross_exposure_pct: 40
+futures:
+  max_contracts_per_product: 4
+  margin_cap_pct_of_equity: 25
+crypto:
+  max_position_usd: 8000
+  sizing: vol_adjusted
+  max_leverage: 1.0        # spot only until explicitly changed
+hft:                        # M11 additions
+  max_message_rate_per_s: 50
+  max_open_orders: 20
+  cancel_ratio_budget: 0.9
+  markout_kill_bp_at_1s: -2.0
+  markout_kill_min_fills: 200
+parity_tolerances:          # M5 gate thresholds
+  total_return_diff_pp: 1.0
+  sharpe_diff: 0.10
+  trade_count_diff_pct: 2.0
+  max_dd_diff_pp: 1.0

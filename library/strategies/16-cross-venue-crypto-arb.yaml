@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #16
+schema: quantdesk.strategy.v1
+id: 16
+name: cross-venue-crypto-arb
+display_name: "Cross-Venue Crypto Arb"
+class: arb
+asset_classes: [cry]
+holding_period: "ms–s"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "2–6"  # literature/practitioner attribution — not a promise
+edge: "Same pair priced differently across venues; taker-taker when spread > fees+slip."
+signal: "bid(A) > ask(B) + total costs"
+entry: "simultaneous IOC both venues"
+exit: "immediate (atomic intent)"
+sizing: "min(depth both sides)"
+risk: "pre-funded both venues; withdrawal-freeze monitor"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

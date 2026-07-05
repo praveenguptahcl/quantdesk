@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #18
+schema: quantdesk.strategy.v1
+id: 18
+name: perp-spot-basis-capture
+display_name: "Perp–Spot Basis Capture"
+class: arb
+asset_classes: [cry]
+holding_period: "hr–days"
+infra_tier: retail          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3"  # literature/practitioner attribution — not a promise
+edge: "Long spot + short perp when funding rich; delta-neutral funding carry."
+signal: "annualized funding > threshold"
+entry: "paired entry, delta-neutral"
+exit: "funding normalizes"
+sizing: "≤ 30% of sleeve per pair"
+risk: "liquidation buffer; per-exchange counterparty cap"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

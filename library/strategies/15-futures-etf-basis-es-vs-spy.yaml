@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #15
+schema: quantdesk.strategy.v1
+id: 15
+name: futures-etf-basis-es-vs-spy
+display_name: "Futures–ETF Basis (ES vs SPY)"
+class: arb
+asset_classes: [eq, fut]
+holding_period: "s–min"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "2–5"  # literature/practitioner attribution — not a promise
+edge: "Same index, two instruments; short-lived basis deviations revert."
+signal: "carry-adjusted basis z"
+entry: "z > 2.5, both legs simultaneous"
+exit: "z < 0.5"
+sizing: "notional-matched pairs"
+risk: "leg-out limit 200ms; flat at session breaks"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

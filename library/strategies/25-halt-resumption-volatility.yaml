@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #25
+schema: quantdesk.strategy.v1
+id: 25
+name: halt-resumption-volatility
+display_name: "Halt-Resumption Volatility"
+class: event
+asset_classes: [eq]
+holding_period: "s–min"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3"  # literature/practitioner attribution — not a promise
+edge: "LULD reopen overshoots then reverts; fade the reopening extreme."
+signal: "reopen print vs pre-halt VWAP"
+entry: "fade if gap > 2× band width"
+exit: "VWAP touch or ±bracket"
+sizing: "small fixed, wide stop"
+risk: "one attempt per halt; skip news-pending T1 halts"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

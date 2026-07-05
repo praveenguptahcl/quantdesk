@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #26
+schema: quantdesk.strategy.v1
+id: 26
+name: inverted-venue-rebate-capture
+display_name: "Inverted-Venue Rebate Capture"
+class: liq
+asset_classes: [eq]
+holding_period: "s–min"
+infra_tier: colo          # colo | lowlat | retail
+expected_sharpe_range: "1–2.5"  # literature/practitioner attribution — not a promise
+edge: "Post on taker-rebate venues; earn rebate on flow that would cross anyway."
+signal: "crossing-probability model per venue"
+entry: "passive at NBBO on inverted venue"
+exit: "fill (rebate) or cancel"
+sizing: "odd lots, high count"
+risk: "per-venue adverse-selection markout monitor"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

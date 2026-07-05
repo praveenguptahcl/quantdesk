@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #29
+schema: quantdesk.strategy.v1
+id: 29
+name: opening-range-breakout-scalp
+display_name: "Opening-Range Breakout Scalp"
+class: scalp
+asset_classes: [eq, fut]
+holding_period: "min–hr"
+infra_tier: retail          # colo | lowlat | retail
+expected_sharpe_range: "1–2"  # literature/practitioner attribution — not a promise
+edge: "First-15min range break with volume continues; decayed classic — needs strict filters."
+signal: "OR high/low ± buffer + volume confirm"
+entry: "stop order through range ± buffer"
+exit: "1R/2R bracket, EOD flat"
+sizing: "fixed risk 0.25%/trade"
+risk: "skip inside-day opens; one shot per side"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

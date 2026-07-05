@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #11
+schema: quantdesk.strategy.v1
+id: 11
+name: iceberg-detection-fade
+display_name: "Iceberg Detection Fade"
+class: flow
+asset_classes: [eq, fut]
+holding_period: "10s–5min"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "1.5–3"  # literature/practitioner attribution — not a promise
+edge: "Hidden size refilling at a level is a wall; fade approaches into it."
+signal: "repeated same-price refills > 4× displayed"
+entry: "passive in front of detected iceberg"
+exit: "flat when refills stop (exhaustion)"
+sizing: "≤ 20% of est. hidden size"
+risk: "stop just through the level"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

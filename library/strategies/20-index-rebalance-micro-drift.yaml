@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #20
+schema: quantdesk.strategy.v1
+id: 20
+name: index-rebalance-micro-drift
+display_name: "Index Rebalance Micro-Drift"
+class: arb
+asset_classes: [eq]
+holding_period: "min–hr"
+infra_tier: retail          # colo | lowlat | retail
+expected_sharpe_range: "1–2.5"  # literature/practitioner attribution — not a promise
+edge: "Announced index adds/deletes drift into effective date on predictable tracking flow."
+signal: "announced changes + est. flow"
+entry: "day-before, flow direction"
+exit: "at rebalance close print"
+sizing: "ADV-capped"
+risk: "crowding monitor; size down on spread widening"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

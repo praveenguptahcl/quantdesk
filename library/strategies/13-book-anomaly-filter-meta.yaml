@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #13
+schema: quantdesk.strategy.v1
+id: 13
+name: book-anomaly-filter-meta
+display_name: "Book-Anomaly Filter (meta)"
+class: flow
+asset_classes: [eq, fut, cry]
+holding_period: "—"
+infra_tier: lowlat          # colo | lowlat | retail
+expected_sharpe_range: "n/a"  # literature/practitioner attribution — not a promise
+edge: "Not standalone alpha: detects layering/quote-stuffing patterns and gates other strategies OFF — raises realized SR of #6–#12."
+signal: "cancel-burst rate, depth-flicker entropy"
+entry: "—"
+exit: "—"
+sizing: "—"
+risk: "output = trade/no-trade flag"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true

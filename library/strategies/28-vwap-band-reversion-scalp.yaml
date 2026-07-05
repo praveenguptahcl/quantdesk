@@ -1,0 +1,18 @@
+# quantdesk.strategy.v1 — library entry #28
+schema: quantdesk.strategy.v1
+id: 28
+name: vwap-band-reversion-scalp
+display_name: "VWAP-Band Reversion Scalp"
+class: scalp
+asset_classes: [eq, cry]
+holding_period: "min"
+infra_tier: retail          # colo | lowlat | retail
+expected_sharpe_range: "1–2.5"  # literature/practitioner attribution — not a promise
+edge: "Liquid names oscillate around session VWAP absent news; fade band extremes."
+signal: "price vs VWAP ± 1.5σ band"
+entry: "band touch + tape deceleration"
+exit: "VWAP touch / −0.75σ stop"
+sizing: "vol-scaled"
+risk: "trend-day (ADX) gate — the failure mode"
+kill_criterion: "Realized SR < 50% of expected range over 30 sessions"
+requires_review: true
