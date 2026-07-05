@@ -60,6 +60,25 @@ import threading  # noqa: E402
 threading.Thread(target=lambda: community.standings(store), daemon=True).start()
 
 
+def runnable_for(u):
+    """Runnable strategies visible to user u (module-level: usable from the week
+    loop where no request/session exists)."""
+    out = []
+    for i in store.list_docs("ideas"):
+        mine = i.get("owner", "solo") in (u["u"], None) or u.get("role") == "admin"
+        visible = (mine and i.get("stage", 1) >= 2) or (i.get("public") and i.get("stage", 1) >= 5)
+        if not visible:
+            continue
+        out.append({"id": i["id"], "name": i["name"], "owner": i.get("owner", "solo"),
+                    "stage": logic.STAGES[i.get("stage", 1)], "mine": mine,
+                    "public": bool(i.get("public")),
+                    "params": i.get("engine_params") or ({} if i["name"] == "momo-etf-v3" else None)})
+    if not any(o["name"] == "momo-etf-v3" for o in out):
+        out.insert(0, {"id": 1, "name": "momo-etf-v3", "owner": "solo",
+                       "stage": "Paper", "mine": True, "public": True, "params": {}})
+    return out
+
+
 # --------------------------------------------------------------------------
 class Handler(BaseHTTPRequestHandler):
     server_version = "QuantDesk/0.2"
@@ -75,6 +94,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _user(self):
         return community.whoami(store, self._token())
+
+    def _admin_gate(self):
+        """Multi-user: actions on the SHARED paper account are admin-only.
+        Solo mode: everyone is the admin, so this is a no-op."""
+        if not community.enabled():
+            return None
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "shared-account action — admin only in multi-user mode")
+        return None
 
     def _auth_gate(self, path):
         """When QD_MULTIUSER=1: everything under /api needs a session except login."""
@@ -231,7 +260,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/optimize/run": lambda: self.p_optimize_run(body),
             "/api/clientlog": lambda: (open(os.path.join(HERE, "..", "logs_and_artifacts",
                 "client_errors.log"), "a").write(
-                f"{time.strftime('%H:%M:%S')} {json.dumps(body)}\n"), self._send(200, {"ok": True}))[-1],
+                f"{time.strftime('%H:%M:%S')} {json.dumps(body)[:2000]}\n"), self._send(200, {"ok": True}))[-1],
             "/api/signals/history": lambda: (lambda h: self._send(200, h) if h else self._err(
                 503, "catalog data missing"))(backtest.signal_history(
                     sym=body.get("sym", "XLK"), params=body.get("params"))),
@@ -258,11 +287,23 @@ class Handler(BaseHTTPRequestHandler):
         return self._err(404, "not found")
 
     def do_DELETE(self):
+        if self._auth_gate(self.path.split("?")[0]) is not None:
+            return
         for kind, pat in (("ideas", r"^/api/ideas/(\d+)$"), ("notes", r"^/api/notes/(\d+)$"),
                           ("alerts", r"^/api/alerts/(\d+)$")):
             m = re.match(pat, self.path)
             if m:
+                u = self._user() or {"u": "solo", "role": "admin"}
+                doc = store.get_doc(kind, m.group(1))
+                if doc is None:
+                    return self._err(404, "not found")
+                owner = doc.get("owner", "solo") if kind == "ideas" else doc.get("user", u["u"])
+                if owner not in (u["u"], None, "solo") and u.get("role") != "admin":
+                    return self._err(403, "not yours to delete")
+                if kind == "ideas" and community._invested_in(store, m.group(1)):
+                    return self._err(409, "money is invested in this strategy — divest first")
                 store.delete_doc(kind, m.group(1))
+                store.add_feed("warn", f"DELETE {kind[:-1]} {m.group(1)} by {u['u']}")
                 return self._send(200, {"ok": True})
         m = re.match(r"^/api/orders/([\w-]+)$", self.path)
         if m and alpaca.configured():
@@ -368,7 +409,8 @@ class Handler(BaseHTTPRequestHandler):
                 return opens, alpaca.closed_orders()
             except alpaca.AlpacaError:
                 pass
-        return store.static("openOrders"), store.static("orderHist")
+        opens = [dict(o, demo=True) for o in store.static("openOrders")]
+        return opens, store.static("orderHist")
 
     def _strategies(self):
         rows = []
@@ -461,6 +503,9 @@ class Handler(BaseHTTPRequestHandler):
         self._send(201, doc)
 
     def p_idea_from_spec(self, body):
+        spec_name = ((body or {}).get("spec") or {}).get("name", "")
+        if not logic.SLUG_RE.match(spec_name or ""):
+            return self._err(422, "spec name must be a kebab-case slug")
         spec = body.get("spec") or {}
         blockers = logic.spec_blockers(spec)
         if blockers:
@@ -489,6 +534,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, idea)
 
     def p_kill(self, body):
+        if self._admin_gate() is not None:
+            return
         ok, code, reason = logic.validate_kill(body)
         if not ok:
             return self._err(code, reason)
@@ -648,7 +695,7 @@ class Handler(BaseHTTPRequestHandler):
 
     @staticmethod
     def _setup_list():
-        """M14: setup progress computed from actual platform state, not hardcoded."""
+        """M14: setup progress — most rows computed from real platform state; rows that need history (paper weeks, backups) are estimates until it exists."""
         syms = store.list_docs("symbols")
         audit = store.get_audit()
         bt = store.get_doc("backtests", "momo-etf-v3")
@@ -844,6 +891,8 @@ class Handler(BaseHTTPRequestHandler):
                          "ts": time.strftime("%H:%M:%S")})
 
     def p_place_order(self, body):
+        if self._admin_gate() is not None:
+            return
         """Manual trade ticket — paper only, risk-validated, audited."""
         if not alpaca.configured():
             return self._err(503, "Alpaca paper keys not configured")
@@ -882,6 +931,8 @@ class Handler(BaseHTTPRequestHandler):
             self._err(502, str(e))
 
     def p_close_position(self, body):
+        if self._admin_gate() is not None:
+            return
         if not alpaca.configured():
             return self._err(503, "Alpaca paper keys not configured")
         sym = (body.get("sym") or "").upper()
@@ -894,6 +945,8 @@ class Handler(BaseHTTPRequestHandler):
             self._err(502, str(e))
 
     def p_rebalance(self, body):
+        if self._admin_gate() is not None:
+            return
         """Run the paper node from the GUI: dry-run plan, or execute with typed confirm."""
         import subprocess
         execute = bool(body.get("execute"))
@@ -935,21 +988,7 @@ class Handler(BaseHTTPRequestHandler):
         """Visibility rule: YOUR strategies at Research stage (2)+, plus EVERYONE'S
         public strategies once they reach Paper stage (5)+."""
         u = self._user() or {"u": "solo", "role": "admin"}
-        out = []
-        for i in store.list_docs("ideas"):
-            mine = i.get("owner", "solo") in (u["u"], None) or u.get("role") == "admin"
-            visible = (mine and i.get("stage", 1) >= 2) or                       (i.get("public") and i.get("stage", 1) >= 5)
-            if not visible:
-                continue
-            out.append({"id": i["id"], "name": i["name"], "owner": i.get("owner", "solo"),
-                        "stage": logic.STAGES[i.get("stage", 1)], "mine": mine,
-                        "public": bool(i.get("public")),
-                        "params": i.get("engine_params") or ({} if i["name"] == "momo-etf-v3" else None)})
-        # momo always runnable (frozen defaults)
-        if not any(o["name"] == "momo-etf-v3" for o in out):
-            out.insert(0, {"id": 1, "name": "momo-etf-v3", "owner": "solo",
-                           "stage": "Paper", "mine": True, "public": True, "params": {}})
-        return out
+        return runnable_for(u)
 
     def g_runnable(self):
         self._send(200, self._runnable_list())
@@ -967,6 +1006,10 @@ class Handler(BaseHTTPRequestHandler):
         idea = store.get_doc("ideas", sid)
         if not idea:
             return None, "momo-etf-v3"
+        u = self._user() or {"u": "solo", "role": "admin"}
+        mine = idea.get("owner", "solo") in (u["u"], None) or u.get("role") == "admin"
+        if not mine and not (idea.get("public") and idea.get("stage", 1) >= 5):
+            return None, "momo-etf-v3"   # private params stay private
         return idea.get("engine_params") or None, idea["name"]
 
     def _sid_name(self, q):
@@ -1053,7 +1096,10 @@ class Handler(BaseHTTPRequestHandler):
         u = self._user()
         if not u or u.get("role") != "admin":
             return self._err(403, "admin only")
-        res, err = community.delete_user(store, (body or {}).get("u", ""))
+        target = (body or {}).get("u", "")
+        if target == u["u"]:
+            return self._err(422, "you cannot delete your own account")
+        res, err = community.delete_user(store, target)
         if err:
             return self._err(422, err)
         self._send(200, res)
@@ -1292,7 +1338,7 @@ def main():
                 community.maybe_finalize_week(store)
                 if store.get_kv(f"finalized:{week}") == "1" and last_final != week:
                     # new week begins: platform initiates LLM trader interaction
-                    community.run_llm_traders(store, Handler._runnable_list(Handler))
+                    community.run_llm_traders(store, runnable_for({"u": "admin", "role": "admin"}))
                     last_final = week
             except Exception:
                 pass

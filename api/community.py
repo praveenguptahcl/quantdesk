@@ -10,12 +10,18 @@ Stdlib only. Passwords: PBKDF2-SHA256(100k). Sessions: HttpOnly cookie tokens.
 """
 import datetime
 import hashlib
+import threading
+import time as _time
 import json
 import os
 import secrets
 
 import backtest
 import llm as llm_mod
+
+
+_INVEST_LOCK = threading.Lock()   # cash check+deduct must be atomic
+SESSION_TTL_S = 7 * 24 * 3600     # sessions expire after 7 days
 
 
 def enabled():
@@ -52,7 +58,7 @@ def login(store, u, pw):
     if not doc or doc.get("disabled") or _hash_pw(pw, doc["salt"]) != doc["pw"]:
         return None
     token = secrets.token_hex(24)
-    store.set_kv(f"sess:{token}", u)
+    store.set_kv(f"sess:{token}", f"{u}|{int(_time.time())}")
     return token
 
 
@@ -61,20 +67,31 @@ def whoami(store, token):
         return {"u": "solo", "name": "Solo Trader", "role": "admin", "cash": 100_000.0}
     if not token:
         return None
-    u = store.get_kv(f"sess:{token}")
-    if not u:
+    raw = store.get_kv(f"sess:{token}")
+    if not raw:
+        return None
+    u, _, issued = raw.partition("|")
+    if issued and _time.time() - int(issued) > SESSION_TTL_S:
+        store.set_kv(f"sess:{token}", "")
         return None
     doc = store.get_doc("users", u)
     if not doc or doc.get("disabled"):
         return None
+    if issued and doc.get("sess_epoch") and int(issued) < doc["sess_epoch"]:
+        return None   # password changed after this session was issued
     return {k: doc[k] for k in ("u", "name", "role", "cash", "must_change") if k in doc}
 
 
 def set_password(store, u, new_pw):
+    if len(new_pw or "") < 8:
+        return "password must be at least 8 characters"
     doc = store.get_doc("users", u)
     salt = secrets.token_hex(16)
     doc.update(salt=salt, pw=_hash_pw(new_pw, salt), must_change=False)
     store.put_doc("users", u, doc)
+    doc["sess_epoch"] = int(_time.time())   # old sessions die with the old password
+    store.put_doc("users", u, doc)
+    return None
 
 
 # ---------------- publishing & investing ----------------
@@ -98,17 +115,25 @@ def invest(store, user, idea_id, amount, params=None):
     idea = store.get_doc("ideas", idea_id)
     if not idea:
         return None, "strategy not found"
-    amount = float(amount)
-    if amount <= 0 or amount > user["cash"]:
-        return None, f"amount must be 0 < x ≤ your virtual cash (${user['cash']:,.0f})"
-    # THE RULE: investing forces the strategy public
-    forced = not idea.get("public")
-    idea["public"] = True
-    store.put_doc("ideas", idea_id, idea)
-    udoc = store.get_doc("users", user["u"])  # deduct in solo mode too (demo accounts)
-    if udoc:
-        udoc["cash"] -= amount
-        store.put_doc("users", user["u"], udoc)
+    mine = idea.get("owner", "solo") in (user["u"], None, "solo") or user.get("role") == "admin"
+    if not mine and not (idea.get("public") and idea.get("stage", 1) >= 5):
+        return None, "not visible to you — you can invest in your own strategies, or public ones at Paper stage+"
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return None, "amount must be a number"
+    with _INVEST_LOCK:
+        udoc = store.get_doc("users", user["u"])  # tracked in solo mode too (demo accounts)
+        cash = udoc["cash"] if udoc else user.get("cash", 0)
+        if amount <= 0 or amount > cash:
+            return None, f"amount must be 0 < x ≤ your virtual cash (${cash:,.0f})"
+        # THE RULE: investing forces the strategy public
+        forced = not idea.get("public")
+        idea["public"] = True
+        store.put_doc("ideas", idea_id, idea)
+        if udoc:
+            udoc["cash"] = cash - amount
+            store.put_doc("users", user["u"], udoc)
     inv = {"id": int(datetime.datetime.now().timestamp() * 1000), "user": user["u"],
            "idea_id": idea_id, "strategy": idea["name"], "amount": amount,
            "params": params or {}, "week": current_week_id(),
@@ -122,8 +147,13 @@ def copy_strategy(store, user, idea_id):
     if not src or not src.get("public"):
         return None, "strategy not found or not public"
     import logic
+    base = f"{src['name']}-copy-{user['u']}"[:36]
+    names = {i["name"] for i in store.list_docs("ideas")}
+    name, n = base, 2
+    while name in names:
+        name, n = f"{base}-{n}", n + 1
     doc = logic.new_idea({
-        "name": f"{src['name']}-copy-{user['u']}"[:40],
+        "name": name,
         "ac": src.get("ac", "eq"), "syms": src.get("syms", []),
         "hyp": src.get("hyp", ""), "uni": src.get("uni", ""),
         "feats": src.get("feats", ""), "kill": src.get("kill", "inherit — review!"),
@@ -136,10 +166,12 @@ def copy_strategy(store, user, idea_id):
 
 # ---------------- weekly leaderboard ----------------
 def _now_et():
-    # ET = UTC-4 (EDT) / UTC-5 (EST); coarse DST: Mar-Nov -> -4
-    utc = datetime.datetime.utcnow()
-    off = 4 if 3 <= utc.month <= 11 else 5
-    return utc - datetime.timedelta(hours=off)
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None)
+    except Exception:   # tzdata missing — coarse fallback
+        utc = datetime.datetime.utcnow()
+        return utc - datetime.timedelta(hours=4 if 3 <= utc.month <= 11 else 5)
 
 
 def current_week_id():
@@ -197,10 +229,15 @@ def standings(store):
 def maybe_finalize_week(store):
     """Called periodically; freezes the winner at/after Saturday 23:59 ET."""
     et = _now_et()
-    week = current_week_id()
-    if store.get_kv(f"finalized:{week}"):
+    if et.weekday() == 5 and et.hour == 23 and et.minute >= 59:
+        week = current_week_id()             # Saturday close: this week
+    elif et.weekday() == 6:
+        prev = et - datetime.timedelta(days=7)
+        sunday = prev - datetime.timedelta(days=(prev.weekday() + 1) % 7)
+        week = sunday.strftime("%Y-W%W")     # Sunday catch-up: the JUST-ENDED week
+    else:
         return
-    if not (et.weekday() == 5 and et.hour == 23 and et.minute >= 59) and not (et.weekday() == 6):
+    if store.get_kv(f"finalized:{week}"):
         return
     s = standings(store)
     winners = store.get_doc("static", "winners") or []
@@ -453,6 +490,7 @@ def delete_user(store, username):
     """Admin: remove an account and all its data (strategies, investments, log)."""
     if username == "admin":
         return None, "the seed admin cannot be deleted"
+    # (route also blocks self-delete — see p_delete_user)
     u = store.get_doc("users", username)
     if not u:
         return None, "user not found"

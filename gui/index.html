@@ -753,16 +753,16 @@ label.fl b{color:var(--red)}
       <h1>Orders &amp; Fills</h1>
       <div class="sub">Full order lifecycle across venues — submitted → accepted → filled/canceled/rejected — plus execution quality vs backtest assumptions.</div>
       <div class="grid g4">
-        <div class="card kpi"><div class="lbl">Working orders</div><div class="val">3</div><div class="delta mut">2 limit · 1 stop</div></div>
-        <div class="card kpi"><div class="lbl">Fills today</div><div class="val">14</div><div class="delta mut">$92,410 notional</div></div>
-        <div class="card kpi"><div class="lbl">Avg slippage (30d)</div><div class="val warn">+1.8 bp</div><div class="delta mut">backtest assumed +1.5 bp</div></div>
-        <div class="card kpi"><div class="lbl">Reject rate (30d)</div><div class="val">0.5%</div><div class="delta mut">7 of 1,284 — all pre-route risk</div></div>
+        <div class="card kpi"><div class="lbl">Working orders</div><div class="val" id="ordWork">—</div><div class="delta mut" id="ordWorkN"></div></div>
+        <div class="card kpi"><div class="lbl">Orders today</div><div class="val" id="ordFills">—</div><div class="delta mut" id="ordFillsN"></div></div>
+        <div class="card kpi"><div class="lbl">Avg slippage (30d)</div><div class="val warn">+1.8 bp <span class="tag warn">DEMO</span></div><div class="delta mut">real slippage needs fill history</div></div>
+        <div class="card kpi"><div class="lbl">Reject rate (30d)</div><div class="val">0.5% <span class="tag warn">DEMO</span></div><div class="delta mut">demo until fills accumulate</div></div>
       </div>
       <div class="grid g2" style="margin-top:14px">
         <div class="card">
           <h2 style="margin-top:0">Working Orders</h2>
           <table><thead><tr><th>ID</th><th>Symbol</th><th>Side</th><th>Type</th><th>Qty</th><th>Px</th><th>Venue</th><th>State</th><th></th></tr></thead><tbody id="openOrders"></tbody></table>
-          <h2>Execution Quality by Venue (30d)</h2>
+          <h2>Execution Quality by Venue (30d) <span class="tag warn">DEMO</span></h2>
           <table><thead><tr><th>Venue</th><th>Fills</th><th>Slippage</th><th>Latency p50</th><th>vs backtest</th></tr></thead><tbody>
             <tr><td class="s">IBKR paper</td><td>642</td><td>+1.2 bp</td><td>184 ms</td><td class="s"><span class="tag ok">within model</span></td></tr>
             <tr><td class="s">Binance testnet</td><td>388</td><td>+2.1 bp</td><td>96 ms</td><td class="s"><span class="tag warn">+0.6 bp over</span></td></tr>
@@ -980,7 +980,7 @@ label.fl b{color:var(--red)}
         <div class="card"><h2 style="margin-top:0">Circuit Breakers</h2>
           <div class="kv">
             <span class="k">Daily loss limit</span><span class="v">−$2,000 <span class="tag ok">Armed</span></span>
-            <span class="k">Today's P&amp;L</span><span class="v up">+$1,204.55</span>
+            <span class="k">Today's P&amp;L</span><span class="v up">+$1,204.55 <span class="tag warn">DEMO</span></span>
             <span class="k">Max-DD auto-halt</span><span class="v">−8.0% <span class="tag ok">Armed</span></span>
             <span class="k">Current DD</span><span class="v">−3.42%</span>
           </div>
@@ -1004,10 +1004,10 @@ label.fl b{color:var(--red)}
           <div class="kv">
             <span class="k">Price sanity band</span><span class="v">±3% of last</span>
             <span class="k">Max single order</span><span class="v">$10,000 notional</span>
-            <span class="k">Orders validated</span><span class="v">1,284 (30d)</span>
+            <span class="k">Orders validated</span><span class="v">1,284 (30d) <span class="tag warn">DEMO</span></span>
             <span class="k">Rejected</span><span class="v warn">7 (0.5%)</span>
           </div>
-          <h2>Recent rejections</h2>
+          <h2>Recent rejections <span class="tag warn">DEMO</span></h2>
           <div class="feed" style="max-height:120px">
             <div><span class="t">07-03 14:22:10</span> <span class="lv-warn">REJECT</span> BTCUSDT qty 0.9 — exceeds vol-adj cap</div>
             <div><span class="t">07-02 09:31:04</span> <span class="lv-warn">REJECT</span> QQQ limit 620.00 — outside sanity band</div>
@@ -1923,6 +1923,7 @@ const UI = {
       ||'<div class="mut">no trades captured in window</div>';
   },
   renderMicroSynth(){
+    const st=document.getElementById('microFeedInfo'); if(st)st.innerHTML='<span class="tag warn">SYNTHETIC</span> generated book/tape — record real L2 (scripts/record_l2.py) for live metrics';
     const meta={AAPL:[254.80,0.01],SPY:[618.34,0.01],QQQ:[551.02,0.01],XLK:[241.20,0.01],
       MES:[6412.25,0.25],BTCUSDT:[112480,0.1],ETHUSDT:[4182.1,0.05]};
     const sym=(Filt.sym!=='ALL'&&meta[Filt.sym])?Filt.sym:'AAPL';
@@ -2106,7 +2107,7 @@ const UI = {
       :'<span><span class="dot g"></span>Platform (net of costs)</span><span><span class="dot" style="background:var(--muted)"></span>SPY buy &amp; hold</span>';
     // notes + costs
     document.getElementById('noteList').innerHTML=API.notes.map(n=>
-      `<div class="hb"><div class="hn"><b class="mono" style="font-size:11px">${n.d}</b> · <span class="mut">${n.s}</span><div style="margin-top:3px">${n.txt}</div></div>
+      `<div class="hb"><div class="hn"><b class="mono" style="font-size:11px">${n.d}</b> · <span class="mut">${esc(n.s)}</span><div style="margin-top:3px">${esc(n.txt)}</div></div>
        <span class="tag ${n.tag==='incident'?'fail':n.tag==='discipline'?'warn':'off'}">${n.tag}</span></div>`).join('');
     document.getElementById('costRows').innerHTML=API.costs.map(([k,v])=>
       `<tr><td class="s">${k}</td><td style="text-align:right">${v}</td></tr>`).join('')
@@ -2154,7 +2155,7 @@ const UI = {
     document.getElementById('econRows').innerHTML=API.econ.map(([d,e,g])=>
       `<div class="hb"><span class="mono" style="width:96px;color:var(--muted);flex:none">${d}</span><span class="hn">${e}</span><span class="mut" style="font-size:11px">${g}</span></div>`).join('');
     document.getElementById('alertRows').innerHTML=API.alerts.map((al,i)=>
-      `<div class="hb"><span class="hn">${al.r} ${al.fired?'<span class="tag fail">FIRED</span>':''}<div class="mut" style="font-size:11px">${al.ch}${/^[A-Z]{1,6}\s*[<>]/.test(al.r)?' · auto-evaluates every 60s':' · manual/reference only'}</div></span>
+      `<div class="hb"><span class="hn">${esc(al.r)} ${al.fired?'<span class="tag fail">FIRED</span>':''}<div class="mut" style="font-size:11px">${al.ch}${/^[A-Z]{1,6}\s*[<>]/.test(al.r)?' · auto-evaluates every 60s':' · manual/reference only'}</div></span>
        <div class="switch ${al.on?'on':''}" onclick="API.alerts[${i}].on=!API.alerts[${i}].on;UI.renderSafe()"><i></i></div>
        <button class="btn" style="padding:2px 7px;font-size:10px" onclick="if(QD.on&&API.alerts[${i}].id)fetch('/api/alerts/'+API.alerts[${i}].id,{method:'DELETE'});API.alerts.splice(${i},1);UI.renderSafe()">✕</button></div>`).join('');
     document.getElementById('setupList').innerHTML=API.setup.map(([l,pc])=>
@@ -2349,10 +2350,14 @@ const UI = {
     const me=await(await fetch('/api/me')).json(); this.me=me.u?me:this.me;
     document.getElementById('meWho').textContent=`${this.me.name||this.me.u} · ${this.me.role}`;
     document.getElementById('meCash').textContent='$'+(this.me.cash||0).toLocaleString();
-    const mine=API.ideas.filter(i=>!community_enabled_hint()||!i.owner||i.owner===this.me.u);
-    document.getElementById('invSel').innerHTML=mine.map(i=>`<option value="${i.id}">${i.name}</option>`).join('');
+    const meU=this.me.u||'solo';
+    const mine=API.ideas.filter(i=>!i.owner||i.owner===meU||(meU==='solo'&&i.owner==='solo'));
+    try{ const run=await(await fetch('/api/strategies/runnable')).json();
+      document.getElementById('invSel').innerHTML=run.filter(r=>r.params!==null).map(r=>
+        `<option value="${r.id}">${r.name}${r.mine?'':' — by '+r.owner}</option>`).join('');
+    }catch(e){ document.getElementById('invSel').innerHTML=mine.map(i=>`<option value="${i.id}">${i.name}</option>`).join(''); }
     document.getElementById('meStrats').innerHTML=mine.map(i=>`
-      <div class="hb"><span class="hn">${i.name} ${i.copied_from?`<span class="mut" style="font-size:11px">(copied from ${i.copied_from.user})</span>`:''}</span>
+      <div class="hb"><span class="hn">${esc(i.name)} ${i.copied_from?`<span class="mut" style="font-size:11px">(copied from ${esc(i.copied_from.user)})</span>`:''}</span>
         <span class="tag ${i.public?'ok':'off'}">${i.public?'PUBLIC':'private'}</span>
         <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.togglePub(${i.id},${!i.public})">${i.public?'make private':'publish'}</button></div>`).join('')
       ||'<p class="mut">no strategies yet — Journal or AI Builder to create one</p>';
@@ -2384,7 +2389,7 @@ const UI = {
     document.getElementById('admUsers').innerHTML=users.map(u=>
       `<tr style="cursor:pointer" onclick="UI.userDetail('${u.u}')" title="click to manage ${u.u}">
        <td>${u.role==='llm'?'🤖 ':''}${u.u}${u.demo?' <span class="tag warn">demo</span>':''}</td>
-       <td class="s">${u.name||''}</td><td class="s">${u.role||'—'}${u.provider?' · '+u.provider:''}</td>
+       <td class="s">${esc(u.name||'')}</td><td class="s">${u.role||'—'}${u.provider?' · '+u.provider:''}</td>
        <td>${u.cash!==undefined?'$'+u.cash.toLocaleString():'—'}</td>
        <td class="s">${u.disabled?'<span class="tag fail">disabled</span>':'<span class="tag ok">active</span>'}${u.must_change?' <span class="tag warn">temp pw</span>':''}</td>
        <td class="s" style="color:var(--blue)">manage ▸</td></tr>`).join('');
@@ -2393,7 +2398,7 @@ const UI = {
       `<div>${x.user}: $${x.amount.toLocaleString()} → ${x.strategy} (${Object.keys(x.params||{}).length?JSON.stringify(x.params):'frozen'})</div>`).join('')||'none';
     try{ const log=await(await fetch('/api/community/llmlog')).json();
       document.getElementById('llmLog').innerHTML=log.map(e=>
-        `<div><b>🤖 ${e.user}</b> <span class="mut">[${e.provider} · ${e.at}]</span> ${e.error?'⛔ '+e.error:('$'+(e.invested||0).toLocaleString()+' → '+(e.decision.reason||'').slice(0,130))}</div>`).join('')||'no decisions yet — press Run';
+        `<div><b>🤖 ${e.user}</b> <span class="mut">[${e.provider} · ${e.at}]</span> ${e.error?'⛔ '+e.error:('$'+(e.invested||0).toLocaleString()+' → '+esc((e.decision.reason||'')).slice(0,130))}</div>`).join('')||'no decisions yet — press Run';
     }catch(e){}
     document.querySelectorAll('#llmP .chip').forEach(ch=>ch.onclick=()=>{
       document.querySelectorAll('#llmP .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
@@ -2417,9 +2422,9 @@ const UI = {
     const el=document.getElementById('admUserDetail'); el.style.display='block';
     const st=d.strategies.map(x=>`<div>• <b>${x.name}</b> — stage ${x.stage}, ${x.public?'🌐 public':'🔒 private'}${x.params&&Object.keys(x.params).length?' · <span class="mut">'+JSON.stringify(x.params)+'</span>':''}</div>`).join('')||'<div class="mut">no strategies</div>';
     const iv=d.investments.map(x=>`<div>• $${x.amount.toLocaleString()} → ${x.strategy} <span style="color:${x.week_return_pct>=0?'var(--green)':'var(--red)'}">${x.week_return_pct>=0?'+':''}${x.week_return_pct}% this week</span></div>`).join('')||'<div class="mut">no open investments</div>';
-    const lg=(d.llm_decisions||[]).map(x=>`<div class="mut" style="font-size:11px">🤖 ${x.at}: ${(x.decision&&x.decision.reason||'').slice(0,120)}</div>`).join('');
+    const lg=(d.llm_decisions||[]).map(x=>`<div class="mut" style="font-size:11px">🤖 ${x.at}: ${esc(x.decision&&x.decision.reason||'').slice(0,120)}</div>`).join('');
     el.innerHTML=`<div class="flex" style="justify-content:space-between;align-items:center">
-      <b>${d.user.role==='llm'?'🤖 ':''}${d.user.u} — ${d.user.name||''}</b>
+      <b>${d.user.role==='llm'?'🤖 ':''}${d.user.u} — ${esc(d.user.name||'')}</b>
       <span>${d.user.demo?'<span class="tag warn">demo</span> ':''}<span class="tag">${d.user.role}</span></span></div>
       <div class="mut" style="margin:4px 0">virtual cash $${(d.user.cash||0).toLocaleString()} · invested $${d.invested_total.toLocaleString()}</div>
       <div style="margin-top:6px"><b>Strategies</b>${st}</div>
@@ -2785,13 +2790,19 @@ const UI = {
 
   /* ---- orders ---- */
   renderOrders(){
-    document.getElementById('openOrders').innerHTML=API.openOrders.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym)).map(o=>
-      `<tr><td>${o.id}</td><td>${o.sym}</td><td class="${o.side==='BUY'?'up':'down'}">${o.side}</td><td>${o.type}</td><td>${o.qty}</td><td>${o.px}</td><td class="s">${o.venue}</td>
+    const open_=API.openOrders.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym));
+    const hist=API.orderHist.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym));
+    const w=document.getElementById('ordWork'); if(w){w.textContent=open_.length;
+      document.getElementById('ordWorkN').textContent=open_.length?open_.map(o=>o.type).join(' · '):'none';
+      document.getElementById('ordFills').textContent=hist.length;
+      document.getElementById('ordFillsN').textContent=hist.filter(o=>o.st==='filled').length+' filled · '+hist.filter(o=>o.st==='canceled').length+' canceled';}
+    document.getElementById('openOrders').innerHTML=open_.map(o=>
+      `<tr><td>${o.id}${o.demo?' <span class="tag warn">DEMO</span>':''}</td><td>${o.sym}</td><td class="${o.side==='BUY'?'up':'down'}">${o.side}</td><td>${o.type}</td><td>${o.qty}</td><td>${o.px}</td><td class="s">${o.venue}</td>
        <td class="s"><span class="tag warn">${o.state}</span></td>
-       <td><button class="btn" style="padding:3px 10px;font-size:11px" onclick="UI.cancelOrder('${o.id}')">✕</button></td></tr>`).join('')||'<tr><td colspan="9" class="s mut">no working orders</td></tr>';
-    document.getElementById('orderHist').innerHTML=API.orderHist.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym)).map(o=>
+       <td>${o.demo?'':`<button class="btn" style="padding:3px 10px;font-size:11px" onclick="UI.cancelOrder('${o.id}')">✕</button>`}</td></tr>`).join('')||'<tr><td colspan="9" class="s mut">no working orders</td></tr>';
+    document.getElementById('orderHist').innerHTML=hist.map(o=>
       `<tr><td>${o.t}</td><td>${o.sym}</td><td>${o.sq}</td><td>${o.px}</td><td>${o.slip}</td>
-       <td class="s"><span class="tag ${o.st==='filled'?'ok':o.st==='rejected'?'fail':'off'}">${o.st}</span></td></tr>`).join('');
+       <td class="s"><span class="tag ${o.st==='filled'?'ok':o.st==='rejected'?'fail':'off'}">${o.st}</span></td></tr>`).join('')||'<tr><td colspan="6" class="s mut">no orders today</td></tr>';
   },
 
   /* ---- wizard ---- */
@@ -2913,6 +2924,7 @@ const UI = {
    ?mock=1 (or no backend running) => pure offline demo on embedded mocks.
 ===================================================================== */
 const QD={on:false};
+function esc(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function community_enabled_hint(){return !!(UI.me&&UI.me.u&&UI.me.u!=='solo');}
 QD.post=async function(path,body){
   if(!QD.on)return null;
