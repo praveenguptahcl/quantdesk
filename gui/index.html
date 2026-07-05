@@ -703,8 +703,10 @@ label.fl b{color:var(--red)}
 
     <!-- ======== OPTIMIZE & WALK-FORWARD ======== -->
     <section class="screen" id="s-opt">
-      <h1>Optimize &amp; Walk-Forward</h1>
-      <div class="sub">Two questions every strategy must answer: <b>are the parameters robust</b> (not a lucky fluke), and <b>did it work out-of-sample</b>? Both computed from real backtests on your data.</div>
+      <div class="flex spread"><div><h1>Optimize &amp; Walk-Forward</h1>
+      <div class="sub">Two questions every strategy must answer: <b>are the parameters robust</b> (not a lucky fluke), and <b>did it work out-of-sample</b>? Both computed from real backtests on your data.</div></div>
+      <span class="tag paper" style="font-size:12px;padding:6px 14px;flex:none">STRATEGY: MOMO-ETF-V3</span></div>
+      <p class="mut" style="margin:-8px 0 16px">Why only this strategy? Optimization requires a <b>runnable implementation</b>, and momo-etf-v3 is currently the only journal strategy implemented in the backtest engine — the sweep re-runs it 30 times varying its two tunable parameters. Other journal ideas and library entries are specs awaiting implementation (Learning Path Week 7 walks you through implementing one); once a strategy is coded and passes parity, it becomes sweepable here.</p>
 
       <div class="card" style="margin-bottom:14px">
         <div class="flex spread">
