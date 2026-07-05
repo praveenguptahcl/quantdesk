@@ -77,7 +77,9 @@ def main():
     if not alpaca.configured():
         raise SystemExit("Alpaca paper keys not configured — dry math only")
     acct = alpaca.account()
-    equity = acct["equity"]
+    # Trade at INTENDED capital, not the paper account's inflated $1M:
+    # QD_CAPITAL caps deployable equity (default 100k, matching risk/limits.yaml).
+    equity = min(acct["equity"], float(os.environ.get("QD_CAPITAL", "100000")))
     held = {p["sym"]: float(p["qty"]) for p in alpaca.positions()}
     limits_path = os.path.join(HERE, "..", "risk", "limits.yaml")
     limits = logic.parse_simple_yaml(open(limits_path).read()) if os.path.exists(limits_path) else {}
@@ -88,8 +90,15 @@ def main():
         if not px:
             print(f"{s}: no price — skipped")
             continue
-        tgt_qty = int(equity * w / px)
+        # clamp to risk limits: per-symbol cap and single-order notional cap
+        eq_cap = limits.get("equities", {}).get("max_position_usd_per_symbol", 15000)
+        ord_cap = limits.get("global", {}).get("max_single_order_notional_usd", 10000)
+        tgt_val = min(equity * w, eq_cap)
+        tgt_qty = int(tgt_val / px)
         delta = tgt_qty - int(held.get(s, 0))
+        max_delta = int(ord_cap / px)
+        if abs(delta) > max_delta:   # partial rebalance; converges over successive runs
+            delta = max_delta if delta > 0 else -max_delta
         if delta == 0:
             continue
         order = {"sym": s, "ac": "eq", "side": "BUY" if delta > 0 else "SELL",
