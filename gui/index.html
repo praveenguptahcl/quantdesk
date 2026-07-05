@@ -285,6 +285,7 @@ label.fl b{color:var(--red)}
     <button class="nav-item" data-s="learn"><span class="ic">🎓</span>Docs &amp; Learn</button>
     <button class="nav-item" data-s="research"><span class="ic">✦</span>Research Journal</button>
     <button class="nav-item" data-s="ai"><span class="ic">✧</span>AI Strategy Builder</button>
+    <button class="nav-item" data-s="sig"><span class="ic">◈</span>Signal Builder</button>
     <button class="nav-item" data-s="lib"><span class="ic">⚡</span>HFT Library</button>
     <button class="nav-item" data-s="lab"><span class="ic">⚗</span>Strategy Lab</button>
     <button class="nav-item" data-s="data"><span class="ic">◫</span>Data &amp; Artifacts</button>
@@ -535,6 +536,51 @@ label.fl b{color:var(--red)}
     </section>
 
     <!-- ======== AI STRATEGY BUILDER ======== -->
+    <section class="screen" id="s-sig">
+      <div class="flex spread"><div><h1>Signal Builder &amp; Library</h1>
+      <div class="sub">Signals are the atoms of strategies: a parameterized variant of a popular signal, per asset, judged by REAL alpha diagnostics (IC vs forward returns, decay, hit rate, cost-adjusted Sharpe). Save yours privately, publish to the shared library, copy others', and promote any signal into a runnable strategy.</div></div></div>
+      <div class="grid g32">
+        <div class="card">
+          <h2 style="margin-top:0">✧ AI signal builder</h2>
+          <textarea id="sigText" style="min-height:64px" placeholder="e.g.  buy SPY when RSI over 10 days drops below 25 · fade gaps larger than 0.8% on XLV · 20-day breakout on XLK">buy SPY when RSI over 10 days drops below 25</textarea>
+          <div class="flex" style="margin-top:8px"><button class="btn primary" onclick="UI.sigParse()">✧ Parse to signal</button>
+          <span class="mut" id="sigParseNote" style="font-size:11px"></span></div>
+          <div class="f2" style="margin-top:12px">
+            <div><label class="fl">Base signal (popular template)</label><select id="sigTpl" onchange="UI.sigTplChange()"></select></div>
+            <div><label class="fl">Asset</label><select id="sigAsset"></select></div>
+          </div>
+          <div id="sigParams" class="f2" style="margin-top:8px"></div>
+          <p class="mut" id="sigTplDesc" style="font-size:11px;margin:6px 0"></p>
+          <div class="flex" style="margin-top:6px">
+            <button class="btn primary" onclick="UI.sigEval()">⚡ Evaluate (real diagnostics)</button>
+            <input type="text" id="sigName" placeholder="kebab-case-name (optional)" style="max-width:200px">
+            <button class="btn" onclick="UI.sigSave(false)">💾 Save private</button>
+            <button class="btn" style="border-color:var(--green);color:var(--green)" onclick="UI.sigSave(true)">🌐 Save &amp; publish</button>
+          </div>
+          <div id="sigDiag" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
+            <div class="grid g4">
+              <div class="card kpi"><div class="lbl">IC (1-day)</div><div class="val" id="sgIC">—</div><div class="delta mut">rank corr vs next-day return</div></div>
+              <div class="card kpi"><div class="lbl">Hit rate</div><div class="val" id="sgHit">—</div><div class="delta mut" id="sgExp"></div></div>
+              <div class="card kpi"><div class="lbl">Sharpe (signal-only)</div><div class="val" id="sgSR">—</div><div class="delta mut">after 5 bps/turnover costs</div></div>
+              <div class="card kpi"><div class="lbl">Max drawdown</div><div class="val down" id="sgDD">—</div><div class="delta mut" id="sgTot"></div></div>
+            </div>
+            <div class="f2" style="margin-top:10px">
+              <div><label class="fl">IC decay (1 / 5 / 10 / 21 days)</label><div id="sgDecay" class="mono" style="font-size:12px"></div></div>
+              <div><label class="fl">Regime split (IC)</label><div id="sgRegime" class="mono" style="font-size:12px"></div></div>
+            </div>
+            <label class="fl" style="margin-top:8px">Signal-only equity (real, cost-adjusted)</label>
+            <canvas id="sigEq" style="width:100%;height:60px"></canvas>
+            <p id="sgVerdict" style="font-size:12px;margin:8px 0 0"></p>
+          </div>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">🌐 Shared signal library</h2>
+          <p class="mut" style="font-size:11px;margin:0 0 8px">Public signals from every user (+ your private ones). Copy → tune params → publish back. "→ Strategy" builds a real cross-sectional top-N portfolio from the signal (same regime gate &amp; vol targeting as momo-etf-v3) and files it in your Research Journal.</p>
+          <div id="sigLib" style="max-height:520px;overflow:auto">—</div>
+        </div>
+      </div>
+    </section>
+
     <section class="screen" id="s-ai">
       <h1>AI Strategy Builder</h1>
       <div class="sub">Describe a strategy in plain language → get a structured spec the platform consumes (the same schema as STRATEGY_GUIDE.md). Works offline with the built-in parser; connect any LLM for deeper extraction.</div>
@@ -1494,6 +1540,7 @@ const UI = {
       if(b.dataset.s==='board') this.renderBoard();
       if(b.dataset.s==='me') this.renderMe();
       if(b.dataset.s==='admin') this.renderAdmin();
+      if(b.dataset.s==='sig') this.renderSig();
       history.replaceState(null,'','#/'+b.dataset.s);
     });
     const h=(location.hash||'').replace(/^#\/?/,'');
@@ -1825,6 +1872,7 @@ const UI = {
       's-board':()=>this.renderBoard(),
       's-me':()=>this.renderMe(),
       's-admin':()=>this.renderAdmin(),
+      's-sig':()=>this.renderSig(),
     }[act.id]||(()=>{}))();
   },
   addSymbol(){
@@ -2354,7 +2402,7 @@ const UI = {
     const meU=this.me.u||'solo';
     const mine=API.ideas.filter(i=>!i.owner||i.owner===meU||(meU==='solo'&&i.owner==='solo'));
     try{ const run=await(await fetch('/api/strategies/runnable')).json();
-      document.getElementById('invSel').innerHTML=run.filter(r=>r.params!==null).map(r=>
+      document.getElementById('invSel').innerHTML=run.filter(r=>r.params!==null||r.sig).map(r=>
         `<option value="${r.id}">${r.name}${r.mine?'':' — by '+r.owner}</option>`).join('');
     }catch(e){ document.getElementById('invSel').innerHTML=mine.map(i=>`<option value="${i.id}">${i.name}</option>`).join(''); }
     document.getElementById('meStrats').innerHTML=mine.map(i=>`
@@ -2367,6 +2415,104 @@ const UI = {
       `<div class="hb"><span class="hn">${x.strategy} · $${x.amount.toLocaleString()}</span>
        <span class="mut" style="font-size:11px">${Object.keys(x.params||{}).length?JSON.stringify(x.params):'frozen params'} · since ${x.opened}</span></div>`).join('')
       ||'<p class="mut">none — invest above to join the leaderboard</p>';
+  },
+  _siglib:null,
+  async renderSig(){
+    if(!QD.on)return;
+    try{ this._siglib=await(await fetch('/api/siglib')).json(); }catch(e){ return; }
+    const d=this._siglib;
+    const tplSel=document.getElementById('sigTpl');
+    if(!tplSel.options.length){
+      tplSel.innerHTML=Object.entries(d.templates).map(([k,t])=>`<option value="${k}">${t.label} (${t.family})</option>`).join('');
+      document.getElementById('sigAsset').innerHTML=d.assets.map(a=>`<option>${a}</option>`).join('');
+      this.sigTplChange();
+    }
+    document.getElementById('sigLib').innerHTML=d.signals.map(g=>{
+      const st=g.stats||{};
+      const icCol=(st.ic&&st.ic['1']>=0.02)?'var(--green)':(st.ic&&st.ic['1']<=-0.02?'var(--red)':'var(--dim)');
+      return `<div class="hb" style="align-items:flex-start">
+        <div style="flex:1"><span class="hn">${esc(g.name)}</span>
+          ${g.demo?'<span class="tag warn">demo</span>':''} <span class="tag ${g.public?'ok':'off'}">${g.public?'PUBLIC':'private'}</span>
+          <div class="mut" style="font-size:11px">${esc(g.desc||'')} · ${g.asset} · by ${esc(g.owner)}${g.copied_from?' (copy of '+esc(g.copied_from.signal)+')':''}</div>
+          <div class="mono" style="font-size:11px;margin-top:2px">IC₁ <span style="color:${icCol}">${st.ic?st.ic['1']:'—'}</span> · hit ${st.hit_rate!=null?(st.hit_rate*100).toFixed(0)+'%':'—'} · SR ${st.sharpe!=null?st.sharpe:'—'}</div></div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigLoad(${g.id})">⚡ open</button>
+          <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigCopy(${g.id})">📋 copy</button>
+          <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigPromote(${g.id},'${esc(g.name)}')">→ strategy</button>
+          ${g.mine?`<button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigPub(${g.id},${!g.public})">${g.public?'unpublish':'publish'}</button>
+          <button class="btn" style="padding:2px 8px;font-size:10px;border-color:var(--red);color:var(--red)" onclick="UI.sigDel(${g.id})">🗑</button>`:''}
+        </div></div>`;}).join('')||'<p class="mut">library is empty — evaluate a signal and publish it</p>';
+  },
+  sigTplChange(){
+    const d=this._siglib; if(!d)return;
+    const t=d.templates[document.getElementById('sigTpl').value];
+    document.getElementById('sigTplDesc').textContent=t.desc;
+    document.getElementById('sigParams').innerHTML=Object.entries(t.params).map(([k,v])=>
+      `<div><label class="fl">${k}</label><input type="number" step="any" data-sp="${k}" value="${v}"></div>`).join('');
+  },
+  _sigSpec(){
+    const params={};
+    document.querySelectorAll('#sigParams [data-sp]').forEach(i=>{ if(i.value!=='')params[i.dataset.sp]=+i.value; });
+    return {template:document.getElementById('sigTpl').value, params,
+            asset:document.getElementById('sigAsset').value};
+  },
+  async sigParse(){
+    const r=await QD.post('/api/siglib/ai',{text:document.getElementById('sigText').value});
+    if(!r||r.err)return;
+    document.getElementById('sigTpl').value=r.spec.template; this.sigTplChange();
+    Object.entries(r.spec.params).forEach(([k,v])=>{const i=document.querySelector(`#sigParams [data-sp="${k}"]`); if(i)i.value=v;});
+    document.getElementById('sigAsset').value=r.spec.asset;
+    document.getElementById('sigParseNote').textContent=(r.warnings[0]||`parsed → ${r.spec.template} on ${r.spec.asset}`);
+    this.sigEval();
+  },
+  async sigEval(){
+    const r=await QD.post('/api/siglib/eval',this._sigSpec()); if(!r||r.err)return r;
+    document.getElementById('sigDiag').style.display='block';
+    document.getElementById('sgIC').textContent=r.ic['1'];
+    document.getElementById('sgIC').style.color=r.ic['1']>=0.02?'var(--green)':(r.ic['1']<=-0.02?'var(--red)':'');
+    document.getElementById('sgHit').textContent=(r.hit_rate*100).toFixed(1)+'%';
+    document.getElementById('sgExp').textContent=`in market ${(r.exposure*100).toFixed(0)}% of days · turnover ${r.turnover}`;
+    document.getElementById('sgSR').textContent=r.sharpe;
+    document.getElementById('sgDD').textContent=r.max_dd_pct+'%';
+    document.getElementById('sgTot').textContent=`total ${r.total_return_pct>=0?'+':''}${r.total_return_pct}% over ${r.n_days}d`;
+    document.getElementById('sgDecay').textContent=`${r.ic['1']} → ${r.ic['5']} → ${r.ic['10']} → ${r.ic['21']}`;
+    const ric=r.regime_ic;
+    document.getElementById('sgRegime').textContent=`risk-on ${ric.risk_on!=null?ric.risk_on:'n/a'} · risk-off ${ric.risk_off!=null?ric.risk_off:'n/a'}`;
+    document.getElementById('sgVerdict').innerHTML=`<span class="tag ${r.ic['1']>=0.03&&r.sharpe>=0.5?'ok':(r.ic['1']<=-0.02?'fail':'warn')}">${esc(r.verdict)}</span>`;
+    const c=document.getElementById('sigEq'); if(c&&r.equity.length>2)CH.spark(c,r.equity,r.equity[r.equity.length-1]>=1?'rgb(61,220,151)':'rgb(255,92,92)');
+    return r;
+  },
+  async sigSave(pub){
+    const body={...this._sigSpec(),public:pub,name:document.getElementById('sigName').value.trim()||undefined};
+    const r=await QD.post('/api/siglib/save',body); if(!r||r.err)return;
+    this.toast(pub?`🌐 ${r.name} published to the shared library`:`💾 ${r.name} saved (private)`,'ok');
+    this.renderSig();
+  },
+  sigLoad(id){
+    const g=(this._siglib.signals||[]).find(x=>x.id===id); if(!g)return;
+    document.getElementById('sigTpl').value=g.template; this.sigTplChange();
+    Object.entries(g.params||{}).forEach(([k,v])=>{const i=document.querySelector(`#sigParams [data-sp="${k}"]`); if(i)i.value=v;});
+    document.getElementById('sigAsset').value=g.asset; this.sigEval();
+    this.toast(`${g.name} loaded — tweak params and re-evaluate`,'ok');
+  },
+  async sigCopy(id){
+    const r=await QD.post('/api/siglib/copy',{id}); if(!r||r.err)return;
+    this.toast(`📋 copied as ${r.name} (private) — tune it and publish back`,'ok'); this.renderSig();
+  },
+  async sigPub(id,pub){
+    const r=await QD.post('/api/siglib/publish',{id,public:pub}); if(!r||r.err)return;
+    this.toast(pub?'published':'made private','ok'); this.renderSig();
+  },
+  async sigDel(id){
+    if(!confirm('Delete this signal from the library?'))return;
+    const r=await QD.post('/api/siglib/delete',{id}); if(!r||r.err)return;
+    this.toast('signal deleted','ok'); this.renderSig();
+  },
+  async sigPromote(id,name){
+    const nm=prompt('Strategy name (kebab-case):',name+'-strat'); if(!nm)return;
+    this.toast('Running the real cross-sectional backtest…','ok');
+    const r=await QD.post('/api/siglib/promote',{id,name:nm}); if(!r||r.err)return;
+    this.toast(`→ ${r.idea.name} filed in Research Journal — real SR ${r.backtest.sharpe}, maxDD ${r.backtest.max_dd_pct}% · runnable & investable`,'ok');
   },
   async switchUser(){
     if(!community_enabled_hint()){

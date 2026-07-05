@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import alpaca  # noqa: E402
 import backtest  # noqa: E402
 import community  # noqa: E402
+import signals_lib  # noqa: E402
 import llm  # noqa: E402
 import logic  # noqa: E402
 import micro  # noqa: E402
@@ -71,7 +72,7 @@ def runnable_for(u):
             continue
         out.append({"id": i["id"], "name": i["name"], "owner": i.get("owner", "solo"),
                     "stage": logic.STAGES[i.get("stage", 1)], "mine": mine,
-                    "public": bool(i.get("public")),
+                    "public": bool(i.get("public")), "sig": bool(i.get("signal_spec")),
                     "params": i.get("engine_params") or ({} if i["name"] == "momo-etf-v3" else None)})
     if not any(o["name"] == "momo-etf-v3" for o in out):
         out.insert(0, {"id": 1, "name": "momo-etf-v3", "owner": "solo",
@@ -162,6 +163,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/community/llmlog": lambda: self._send(
                 200, store.get_doc("static", "llm_log") or []),
             "/api/community/users": self.g_users,
+            "/api/siglib": self.g_siglib,
             "/api/community/user": lambda: self.g_user_detail(q),
             "/api/community/public": lambda: self._send(200, [
                 {k: i.get(k) for k in ("id", "name", "owner", "hyp", "kill", "copied_from", "stage")}
@@ -240,6 +242,13 @@ class Handler(BaseHTTPRequestHandler):
             "/api/community/seed-demo": lambda: self.p_seed_demo(),
             "/api/community/remove-demo": lambda: self.p_remove_demo(),
             "/api/community/users/delete": lambda: self.p_delete_user(body),
+            "/api/siglib/eval": lambda: self.p_sig_eval(body),
+            "/api/siglib/save": lambda: self.p_sig_save(body),
+            "/api/siglib/publish": lambda: self.p_sig_publish(body),
+            "/api/siglib/copy": lambda: self.p_sig_copy(body),
+            "/api/siglib/delete": lambda: self.p_sig_delete(body),
+            "/api/siglib/ai": lambda: self.p_sig_ai(body),
+            "/api/siglib/promote": lambda: self.p_sig_promote(body),
             "/api/chat": lambda: self.p_chat(body),
             "/api/strategies/adopt": lambda: self.p_adopt(body),
             "/api/ideas": lambda: self.p_idea(body),
@@ -1105,6 +1114,141 @@ class Handler(BaseHTTPRequestHandler):
         if err:
             return self._err(422, err)
         self._send(200, res)
+
+    # ---------- signal library (M19) ----------
+    def g_siglib(self):
+        u = self._user() or {"u": "solo", "role": "admin"}
+        rows = []
+        for d in store.list_docs("signals"):
+            mine = d.get("owner", "solo") in (u["u"], None) or u.get("role") == "admin"
+            if not mine and not d.get("public"):
+                continue
+            st, _ = signals_lib.evaluate(d["template"], d.get("params"), d.get("asset", "SPY"))
+            rows.append({**{k: d.get(k) for k in ("id", "name", "owner", "public", "demo",
+                                                  "template", "params", "asset", "desc")},
+                         "mine": mine, "family": signals_lib.TEMPLATES[d["template"]]["family"],
+                         "stats": ({k: st[k] for k in ("ic", "hit_rate", "sharpe", "verdict")}
+                                   if st else None)})
+        self._send(200, {"templates": {k: {kk: v[kk] for kk in ("label", "family", "desc", "params")}
+                                       for k, v in signals_lib.TEMPLATES.items()},
+                         "assets": signals_lib.available_assets(), "signals": rows})
+
+    def p_sig_eval(self, body):
+        st, err = signals_lib.evaluate((body or {}).get("template"), body.get("params"),
+                                       body.get("asset", "SPY"))
+        if err:
+            return self._err(422, err)
+        self._send(200, st)
+
+    def p_sig_save(self, body):
+        u = self._user() or {"u": "solo"}
+        tpl = (body or {}).get("template")
+        if tpl not in signals_lib.TEMPLATES:
+            return self._err(422, "unknown template")
+        name = (body.get("name") or "").strip() or \
+            f"{tpl.replace('_','-')}-{body.get('asset','SPY').lower()}-{u['u']}"
+        if not logic.SLUG_RE.match(name):
+            return self._err(422, "name must be a kebab-case slug")
+        if any(d["name"] == name for d in store.list_docs("signals")):
+            return self._err(422, f"signal name '{name}' already exists")
+        st, err = signals_lib.evaluate(tpl, body.get("params"), body.get("asset", "SPY"))
+        if err:
+            return self._err(422, err)
+        doc = {"id": int(time.time() * 1000), "name": name, "owner": u["u"],
+               "public": bool(body.get("public")), "template": tpl,
+               "params": signals_lib.merged_params(tpl, body.get("params")),
+               "asset": body.get("asset", "SPY"), "desc": (body.get("desc") or "")[:200],
+               "created": time.strftime("%Y-%m-%d %H:%M")}
+        store.put_doc("signals", doc["id"], doc)
+        store.add_feed("info", f"SIGNAL {'PUBLISHED' if doc['public'] else 'saved'} — {name} "
+                       f"by {u['u']} (IC {st['ic'][1]}, SR {st['sharpe']})")
+        self._send(201, doc)
+
+    def _own_signal(self, body):
+        u = self._user() or {"u": "solo", "role": "admin"}
+        d = store.get_doc("signals", (body or {}).get("id"))
+        if not d:
+            return None, None, self._err(404, "signal not found")
+        if d.get("owner", "solo") not in (u["u"], None) and u.get("role") != "admin":
+            return None, None, self._err(403, "not your signal")
+        return u, d, None
+
+    def p_sig_publish(self, body):
+        u, d, err = self._own_signal(body)
+        if err is not None:
+            return
+        d["public"] = bool(body.get("public"))
+        store.put_doc("signals", d["id"], d)
+        self._send(200, d)
+
+    def p_sig_delete(self, body):
+        u, d, err = self._own_signal(body)
+        if err is not None:
+            return
+        store.delete_doc("signals", d["id"])
+        store.add_feed("warn", f"SIGNAL deleted — {d['name']} by {u['u']}")
+        self._send(200, {"ok": True})
+
+    def p_sig_copy(self, body):
+        u = self._user() or {"u": "solo"}
+        src = store.get_doc("signals", (body or {}).get("id"))
+        if not src or (not src.get("public") and src.get("owner") != u["u"]):
+            return self._err(404, "signal not found or not public")
+        base = f"{src['name']}-copy-{u['u']}"[:36]
+        names = {d["name"] for d in store.list_docs("signals")}
+        name, n = base, 2
+        while name in names:
+            name, n = f"{base}-{n}", n + 1
+        doc = {**src, "id": int(time.time() * 1000), "name": name, "owner": u["u"],
+               "public": False, "demo": False,
+               "copied_from": {"user": src.get("owner", "solo"), "signal": src["name"]},
+               "created": time.strftime("%Y-%m-%d %H:%M")}
+        store.put_doc("signals", doc["id"], doc)
+        self._send(201, doc)
+
+    def p_sig_ai(self, body):
+        text = ((body or {}).get("text") or "").strip()
+        if len(text) < 8:
+            return self._err(422, "describe the signal in a sentence")
+        spec, warns = signals_lib.ai_parse_signal(text, signals_lib.available_assets())
+        self._send(200, {"spec": spec, "warnings": warns, "provider": "builtin-parser"})
+
+    def p_sig_promote(self, body):
+        """Signal -> cross-sectional strategy in the Research Journal (runnable,
+        investable, leaderboard-eligible via the real signal strategy engine)."""
+        u = self._user() or {"u": "solo"}
+        d = store.get_doc("signals", (body or {}).get("id"))
+        if not d or (not d.get("public") and d.get("owner", "solo") not in (u["u"], None)
+                     and u.get("role") != "admin"):
+            return self._err(404, "signal not found")
+        spec = {"template": d["template"], "params": d["params"],
+                "top_n": int((body or {}).get("top_n", 3)),
+                "vol_tgt": float((body or {}).get("vol_tgt", 0.10))}
+        r = signals_lib.strategy_engine(spec["template"], spec["params"],
+                                        spec["top_n"], spec["vol_tgt"])
+        if not r:
+            return self._err(422, "strategy engine could not run (catalog data missing)")
+        name = (body.get("name") or f"{d['name']}-strat")[:40]
+        if not logic.SLUG_RE.match(name):
+            return self._err(422, "name must be a kebab-case slug")
+        if any(i["name"] == name for i in store.list_docs("ideas")):
+            return self._err(422, f"strategy name '{name}' already exists")
+        doc = logic.new_idea({
+            "name": name, "ac": "eq", "syms": ["SPY"] + signals_lib.ETFS[:3], "owner": u["u"],
+            "hyp": f"Cross-sectional top-{spec['top_n']} on signal '{d['name']}' "
+                   f"({signals_lib.TEMPLATES[d['template']]['label']}) over the sector-ETF "
+                   f"universe, SPY>SMA200 regime gate, {int(spec['vol_tgt']*100)}% vol target.",
+            "uni": "SPY + 9 sector ETFs", "feats": f"signal:{d['name']}",
+            "kill": "signal IC(1d) < 0 for 8 consecutive weeks, or DD > 15%",
+            "signal_spec": spec, "signal_ref": d["id"], "public": False,
+        })
+        doc["stage"] = 2
+        doc["gateNote"] = (f"Research stage — promoted from signal '{d['name']}': "
+                           f"SR {r['sharpe']}, maxDD {r['max_dd_pct']}%")
+        store.put_doc("ideas", doc["id"], doc)
+        store.add_feed("info", f"SIGNAL→STRATEGY — {name} by {u['u']} (real SR {r['sharpe']})")
+        self._send(201, {"idea": doc, "backtest": {k: r[k] for k in
+                        ("sharpe", "max_dd_pct", "total_return_pct")}})
 
     # ---------- community handlers ----------
     def g_users(self):

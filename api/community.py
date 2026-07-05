@@ -136,7 +136,8 @@ def invest(store, user, idea_id, amount, params=None):
             store.put_doc("users", user["u"], udoc)
     inv = {"id": int(datetime.datetime.now().timestamp() * 1000), "user": user["u"],
            "idea_id": idea_id, "strategy": idea["name"], "amount": amount,
-           "params": params or {}, "week": current_week_id(),
+           "params": params or {}, "signal_spec": idea.get("signal_spec"),
+           "week": current_week_id(),
            "opened": datetime.datetime.now().isoformat()[:16]}
     store.put_doc("investments", inv["id"], inv)
     return {"investment": inv, "forced_public": forced}, None
@@ -187,9 +188,13 @@ def week_deadline_str():
 _WR_CACHE = {}  # params-json -> (date, value); real returns only move with new bars
 
 
-def _strategy_week_return(params):
-    """REAL last-5-trading-day return of the strategy variant (engine_a). Cached per
+def _strategy_week_return(params, signal_spec=None):
+    """REAL last-5-trading-day return of the strategy variant (engine_a for the
+    momentum family; the signal strategy engine for promoted signals). Cached per
     calendar day so a demo-filled leaderboard doesn't rerun 10+ backtests per view."""
+    if signal_spec:
+        import signals_lib
+        return signals_lib.strategy_week_return(signal_spec)
     key = json.dumps(params or {}, sort_keys=True)
     today = datetime.date.today().isoformat()
     hit = _WR_CACHE.get(key)
@@ -208,7 +213,7 @@ def standings(store):
     week = current_week_id()
     per_user = {}
     for inv in store.list_docs("investments"):
-        wr = _strategy_week_return(inv.get("params"))
+        wr = _strategy_week_return(inv.get("params"), inv.get("signal_spec"))
         pnl = inv["amount"] * wr
         d = per_user.setdefault(inv["user"], {"user": inv["user"], "invested": 0.0,
                                               "week_pnl": 0.0, "positions": []})
@@ -268,7 +273,7 @@ def tuning_pack(store, username, runnable):
     s = standings(store)
     mine = [inv for inv in store.list_docs("investments") if inv["user"] == username]
     for inv in mine:
-        inv["week_return_pct"] = round(_strategy_week_return(inv.get("params")) * 100, 2)
+        inv["week_return_pct"] = round(_strategy_week_return(inv.get("params"), inv.get("signal_spec")) * 100, 2)
     strategies = []
     for r in runnable:
         if r.get("params") is None:
@@ -470,6 +475,28 @@ def seed_demo(store, force=False):
     if gpt_idea and ravi:
         invest(store, {"u": "ravi", "cash": ravi["cash"], "role": "user"},
                gpt_idea["id"], 8000, gpt_idea.get("engine_params"))
+    # shared demo signals (variants of popular signals, one per persona)
+    demo_sigs = [
+        ("grok",     "donchian",  {"n": 20},                 "SPY", "fast 20-day breakout — grok likes speed"),
+        ("chatgpt",  "mom_12_1",  {"look": 252, "skip": 21}, "XLK", "the classic 12-1 momentum on tech"),
+        ("deepseek", "boll_z",    {"n": 20, "cap_z": 2.0},   "XLF", "fade 2-sigma moves in financials"),
+        ("claude",   "rsi",       {"n": 14, "buy_below": 30}, "SPY", "patient RSI dip-buying"),
+        ("gemini",   "macd",      {"fast": 12, "slow": 26},  "XLE", "MACD momentum in energy"),
+        ("maya",     "sma_cross", {"n": 150},                "SPY", "Maya's faster trend filter"),
+        ("sofia",    "gap_rev",   {"min_gap_pct": 0.5},      "XLV", "fading healthcare gaps"),
+        ("ravi",     "vol_surge", {"n": 20, "mult": 2.0},    "XLY", "following big-volume days"),
+    ]
+    import time as _t2
+    existing_sigs = {d["name"] for d in store.list_docs("signals")}
+    for owner, tpl, sp, asset, why in demo_sigs:
+        nm = f"{tpl.replace('_','-')}-{asset.lower()}-{owner}"
+        if nm in existing_sigs or not store.get_doc("users", owner):
+            continue
+        store.put_doc("signals", int(_t2.time() * 1000) + len(existing_sigs), {
+            "id": int(_t2.time() * 1000) + len(existing_sigs), "name": nm, "owner": owner,
+            "public": True, "demo": True, "template": tpl, "params": sp, "asset": asset,
+            "desc": f"[DEMO] {why}", "created": _t2.strftime("%Y-%m-%d %H:%M")})
+        existing_sigs.add(nm)
     store.set_kv("demo:seeded", "1")
     store.add_feed("info", f"🎭 DEMO COMMUNITY SEEDED — {n} sample accounts "
                    "(6 LLM traders + 3 humans) with live strategies; admin can delete any of them")
@@ -486,7 +513,7 @@ def user_detail(store, username):
               "params": i.get("engine_params")}
              for i in store.list_docs("ideas") if i.get("owner") == username]
     invs = [{"id": inv["id"], "strategy": inv["strategy"], "amount": inv["amount"],
-             "week_return_pct": round(_strategy_week_return(inv.get("params")) * 100, 2),
+             "week_return_pct": round(_strategy_week_return(inv.get("params"), inv.get("signal_spec")) * 100, 2),
              "opened": inv.get("opened")}
             for inv in store.list_docs("investments") if inv["user"] == username]
     log = [e for e in (store.get_doc("static", "llm_log") or []) if e["user"] == username][:5]
@@ -513,6 +540,9 @@ def delete_user(store, username):
         if idea.get("owner") == username:
             store.delete_doc("ideas", idea["id"])
             n_ideas += 1
+    for sig in list(store.list_docs("signals")):
+        if sig.get("owner") == username:
+            store.delete_doc("signals", sig["id"])
     log = store.get_doc("static", "llm_log") or []
     store.put_doc("static", "llm_log", [e for e in log if e["user"] != username])
     store.delete_doc("users", username)
