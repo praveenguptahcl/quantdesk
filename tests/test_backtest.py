@@ -93,6 +93,8 @@ class TestBacktestHTTP(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         os.environ["QD_PORT"] = "8791"
+        os.environ["QD_MULTIUSER"] = "0"
+        os.environ["QD_NO_DEMO"] = "1"
         import server
         cls.server_mod = server
         cls.httpd = server.ThreadingHTTPServer(("127.0.0.1", 8791), server.Handler)

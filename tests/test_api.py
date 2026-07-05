@@ -13,6 +13,8 @@ import urllib.request
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "api"))
 os.environ["QD_DB"] = ":memory:"
 os.environ["QD_PORT"] = "8790"
+os.environ["QD_MULTIUSER"] = "0"   # tests run solo regardless of .env
+os.environ["QD_NO_DEMO"] = "1"     # no demo seeding in fixtures
 
 import logic  # noqa: E402
 import server  # noqa: E402
