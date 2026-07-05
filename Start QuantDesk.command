@@ -9,7 +9,7 @@ rm -f .git/index.lock .git/HEAD.lock 2>/dev/null
 if ! git diff-index --quiet HEAD -- 2>/dev/null || [ -n "$(git status --porcelain 2>/dev/null)" ]; then
   git add -A
   git -c user.email=praveenguptaymca@gmail.com -c user.name="Praveen Gupta" \
-    commit -m "M1-M14 software implementation: stdlib backend, dual backtest engines + computed parity gate, order validation, GUI wired, 28 tests green" \
+    commit -m "checkpoint: $(date '+%Y-%m-%d %H:%M') local changes" \
     && echo "git: committed" || echo "git: nothing to commit or commit failed"
 else
   echo "git: clean"
