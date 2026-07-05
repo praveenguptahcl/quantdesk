@@ -271,8 +271,19 @@ def evaluate(template, params, asset):
             ric["risk_on"] = round(_rankcorr([p[0] for p in on], [p[1] for p in on]) or 0, 3)
         if len(off) > 30:
             ric["risk_off"] = round(_rankcorr([p[0] for p in off], [p[1] for p in off]) or 0, 3)
+    yearly = {}
+    ystart = {}
+    for i, dt in enumerate(dates):
+        y = dt[:4]
+        ystart.setdefault(y, equity[i - 1] if i else 1.0)
+        yearly[y] = round((equity[i] / ystart[y] - 1) * 100, 2)
+    dd_series, pk = [], equity[0]
+    for e in equity:
+        pk = max(pk, e)
+        dd_series.append(round((e / pk - 1) * 100, 2))
     step = max(1, len(equity) // 260)
     out = {"template": template, "asset": asset, "params": merged_params(template, params),
+           "yearly": yearly, "dd_series": dd_series[::step],
            "n_days": len(equity), "ic": ic, "hit_rate": hitrate,
            "turnover": round(sum(turns) / len(turns), 3),
            "exposure": round(sum(1 for p in pos if p not in (None, 0.0)) / n, 3),
@@ -363,6 +374,82 @@ def strategy_engine(template, params, top_n=3, vol_tgt=0.10):
             "dates": dates[1:len(equity) + 1]}
 
 
+def combo_engine(sig_defs, top_n=3, vol_tgt=0.10):
+    """Compose a strategy from MULTIPLE library signals: each day, rank the ETF
+    universe by each signal's raw value (rank in [0,1], scale-free), combine as
+    the weighted sum of ranks, hold the top `top_n` — same SPY>SMA200 regime gate,
+    vol targeting and costs as everything else. Real backtest."""
+    data = {s: load_ohlcv(s) for s in ETFS}
+    data = {s: b for s, b in data.items() if b}
+    spy = load_ohlcv("SPY")
+    if not spy or len(data) < 4 or not sig_defs:
+        return None
+    idx = {s: {b["d"]: i for i, b in enumerate(bars)} for s, bars in data.items()}
+    allsigs = []   # per sig_def: {etf: values[]}
+    wsum = sum(abs(float(d.get("weight", 1))) for d in sig_defs) or 1.0
+    for d in sig_defs:
+        allsigs.append({s: series(d["template"], bars, d.get("params"))[0]
+                        for s, bars in data.items()})
+    sc = [b["c"] for b in spy]
+    eq, equity, prev_w, run, rets_hist = 1.0, [], {}, 0.0, []
+    for i, b in enumerate(spy):
+        run += sc[i]
+        if i >= 200:
+            run -= sc[i - 200]
+        risk_on = i >= 199 and sc[i] > run / 200
+        combined = {}
+        for k, d in enumerate(sig_defs):
+            vals = {}
+            for s in data:
+                j = idx[s].get(b["d"])
+                if j is not None and allsigs[k][s][j] is not None:
+                    vals[s] = allsigs[k][s][j]
+            if len(vals) < top_n:
+                continue
+            order = sorted(vals, key=vals.get)
+            n_v = len(order) - 1 or 1
+            for r_, s in enumerate(order):
+                combined[s] = combined.get(s, 0.0) + \
+                    float(d.get("weight", 1)) / wsum * (r_ / n_v)
+        w = {}
+        if risk_on and len(combined) >= top_n:
+            top = sorted(combined, key=combined.get, reverse=True)[:top_n]
+            for s in top:
+                w[s] = 1.0 / top_n
+        if len(rets_hist) >= 20:
+            m = sum(rets_hist[-20:]) / 20
+            rv = (sum((r - m) ** 2 for r in rets_hist[-20:]) / 20) ** 0.5 * math.sqrt(252)
+            scale = min(1.5, vol_tgt / rv) if rv > 0 else 1.0
+            w = {s: x * scale for s, x in w.items()}
+        if i + 1 < len(spy):
+            nd = spy[i + 1]["d"]
+            r = 0.0
+            for s, x in w.items():
+                j0, j1 = idx[s].get(b["d"]), idx[s].get(nd)
+                if j0 is not None and j1 is not None:
+                    r += x * (data[s][j1]["c"] / data[s][j0]["c"] - 1)
+            turn = sum(abs(w.get(s, 0) - prev_w.get(s, 0)) for s in set(w) | set(prev_w))
+            r -= turn * COST_BPS / 10000
+            eq *= 1 + r
+            rets_hist.append(r)
+            equity.append(eq)
+            prev_w = w
+    if len(equity) < 30:
+        return None
+    rets = [equity[i] / equity[i - 1] - 1 for i in range(1, len(equity))]
+    mu = sum(rets) / len(rets)
+    sd = (sum((r - mu) ** 2 for r in rets) / len(rets)) ** 0.5 or 1e-9
+    peak, mdd = equity[0], 0.0
+    for e in equity:
+        peak = max(peak, e)
+        mdd = min(mdd, e / peak - 1)
+    step = max(1, len(equity) // 260)
+    return {"equity_daily": equity, "equity": [round(e, 4) for e in equity[::step]],
+            "sharpe": round(mu / sd * math.sqrt(252), 2),
+            "max_dd_pct": round(mdd * 100, 2),
+            "total_return_pct": round((equity[-1] - 1) * 100, 2)}
+
+
 _WK_CACHE = {}
 
 
@@ -373,8 +460,12 @@ def strategy_week_return(spec):
     hit = _WK_CACHE.get(key)
     if hit and hit[0] == today:
         return hit[1]
-    r = strategy_engine(spec.get("template"), spec.get("params"),
-                        int(spec.get("top_n", 3)), float(spec.get("vol_tgt", 0.10)))
+    if spec.get("signals"):
+        r = combo_engine(spec["signals"], int(spec.get("top_n", 3)),
+                         float(spec.get("vol_tgt", 0.10)))
+    else:
+        r = strategy_engine(spec.get("template"), spec.get("params"),
+                            int(spec.get("top_n", 3)), float(spec.get("vol_tgt", 0.10)))
     val = 0.0
     if r and len(r["equity_daily"]) >= 6:
         eq = r["equity_daily"]

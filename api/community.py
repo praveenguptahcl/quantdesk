@@ -219,8 +219,12 @@ def standings(store):
                                               "week_pnl": 0.0, "positions": []})
         d["invested"] += inv["amount"]
         d["week_pnl"] += pnl
+        spec = inv.get("signal_spec") or {}
         d["positions"].append({"strategy": inv["strategy"], "amount": inv["amount"],
                                "params": inv.get("params") or "frozen defaults",
+                               "signals": [x.get("name", x.get("template", "?"))
+                                           for x in spec.get("signals", [])]
+                                          or ([spec.get("name") or spec.get("template")] if spec.get("template") else []),
                                "week_return_pct": round(wr * 100, 2)})
     rows = sorted(per_user.values(), key=lambda x: x["week_pnl"], reverse=True)
     for i, r in enumerate(rows, 1):

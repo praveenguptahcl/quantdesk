@@ -570,11 +570,28 @@ label.fl b{color:var(--red)}
             </div>
             <label class="fl" style="margin-top:8px">Signal-only equity (real, cost-adjusted)</label>
             <canvas id="sigEq" style="width:100%;height:60px"></canvas>
+            <label class="fl" style="margin-top:6px">Drawdown</label>
+            <canvas id="sigDD" style="width:100%;height:36px"></canvas>
+            <div id="sgYearly" class="mono" style="font-size:11px;margin-top:6px"></div>
             <p id="sgVerdict" style="font-size:12px;margin:8px 0 0"></p>
           </div>
         </div>
         <div class="card">
-          <h2 style="margin-top:0">🌐 Shared signal library</h2>
+          <h2 style="margin-top:0">🧪 Strategy blender <span class="mut" style="font-size:11px;font-weight:400">— strategies pick their signals here</span></h2>
+          <p class="mut" style="font-size:11px;margin:0 0 8px">Add 1-4 library signals below (＋ blend), set weights, backtest the weighted rank-blend over the ETF universe, then save it as a runnable strategy.</p>
+          <div id="blendTray" class="mut" style="font-size:12px">empty — press ＋ blend on library signals</div>
+          <div class="flex" style="margin-top:8px">
+            <div><label class="fl">top N</label><input type="number" id="blendN" value="3" min="1" max="6" style="width:60px"></div>
+            <div><label class="fl">vol target</label><input type="number" id="blendVt" value="0.10" step="0.01" style="width:70px"></div>
+            <input type="text" id="blendName" placeholder="blend-name (kebab-case)" style="max-width:180px;align-self:flex-end">
+            <button class="btn primary" style="align-self:flex-end" onclick="UI.blendRun(true)">⚡ Backtest blend</button>
+            <button class="btn" style="align-self:flex-end;border-color:var(--green);color:var(--green)" onclick="UI.blendRun(false)">💾 Save as strategy</button>
+          </div>
+          <div id="blendOut" style="display:none;margin-top:8px">
+            <span class="mono" id="blendStats" style="font-size:12px"></span>
+            <canvas id="blendEq" style="width:100%;height:44px"></canvas>
+          </div>
+          <h2>🌐 Shared signal library</h2>
           <p class="mut" style="font-size:11px;margin:0 0 8px">Public signals from every user (+ your private ones). Copy → tune params → publish back. "→ Strategy" builds a real cross-sectional top-N portfolio from the signal (same regime gate &amp; vol targeting as momo-etf-v3) and files it in your Research Journal.</p>
           <div id="sigLib" style="max-height:520px;overflow:auto">—</div>
         </div>
@@ -913,8 +930,11 @@ label.fl b{color:var(--red)}
       <div class="flex spread"><div><h1>Leaderboard</h1>
       <div class="sub">Weekly contest on $100k virtual books. Rule: every strategy with money on it is PUBLIC — anyone can inspect and copy it. Winner frozen <b>Saturday 11:59 PM ET</b>.</div></div>
       <span class="tag warn" id="boardWeek" style="font-size:12px;padding:6px 14px"></span></div>
-      <div class="card">
-        <h2 style="margin-top:0">This week's standings <span class="mut" id="boardMeta"></span></h2>
+      <div class="card" style="background:linear-gradient(160deg,var(--bg2),transparent);border-color:var(--line)">
+        <div class="flex spread" style="align-items:baseline">
+          <h2 style="margin:0">This week's standings <span class="mut" id="boardMeta"></span></h2>
+          <span class="mono" id="boardClock" style="font-size:13px;color:var(--amber)"></span></div>
+        <div id="boardPodium" style="display:none;margin:14px 0 6px"></div>
         <div id="boardRows" class="mut">connect backend</div>
       </div>
       <div class="card" style="margin-top:14px">
@@ -2364,26 +2384,78 @@ const UI = {
     const r=await QD.post('/api/auth/password',{pw}); if(!r||r.err)return;
     this.toast('Password changed','ok'); document.getElementById('mePw').value='';
   },
+  _me_u:null,
+  _boardTimer:null,
+  _boardCountdown(){
+    // next Saturday 23:59 ET (approximate client-side; server is the referee)
+    const now=new Date();
+    const et=new Date(now.toLocaleString('en-US',{timeZone:'America/New_York'}));
+    const close=new Date(et); close.setDate(et.getDate()+((6-et.getDay())+7)%7); close.setHours(23,59,0,0);
+    if(close<et)close.setDate(close.getDate()+7);
+    let ms=close-et;
+    const d2=Math.floor(ms/864e5); ms-=d2*864e5;
+    const h=Math.floor(ms/36e5); ms-=h*36e5;
+    const m=Math.floor(ms/6e4);
+    return `⏳ winner frozen in ${d2}d ${h}h ${m}m`;
+  },
+  _avatar(u,role){
+    if(role==='llm'||['grok','chatgpt','deepseek','claude','copilot','gemini'].includes(u))return '🤖';
+    return ['🦊','🐼','🦉','🐯','🦈','🐺','🦅','🐸','🦄'][u.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%9];
+  },
   async renderBoard(){
     if(!QD.on)return;
     try{
       const d=await(await fetch('/api/leaderboard')).json();
       document.getElementById('boardWeek').textContent=`week ${d.week} · closes ${d.closes}`;
-      document.getElementById('boardMeta').textContent=d.rows.length?'':'— no investments yet: be first (My Panel → Invest)';
-      document.getElementById('boardRows').innerHTML=d.rows.length?d.rows.map(r=>`
-        <div class="card" style="margin-bottom:10px;background:var(--bg2)">
-          <div class="flex spread"><b>#${r.rank} ${r.user}</b>
-            <span class="${r.week_pnl>=0?'up':'down'} mono">${r.week_pnl>=0?'+':''}$${Math.abs(r.week_pnl).toLocaleString()} (${r.week_return_pct>=0?'+':''}${r.week_return_pct}%)</span></div>
-          <table style="margin-top:8px"><thead><tr><th>Strategy (PUBLIC)</th><th>Amount</th><th>Params</th><th>Week ret</th><th></th></tr></thead><tbody>
-          ${r.positions.map(p2=>`<tr><td class="s">${p2.strategy}</td><td>$${p2.amount.toLocaleString()}</td>
-            <td class="s mono" style="font-size:11px">${typeof p2.params==='string'?p2.params:JSON.stringify(p2.params)}</td>
+      document.getElementById('boardClock').textContent=this._boardCountdown();
+      if(this._boardTimer)clearInterval(this._boardTimer);
+      this._boardTimer=setInterval(()=>{const el=document.getElementById('boardClock'); if(el)el.textContent=this._boardCountdown();},30000);
+      document.getElementById('boardMeta').textContent=d.rows.length?`· ${d.rows.length} players · $${d.rows.reduce((a,r)=>a+r.invested,0).toLocaleString()} at play`:'— no investments yet: be first (My Panel → Invest)';
+      const meU=(this.me&&this.me.u)||'';
+      // podium
+      const pod=document.getElementById('boardPodium');
+      if(d.rows.length>=3){
+        const medals=['🥇','🥈','🥉'], order=[1,0,2], hts=[64,88,52];
+        pod.style.display='flex'; pod.style.gap='10px'; pod.style.alignItems='flex-end';
+        pod.innerHTML=order.map((oi,slot)=>{const r=d.rows[oi]; if(!r)return '';
+          return `<div style="flex:1;text-align:center">
+            <div style="font-size:22px">${this._avatar(r.user)} <span style="font-size:26px">${medals[oi]}</span></div>
+            <b>${esc(r.user)}</b>${r.user===meU?' <span class="tag ok">you</span>':''}
+            <div class="mono ${r.week_pnl>=0?'up':'down'}" style="font-size:15px">${r.week_return_pct>=0?'+':''}${r.week_return_pct}%</div>
+            <div class="mut" style="font-size:11px">$${r.invested.toLocaleString()} · ${r.positions.length} pos</div>
+            <div style="height:${hts[slot]}px;margin-top:6px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,${oi===0?'rgba(255,200,60,.35)':oi===1?'rgba(200,200,215,.25)':'rgba(205,127,50,.25)'},transparent)"></div></div>`;}).join('');
+      } else pod.style.display='none';
+      // rows with return bars
+      const maxAbs=Math.max(.01,...d.rows.map(r=>Math.abs(r.week_return_pct)));
+      document.getElementById('boardRows').innerHTML=d.rows.length?d.rows.map(r=>{
+        const w=Math.min(100,Math.abs(r.week_return_pct)/maxAbs*100);
+        return `
+        <div class="card" style="margin-bottom:10px;background:var(--bg2);${r.user===meU?'border-color:var(--blue);':''}">
+          <div class="flex spread" style="align-items:center">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="mono" style="font-size:15px;color:var(--dim);min-width:28px">#${r.rank}</span>
+              <span style="font-size:20px">${this._avatar(r.user)}</span>
+              <div><b>${esc(r.user)}</b>${r.user===meU?' <span class="tag ok">you</span>':''}
+                <div class="mut" style="font-size:11px">$${r.invested.toLocaleString()} invested · ${r.positions.length} position${r.positions.length>1?'s':''}</div></div>
+            </div>
+            <div style="text-align:right;min-width:210px">
+              <span class="${r.week_pnl>=0?'up':'down'} mono" style="font-size:15px">${r.week_pnl>=0?'+':'−'}$${Math.abs(r.week_pnl).toLocaleString()} (${r.week_return_pct>=0?'+':''}${r.week_return_pct}%)</span>
+              <div style="height:5px;margin-top:4px;border-radius:3px;background:var(--bg);overflow:hidden">
+                <div style="height:100%;width:${w}%;margin-left:${r.week_return_pct>=0?0:100-w}%;background:${r.week_return_pct>=0?'var(--green)':'var(--red)'};opacity:.75"></div></div>
+            </div></div>
+          <details style="margin-top:8px"><summary class="mut" style="cursor:pointer;font-size:12px">positions — every one PUBLIC &amp; copyable</summary>
+          <table style="margin-top:6px"><thead><tr><th>Strategy</th><th>Amount</th><th>Built from</th><th>Week ret</th><th></th></tr></thead><tbody>
+          ${r.positions.map(p2=>`<tr><td class="s">${esc(p2.strategy)}</td><td>$${p2.amount.toLocaleString()}</td>
+            <td class="s" style="font-size:11px">${(p2.signals&&p2.signals.length)?p2.signals.map(x=>`<span class="tag" style="font-size:9px">◈ ${esc(x)}</span>`).join(' '):`<span class="mono mut">${typeof p2.params==='string'?p2.params:esc(JSON.stringify(p2.params))}</span>`}</td>
             <td class="${p2.week_return_pct>=0?'up':'down'}">${p2.week_return_pct>=0?'+':''}${p2.week_return_pct}%</td>
-            <td><button class="btn" style="padding:2px 10px;font-size:11px" onclick="UI.copyFromBoard('${p2.strategy}')">Copy</button></td></tr>`).join('')}
-          </tbody></table></div>`).join(''):'<p class="mut">Empty board — every strategy invested in appears here, fully public.</p>';
+            <td><button class="btn" style="padding:2px 10px;font-size:11px" onclick="UI.copyFromBoard('${esc(p2.strategy)}')">Copy</button></td></tr>`).join('')}
+          </tbody></table></details></div>`;}).join(''):'<p class="mut">Empty board — every strategy invested in appears here, fully public.</p>';
       document.getElementById('boardWinners').innerHTML=(d.winners||[]).length?
-        d.winners.map(w=>`<div class="hb"><span class="hn">🏆 <b>${w.user}</b> — week ${w.week}</span>
-          <span class="${w.week_return_pct>=0?'up':'down'} mono">${w.week_return_pct>=0?'+':''}${w.week_return_pct}%</span>
-          <span class="mut" style="font-size:11px">${w.finalized}</span></div>`).join('')
+        '<div style="display:flex;gap:10px;flex-wrap:wrap">'+d.winners.map(w=>
+          `<div style="border:1px solid var(--line);border-radius:8px;padding:8px 14px;text-align:center">
+           <div style="font-size:18px">🏆</div><b>${esc(w.user)}</b>
+           <div class="${w.week_return_pct>=0?'up':'down'} mono" style="font-size:12px">${w.week_return_pct>=0?'+':''}${w.week_return_pct}%</div>
+           <div class="mut" style="font-size:10px">${w.week}</div></div>`).join('')+'</div>'
         :'none yet — first week closes Saturday 23:59 ET';
     }catch(e){}
   },
@@ -2439,6 +2511,7 @@ const UI = {
           <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigLoad(${g.id})">⚡ open</button>
           <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigCopy(${g.id})">📋 copy</button>
           <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigPromote(${g.id},'${esc(g.name)}')">→ strategy</button>
+          <button class="btn" style="padding:2px 8px;font-size:10px;border-color:var(--purple);color:var(--purple)" onclick="UI.blendAdd(${g.id},'${esc(g.name)}')">＋ blend</button>
           ${g.mine?`<button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.sigPub(${g.id},${!g.public})">${g.public?'unpublish':'publish'}</button>
           <button class="btn" style="padding:2px 8px;font-size:10px;border-color:var(--red);color:var(--red)" onclick="UI.sigDel(${g.id})">🗑</button>`:''}
         </div></div>`;}).join('')||'<p class="mut">library is empty — evaluate a signal and publish it</p>';
@@ -2480,6 +2553,9 @@ const UI = {
     document.getElementById('sgRegime').textContent=`risk-on ${ric.risk_on!=null?ric.risk_on:'n/a'} · risk-off ${ric.risk_off!=null?ric.risk_off:'n/a'}`;
     document.getElementById('sgVerdict').innerHTML=`<span class="tag ${r.ic['1']>=0.03&&r.sharpe>=0.5?'ok':(r.ic['1']<=-0.02?'fail':'warn')}">${esc(r.verdict)}</span>`;
     const c=document.getElementById('sigEq'); if(c&&r.equity.length>2)CH.spark(c,r.equity,r.equity[r.equity.length-1]>=1?'rgb(61,220,151)':'rgb(255,92,92)');
+    const cd=document.getElementById('sigDD'); if(cd&&r.dd_series&&r.dd_series.length>2)CH.spark(cd,r.dd_series,'rgb(255,92,92)');
+    if(r.yearly)document.getElementById('sgYearly').innerHTML='by year: '+Object.entries(r.yearly).map(([y,v])=>
+      `${y} <span class="${v>=0?'up':'down'}">${v>=0?'+':''}${v}%</span>`).join(' · ');
     return r;
   },
   async sigSave(pub){
@@ -2513,6 +2589,35 @@ const UI = {
     this.toast('Running the real cross-sectional backtest…','ok');
     const r=await QD.post('/api/siglib/promote',{id,name:nm}); if(!r||r.err)return;
     this.toast(`→ ${r.idea.name} filed in Research Journal — real SR ${r.backtest.sharpe}, maxDD ${r.backtest.max_dd_pct}% · runnable & investable`,'ok');
+  },
+  _blend:[],
+  blendAdd(id,name){
+    if(this._blend.find(x=>x.id===id))return this.toast('already in the blend','err');
+    if(this._blend.length>=4)return this.toast('max 4 signals per blend','err');
+    this._blend.push({id,name,weight:1});
+    this.blendRender();
+  },
+  blendRender(){
+    document.getElementById('blendTray').innerHTML=this._blend.length?this._blend.map((x,i)=>
+      `<div class="hb"><span class="hn">${esc(x.name)}</span>
+       <span>w <input type="number" value="${x.weight}" step="0.1" min="0" style="width:56px" onchange="UI._blend[${i}].weight=+this.value"></span>
+       <button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI._blend.splice(${i},1);UI.blendRender()">✕</button></div>`).join('')
+      :'empty — press ＋ blend on library signals';
+  },
+  async blendRun(dry){
+    if(!this._blend.length)return this.toast('add signals to the blend first','err');
+    const body={signals:this._blend.map(x=>({id:x.id,weight:x.weight})),
+      top_n:+document.getElementById('blendN').value,vol_tgt:+document.getElementById('blendVt').value,
+      dry,name:document.getElementById('blendName').value.trim()||undefined};
+    if(!dry&&!body.name)return this.toast('give the strategy a kebab-case name','err');
+    this.toast(dry?'Backtesting the blend (real engine)…':'Backtesting + filing strategy…','ok');
+    const r=await QD.post('/api/siglib/compose',body); if(!r||r.err)return;
+    const bt=r.backtest;
+    document.getElementById('blendOut').style.display='block';
+    document.getElementById('blendStats').innerHTML=
+      `SR <b class="${bt.sharpe>=0.4?'up':''}">${bt.sharpe}</b> · maxDD <span class="down">${bt.max_dd_pct}%</span> · total ${bt.total_return_pct>=0?'+':''}${bt.total_return_pct}%`;
+    const c=document.getElementById('blendEq'); if(c&&bt.equity&&bt.equity.length>2)CH.spark(c,bt.equity,bt.equity[bt.equity.length-1]>=1?'rgb(61,220,151)':'rgb(255,92,92)');
+    if(!dry){this.toast(`💾 ${r.idea.name} filed in Research Journal — runnable & investable (real SR ${bt.sharpe})`,'ok');}
   },
   async switchUser(){
     if(!community_enabled_hint()){

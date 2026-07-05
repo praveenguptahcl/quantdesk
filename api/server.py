@@ -249,6 +249,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/siglib/delete": lambda: self.p_sig_delete(body),
             "/api/siglib/ai": lambda: self.p_sig_ai(body),
             "/api/siglib/promote": lambda: self.p_sig_promote(body),
+            "/api/siglib/compose": lambda: self.p_sig_compose(body),
             "/api/chat": lambda: self.p_chat(body),
             "/api/strategies/adopt": lambda: self.p_adopt(body),
             "/api/ideas": lambda: self.p_idea(body),
@@ -1221,7 +1222,7 @@ class Handler(BaseHTTPRequestHandler):
         if not d or (not d.get("public") and d.get("owner", "solo") not in (u["u"], None)
                      and u.get("role") != "admin"):
             return self._err(404, "signal not found")
-        spec = {"template": d["template"], "params": d["params"],
+        spec = {"template": d["template"], "params": d["params"], "name": d["name"],
                 "top_n": int((body or {}).get("top_n", 3)),
                 "vol_tgt": float((body or {}).get("vol_tgt", 0.10))}
         r = signals_lib.strategy_engine(spec["template"], spec["params"],
@@ -1249,6 +1250,53 @@ class Handler(BaseHTTPRequestHandler):
         store.add_feed("info", f"SIGNAL→STRATEGY — {name} by {u['u']} (real SR {r['sharpe']})")
         self._send(201, {"idea": doc, "backtest": {k: r[k] for k in
                         ("sharpe", "max_dd_pct", "total_return_pct")}})
+
+    def p_sig_compose(self, body):
+        """Compose a strategy from MULTIPLE library signals (weighted rank blend).
+        dry=true returns just the real backtest; otherwise files the strategy."""
+        u = self._user() or {"u": "solo"}
+        picks = (body or {}).get("signals") or []
+        if not 1 <= len(picks) <= 4:
+            return self._err(422, "pick 1-4 signals for the blend")
+        sig_defs, names = [], []
+        for pk in picks:
+            d = store.get_doc("signals", pk.get("id"))
+            if not d or (not d.get("public") and d.get("owner", "solo") not in (u["u"], None)
+                         and u.get("role") != "admin"):
+                return self._err(404, f"signal {pk.get('id')} not found or not visible")
+            sig_defs.append({"template": d["template"], "params": d["params"],
+                             "weight": float(pk.get("weight", 1)), "name": d["name"]})
+            names.append(d["name"])
+        top_n = int(body.get("top_n", 3))
+        vol_tgt = float(body.get("vol_tgt", 0.10))
+        r = signals_lib.combo_engine(sig_defs, top_n, vol_tgt)
+        if not r:
+            return self._err(422, "blend engine could not run (catalog data missing)")
+        bt = {k: r[k] for k in ("sharpe", "max_dd_pct", "total_return_pct", "equity")}
+        if body.get("dry"):
+            return self._send(200, {"backtest": bt, "signals": names})
+        name = (body.get("name") or "").strip()
+        if not logic.SLUG_RE.match(name):
+            return self._err(422, "name must be a kebab-case slug")
+        if any(i["name"] == name for i in store.list_docs("ideas")):
+            return self._err(422, f"strategy name '{name}' already exists")
+        doc = logic.new_idea({
+            "name": name, "ac": "eq", "syms": ["SPY"] + signals_lib.ETFS[:3], "owner": u["u"],
+            "hyp": f"Blend of {len(names)} library signals ({', '.join(names)}): weighted "
+                   f"cross-sectional rank over the sector-ETF universe, top-{top_n}, "
+                   f"SPY>SMA200 gate, {int(vol_tgt*100)}% vol target.",
+            "uni": "SPY + 9 sector ETFs", "feats": "signals: " + ", ".join(names),
+            "kill": "blend Sharpe < 0 over 8 consecutive weeks, or DD > 15%",
+            "signal_spec": {"signals": sig_defs, "top_n": top_n, "vol_tgt": vol_tgt},
+            "public": False,
+        })
+        doc["stage"] = 2
+        doc["gateNote"] = f"Research stage — composed from signals: SR {r['sharpe']}, " \
+                          f"maxDD {r['max_dd_pct']}%"
+        store.put_doc("ideas", doc["id"], doc)
+        store.add_feed("info", f"SIGNAL BLEND → STRATEGY — {name} by {u['u']} "
+                       f"({', '.join(names)}; real SR {r['sharpe']})")
+        self._send(201, {"idea": doc, "backtest": bt})
 
     # ---------- community handlers ----------
     def g_users(self):
