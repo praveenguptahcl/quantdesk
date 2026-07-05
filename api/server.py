@@ -19,6 +19,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import alpaca  # noqa: E402
 import backtest  # noqa: E402
 import llm  # noqa: E402
 import logic  # noqa: E402
@@ -90,7 +91,7 @@ class Handler(BaseHTTPRequestHandler):
         r = {
             "/api/bootstrap": self.g_bootstrap,
             "/api/state": self.g_state,
-            "/api/venues": lambda: self._send(200, store.static("venues")),
+            "/api/venues": lambda: self._send(200, self._venues()),
             "/api/positions": lambda: self._send(200, store.static("positions")),
             "/api/strategies": lambda: self._send(200, store.static("strategies")),
             "/api/ideas": lambda: self._send(200, store.list_docs("ideas")),
@@ -102,7 +103,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/notes": lambda: self._send(200, store.list_docs("notes")),
             "/api/alerts": lambda: self._send(200, store.list_docs("alerts")),
             "/api/costs": lambda: self._send(200, store.static("costs")),
-            "/api/accounts": lambda: self._send(200, store.static("accounts")),
+            "/api/accounts": lambda: self._send(200, self._accounts()),
+            "/api/paper/status": self.g_paper_status,
             "/api/econ": lambda: self._send(200, store.static("econ")),
             "/api/setup": self.g_setup,
             "/api/pnl/daily": lambda: self._send(200, logic.daily_pnl()),
@@ -140,6 +142,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/alerts": lambda: self.p_alert(body),
             "/api/risk/simulate-breach": self.p_breach,
             "/api/orders/validate": lambda: self.p_validate_order(body),
+            "/api/paper/test-order": self.p_paper_test,
         }
         r = routes.get(path)
         if r:
@@ -180,12 +183,12 @@ class Handler(BaseHTTPRequestHandler):
             "notes": store.list_docs("notes"),
             "alerts": store.list_docs("alerts"),
             "feed": store.get_feed(50),
-            "venues": store.static("venues"),
+            "venues": self._venues(),
             "positions": store.static("positions"),
             "strategies": store.static("strategies"),
             "openOrders": store.static("openOrders"),
             "orderHist": store.static("orderHist"),
-            "accounts": store.static("accounts"),
+            "accounts": self._accounts(),
             "costs": store.static("costs"),
             "econ": store.static("econ"),
             "setup": self._setup_list(),
@@ -290,11 +293,19 @@ class Handler(BaseHTTPRequestHandler):
             return self._err(code, reason)
         t0 = time.time()
         store.set_kv("halted", "1")
-        n_pos = len(store.static("positions") or [])
-        ms = int((time.time() - t0) * 1000) + 12  # node round-trip lands in M6/M7
-        store.add_feed("err", f"KILL SWITCH — {n_pos} positions flattened, order submission halted ({ms}ms)")
-        store.add_audit("kill", f"operator kill switch; {n_pos} positions; {ms}ms")
-        self._send(200, {"flattened": n_pos, "halted": True, "ms": ms})
+        flattened, venue_note = 0, "no live venue configured"
+        if alpaca.configured():
+            try:
+                n_before = len(alpaca.positions())
+                alpaca.close_all_positions()          # cancels open orders too
+                flattened = n_before
+                venue_note = "Alpaca paper: orders canceled + positions closing"
+            except alpaca.AlpacaError as e:
+                venue_note = f"Alpaca flatten FAILED: {e}"
+        ms = int((time.time() - t0) * 1000)
+        store.add_feed("err", f"KILL SWITCH — halted; {venue_note} ({flattened} positions, {ms}ms)")
+        store.add_audit("kill", f"operator kill switch; {venue_note}; {ms}ms")
+        self._send(200, {"flattened": flattened, "halted": True, "ms": ms, "venue": venue_note})
 
     def p_golive(self, body):
         parity = store.static("parity") or {}
@@ -452,6 +463,54 @@ class Handler(BaseHTTPRequestHandler):
             ["Dead-man switch + backups verified", 25],
             ["Go-live checklist", 100 if "golive" in kinds else 0],
         ]
+
+    def _accounts(self):
+        rows = list(store.static("accounts") or [])
+        if alpaca.configured():
+            try:
+                a = alpaca.account()
+                live = {"n": f"Alpaca paper ({a['number_masked']}) · LIVE DATA", "eq": f"${a['equity']:,.0f}",
+                        "bp": f"${a['buying_power']:,.0f}", "mg": a["status"]}
+                rows = [live] + [r for r in rows if "Alpaca" not in r["n"]]
+            except alpaca.AlpacaError as e:
+                rows = [{"n": "Alpaca paper — ERROR", "eq": str(e)[:40], "bp": "—", "mg": "—"}] + rows
+        return rows
+
+    def _venues(self):
+        rows = list(store.static("venues") or [])
+        if alpaca.configured():
+            try:
+                ms = alpaca.latency_ms()
+                real = {"name": "Alpaca", "env": "paper · CONNECTED", "lat": f"{ms}ms", "ok": True}
+            except alpaca.AlpacaError:
+                real = {"name": "Alpaca", "env": "paper · AUTH/CONN ERROR", "lat": "—", "ok": False}
+            rows = [real if v["name"].startswith("Alpaca") else v for v in rows]
+        return rows
+
+    def g_paper_status(self):
+        if not alpaca.configured():
+            return self._err(503, "Alpaca paper keys not configured in .env")
+        try:
+            self._send(200, {"account": alpaca.account(), "clock": alpaca.clock(),
+                             "positions": alpaca.positions(), "open_orders": alpaca.open_orders()})
+        except alpaca.AlpacaError as e:
+            self._err(502, str(e))
+
+    def p_paper_test(self):
+        """Phase 5 checkpoint: place/confirm/cancel a 1-share far-from-market limit order."""
+        if not alpaca.configured():
+            return self._err(503, "Alpaca paper keys not configured in .env")
+        if store.get_kv("halted") == "1":
+            return self._err(409, "kill switch engaged — reset before testing orders")
+        try:
+            r = alpaca.phase5_checkpoint("SPY")
+            store.add_audit("paper_test_order", json.dumps(r))
+            store.add_feed("info" if r["ok"] else "err",
+                           f"PHASE 5 CHECKPOINT — Alpaca paper {r['symbol']} 1sh limit ${r['limit']}: "
+                           f"placed({r['placed_status']}) → canceled({r['final_status']}) in {r['roundtrip_ms']}ms")
+            self._send(200, r)
+        except alpaca.AlpacaError as e:
+            self._err(502, str(e))
 
     # ---------- helpers ----------
     @staticmethod
