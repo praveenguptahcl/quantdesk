@@ -239,6 +239,71 @@ def engine_b(inject_warmup_bug=False):
     return _run_portfolio(dates, closes, decide)
 
 
+# ------------------------------------------------------------------ live signal (transparency)
+def current_signal():
+    """Today's signal with EVERY intermediate value exposed — this is the
+    authoritative answer to 'how are signals generated'. Same math as the
+    backtest engines and the paper node; docs/SIGNALS.md walks through it."""
+    spy = load_bars("SPY")
+    data = {s: load_bars(s) for s in ETFS}
+    if spy is None or any(v is None for v in data.values()):
+        return None
+    n = min(len(spy), *(len(v) for v in data.values()))
+    i = n - 1
+    spy_c = [spy[j][1] for j in range(n)]
+    sma200 = sum(spy_c[i - SMA_N + 1: i + 1]) / SMA_N
+    risk_on = spy_c[i] > sma200
+    rows = []
+    for sym in ETFS:
+        c = [data[sym][j][1] for j in range(n)]
+        mom_full = c[i] / c[i - MOM] - 1
+        mom_recent = c[i] / c[i - SKIP] - 1
+        mom_12_1 = mom_full - mom_recent
+        rets = [c[j] / c[j - 1] - 1 for j in range(i - VOLW + 1, i + 1)]
+        mu = sum(rets) / VOLW
+        vol_ann = max(math.sqrt(sum((r - mu) ** 2 for r in rets) / VOLW) * math.sqrt(252), 0.02)
+        conf = 0.0 if not risk_on else 1.0 / (1.0 + math.exp(-3.0 * (mom_12_1 / 0.08)))
+        rows.append({"sym": sym, "close": round(c[i], 2),
+                     "mom_12m_pct": round(mom_full * 100, 2),
+                     "mom_1m_pct": round(mom_recent * 100, 2),
+                     "mom_12_1_pct": round(mom_12_1 * 100, 2),
+                     "vol_ann_pct": round(vol_ann * 100, 1),
+                     "confidence": round(conf, 3),
+                     "vol_scalar": round(min(VOL_TGT / vol_ann, VOL_CAP), 2)})
+    rows.sort(key=lambda r: r["mom_12_1_pct"], reverse=True)
+    for rank, r in enumerate(rows, 1):
+        r["rank"] = rank
+        r["in_top3"] = rank <= TOP_N
+        r["passes_entry"] = r["in_top3"] and r["confidence"] >= ENTRY_CONF
+        r["target_weight_pct"] = round(
+            (r["confidence"] * r["vol_scalar"] / TOP_N) * 100, 1) if r["passes_entry"] and risk_on else 0.0
+    gross = sum(r["target_weight_pct"] for r in rows)
+    if gross > 100:
+        for r in rows:
+            r["target_weight_pct"] = round(r["target_weight_pct"] * 100 / gross, 1)
+    return {
+        "strategy": "momo-etf-v3", "as_of": spy[i][0],
+        "data_provenance": provenance(),
+        "pipeline": ["1. REGIME: SPY close vs 200-day SMA",
+                     "2. RANK: 12-1 momentum across 9 sector ETFs",
+                     "3. FILTER: top-3 AND sigmoid confidence >= 0.50",
+                     "4. SIZE: confidence x min(10%/vol, 1.5x) / 3",
+                     "5. RISK: pre-route validation (risk/limits.yaml)",
+                     "6. ORDER: paper node submits deltas to Alpaca"],
+        "regime": {"spy_close": round(spy_c[i], 2), "sma200": round(sma200, 2),
+                   "risk_on": risk_on,
+                   "rule": "risk_on = SPY_close > SMA200; if false -> liquidate everything"},
+        "params": {"momentum_lookback_days": MOM, "momentum_skip_days": SKIP,
+                   "regime_sma_days": SMA_N, "vol_window_days": VOLW,
+                   "vol_target": VOL_TGT, "entry_confidence": ENTRY_CONF,
+                   "exit_confidence": EXIT_CONF, "top_n": TOP_N},
+        "table": rows,
+        "decision": ("FLAT — regime risk-off" if not risk_on else
+                     "HOLD/REBALANCE to targets: " + ", ".join(
+                         f"{r['sym']} {r['target_weight_pct']}%" for r in rows if r["target_weight_pct"] > 0)),
+    }
+
+
 # ------------------------------------------------------------------ real nautilus (M5)
 NAUT_PY = os.path.expanduser("~/.quantdesk/venv/bin/python")
 NAUT_SCRIPT = os.path.normpath(os.path.join(HERE, "..", "scripts", "nautilus_backtest.py"))

@@ -282,6 +282,7 @@ label.fl b{color:var(--red)}
   <nav id="sidebar">
     <div class="brand">Quant<span>Desk</span></div>
     <div class="nav-sec">Research</div>
+    <button class="nav-item" data-s="learn"><span class="ic">🎓</span>Docs &amp; Learn</button>
     <button class="nav-item" data-s="research"><span class="ic">✦</span>Research Journal</button>
     <button class="nav-item" data-s="ai"><span class="ic">✧</span>AI Strategy Builder</button>
     <button class="nav-item" data-s="lib"><span class="ic">⚡</span>HFT Library</button>
@@ -402,6 +403,52 @@ label.fl b{color:var(--red)}
       </div>
     </section>
 
+    <!-- ======== DOCS & LEARN ======== -->
+    <section class="screen" id="s-learn">
+      <h1>Docs &amp; Learn</h1>
+      <div class="sub">Learn quant by operating this platform. Every document lives in the project folder; every claim links to a primary source (links verified).</div>
+      <div class="grid g2">
+        <div class="card">
+          <h2 style="margin-top:0">Learning path (start here)</h2>
+          <div class="cp done"><span class="ck">1</span>&nbsp;<b>How signals are generated</b> — docs/SIGNALS.md + the live panel in Strategy Lab</div>
+          <div class="cp done"><span class="ck">2</span>&nbsp;<b>Build a strategy</b> — STRATEGY_GUIDE.md (full LEAN + Nautilus code)</div>
+          <div class="cp done"><span class="ck">3</span>&nbsp;<b>Backtest honestly</b> — dual backtest + the Optimize screen's plateau-vs-peak lesson</div>
+          <div class="cp done"><span class="ck">4</span>&nbsp;<b>The parity gate</b> — break it on purpose (⚠ button) and diagnose the trade diff</div>
+          <div class="cp done"><span class="ck">5</span>&nbsp;<b>Paper trade</b> — scripts/paper_node.py dry-run, then --execute; watch fills land</div>
+          <div class="cp done"><span class="ck">6</span>&nbsp;<b>Survive</b> — kill-switch drill, breach simulation, journal discipline tags</div>
+          <div class="cp todo"><span class="ck">7</span>&nbsp;<b>HFT concepts</b> — HFT_STRATEGY_LIBRARY.md + Microstructure screen on real book data</div>
+          <div class="cp todo"><span class="ck">8</span>&nbsp;<b>Go-live discipline</b> — the wizard, one venue, minimum size</div>
+          <h2>Project documents</h2>
+          <div class="feed" style="max-height:220px;font-family:var(--sans);font-size:12.5px;line-height:1.9">
+            <div>📄 <b>docs/SIGNALS.md</b> — how every signal is generated, value by value</div>
+            <div>📄 <b>docs/LEARNING_PATH.md</b> — 8-week curriculum with exercises + references</div>
+            <div>📄 <b>docs/COLLABORATION.md</b> — share strategies, review each other's parity runs</div>
+            <div>📄 <b>docs/DAY_TRADER_REVIEW.md</b> — the platform audited from a day trader's chair</div>
+            <div>📄 <b>STRATEGY_GUIDE.md</b> — momo-etf-v3 implemented twice, with the 5 parity traps</div>
+            <div>📄 <b>HFT_STRATEGY_LIBRARY.md</b> — 30 archetypes, honest infra tiers</div>
+            <div>📄 <b>IMPLEMENTATION_BLUEPRINT.md</b> — M0–M14 plan · <b>STATUS.md</b> — what's real</div>
+          </div>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Primary sources (external, verified)</h2>
+          <div class="feed" style="max-height:420px;font-family:var(--sans);font-size:12.5px;line-height:2">
+            <div>📚 <a href="https://www.quantconnect.com/docs/v2/" target="_blank" style="color:var(--blue)">QuantConnect / LEAN documentation</a> — research env, QCAlgorithm API</div>
+            <div>📚 <a href="https://nautilustrader.io/docs/latest/" target="_blank" style="color:var(--blue)">NautilusTrader documentation</a> — Strategy API, BacktestEngine, adapters</div>
+            <div>📚 <a href="https://docs.alpaca.markets/" target="_blank" style="color:var(--blue)">Alpaca API docs</a> — paper trading, orders, portfolio history</div>
+            <div>📄 <a href="https://arxiv.org/abs/1011.6402" target="_blank" style="color:var(--blue)">Cont, Kukanov &amp; Stoikov — Order Flow Imbalance (arXiv)</a> — library #6's foundation</div>
+            <div>📄 <a href="https://arxiv.org/abs/1105.3115" target="_blank" style="color:var(--blue)">Guéant, Lehalle, Fernandez-Tapia — inventory MM (arXiv)</a> — library #1 family</div>
+            <div>📄 <a href="https://www.aqr.com/Insights/Research/Journal-Article/Value-and-Momentum-Everywhere" target="_blank" style="color:var(--blue)">Asness, Moskowitz, Pedersen — Value &amp; Momentum Everywhere (AQR)</a> — why 12-1 momentum</div>
+            <div>📄 <a href="https://mebfaber.com/timing-model/" target="_blank" style="color:var(--blue)">Faber — Tactical Asset Allocation (Faber)</a> — why the SMA regime filter</div>
+            <div>📄 <a href="https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf" target="_blank" style="color:var(--blue)">Bailey &amp; López de Prado — Deflated Sharpe Ratio (PDF)</a> — the overfitting guard</div>
+            <div>📚 <a href="https://alphaarchitect.com/" target="_blank" style="color:var(--blue)">Alpha Architect blog</a> — practitioner factor research</div>
+            <div>📚 <a href="https://www.investopedia.com/terms/w/washsalerule.asp" target="_blank" style="color:var(--blue)">Investopedia — wash-sale rule</a> — what the tax flag checks</div>
+            <div>⚖️ <a href="https://www.finra.org/investors/investing/investment-products/stocks/day-trading" target="_blank" style="color:var(--blue)">FINRA — pattern day trading rules</a> — the PDT $25k rule, before going live</div>
+          </div>
+          <p class="mut" style="margin-top:10px">Educational platform, not financial advice. Paper first. Always.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- ======== MICROSTRUCTURE (HFT) ======== -->
     <section class="screen" id="s-micro">
       <div class="flex spread"><div><h1>Microstructure <span id="microSym" class="mono" style="color:var(--blue)"></span></h1>
@@ -496,6 +543,14 @@ label.fl b{color:var(--red)}
       </select></div>
 
       <div class="anat" id="labAnat"></div>
+
+      <div class="card" id="liveSigCard" style="margin-bottom:14px">
+        <div class="flex spread"><h2 style="margin-top:0">🔴 LIVE SIGNAL — computed by the server right now</h2>
+        <span class="mut" id="sigMeta">connect backend to compute</span></div>
+        <div id="liveSig"><p class="mut">This panel answers "how are signals generated": the server runs the exact
+        decision chain (docs/SIGNALS.md) on the latest catalog bars and shows every intermediate number below.
+        Same math drives the backtests and the paper node — one source of truth.</p></div>
+      </div>
 
       <div class="card">
         <h2 style="margin-top:0">Price · Regime · Triggers <span class="mut" style="text-transform:none;letter-spacing:0">— green shading = regime risk-on (SPY &gt; SMA200) · ▲ entry ▼ exit</span></h2>
@@ -1783,6 +1838,7 @@ const UI = {
 
   /* ---- strategy lab ---- */
   renderLab(){
+    this.renderLiveSignal();
     const seed=+document.getElementById('labSel').value;
     const d=CH.labSeries(seed);
     const last=d.px.length-1;
@@ -1820,6 +1876,30 @@ const UI = {
     document.getElementById('labDecision').innerHTML=
       `<div class="verdict ${dec[1]==='ok'?'pass':'fail'}" style="margin-top:0">${dec[0]}</div>
        <p class="mut" style="margin-top:10px">Every box above maps 1:1 to a code block in STRATEGY_GUIDE.md — same names, same thresholds. What you see here is what the backtest executes.</p>`;
+  },
+
+  async renderLiveSignal(){
+    const el=document.getElementById('liveSig'); if(!el)return;
+    if(!QD.on){document.getElementById('sigMeta').textContent='backend offline — run: python3 api/server.py';return;}
+    try{
+      const d=await(await fetch('/api/signals')).json();
+      if(d.error){el.innerHTML='<p class="mut">'+d.error+'</p>';return;}
+      document.getElementById('sigMeta').textContent=`as of ${d.as_of} · data: ${d.data_provenance}`;
+      const reg=d.regime;
+      el.innerHTML=`
+        <div class="sig"><span><b>Step 1 — Regime:</b> SPY ${reg.spy_close.toLocaleString()} vs SMA200 ${reg.sma200.toLocaleString()} <span class="mut">(${reg.rule})</span></span>
+          <span class="tag ${reg.risk_on?'ok':'fail'}">${reg.risk_on?'RISK-ON':'RISK-OFF → FLAT'}</span></div>
+        <table style="margin:10px 0"><thead><tr><th>#</th><th>ETF</th><th>Close</th><th>12m %</th><th>−1m %</th><th>= 12-1 %</th><th>Vol ann</th><th>Conf</th><th>Vol scalar</th><th>Weight</th></tr></thead><tbody>
+        ${d.table.map(r=>`<tr style="${r.passes_entry?'background:rgba(47,191,113,.06)':''}">
+          <td>${r.rank}</td><td>${r.sym}</td><td>${r.close}</td><td>${r.mom_12m_pct}</td><td>${r.mom_1m_pct}</td>
+          <td><b>${r.mom_12_1_pct}</b></td><td>${r.vol_ann_pct}%</td>
+          <td class="${r.confidence>=0.5?'up':'mut'}">${r.confidence}</td><td>${r.vol_scalar}×</td>
+          <td><b>${r.target_weight_pct}%</b></td></tr>`).join('')}
+        </tbody></table>
+        <div class="verdict ${reg.risk_on?'pass':'fail'}" style="margin-top:4px">${d.decision}</div>
+        <p class="mut" style="margin-top:8px">Pipeline: ${d.pipeline.join(' → ')}. Full derivation with formulas and citations: <b>docs/SIGNALS.md</b>.
+        These exact numbers feed the paper node — <span class="mono">python3 scripts/paper_node.py</span> turns them into orders.</p>`;
+    }catch(e){el.innerHTML='<p class="mut">signal fetch failed</p>';}
   },
 
   /* ---- optimize & walk-forward ---- */

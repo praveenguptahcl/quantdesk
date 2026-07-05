@@ -113,6 +113,8 @@ class Handler(BaseHTTPRequestHandler):
                 "results": store.get_doc("backtests", "momo-etf-v3"),
                 "data_provenance": backtest.provenance()}),
             "/api/drift": self.g_drift,
+            "/api/signals": lambda: (lambda sig: self._send(200, sig) if sig else self._err(
+                503, "catalog data missing"))(backtest.current_signal()),
         }.get(path)
         if r:
             return r()

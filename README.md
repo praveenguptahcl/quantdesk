@@ -2,6 +2,20 @@
 
 Personal quant platform: **QuantConnect/LEAN** for research, **NautilusTrader** for execution, and a local **control-plane GUI** tying the workflow together.
 
+## Documentation map
+
+| Doc | What it answers |
+|---|---|
+| `docs/SIGNALS.md` | **How signals are generated** — every formula, every number, watch it live in Strategy Lab |
+| `docs/LEARNING_PATH.md` | 8-week curriculum for students/day traders, with exercises on your own instance |
+| `docs/COLLABORATION.md` | Share strategies, review parity runs, study-group + competition workflows |
+| `docs/DAY_TRADER_REVIEW.md` | Honest audit of every aspect from a day trader's chair |
+| `STRATEGY_GUIDE.md` | Build a strategy twice (LEAN + Nautilus) and pass the parity gate |
+| `HFT_STRATEGY_LIBRARY.md` | 30 strategy archetypes with specs and honest infra tiers |
+| `IMPLEMENTATION_BLUEPRINT.md` / `STATUS.md` | The build plan and what's real today |
+
+All external links in these documents are verified working (re-check: `.bridge` link-check scripts).
+
 ## Run it now (zero installs)
 
 ```bash
