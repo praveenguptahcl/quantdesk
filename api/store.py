@@ -71,6 +71,7 @@ class Store:
             for kind in ("ideas", "notes", "alerts"):
                 for i, doc in enumerate(seed.get(kind, [])):
                     doc_id = str(doc.get("id", i))
+                    doc.setdefault("id", doc_id)   # ensure id is in the blob so clients can toggle/delete
                     c.execute("INSERT OR REPLACE INTO docs VALUES(?,?,?)", (kind, doc_id, json.dumps(doc)))
             for sym in seed.get("symbols", []):
                 c.execute("INSERT OR REPLACE INTO docs VALUES(?,?,?)", ("symbols", sym["s"], json.dumps(sym)))

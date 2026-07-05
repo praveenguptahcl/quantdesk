@@ -49,6 +49,12 @@ LIB_DIR = os.path.normpath(os.path.join(HERE, "..", "library", "strategies"))
 PORT = int(os.environ.get("QD_PORT", "8700"))
 
 store = Store()
+# migration: backfill missing ids on alerts/notes so clients can toggle/delete them
+for _kind in ("alerts", "notes"):
+    for _i, _d in enumerate(store.list_docs(_kind)):
+        if _d.get("id") is None:
+            _d["id"] = str(_i)
+            store.put_doc(_kind, str(_i), _d)
 community.ensure_seed_admin(store)
 if os.environ.get("QD_NO_DEMO", "0") != "1":
     try:
@@ -176,6 +182,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/state": self.g_state,
             "/api/venues": lambda: self._send(200, self._venues()),
             "/api/positions": lambda: self._send(200, self._positions()),
+            "/api/orders": lambda: self._send(200, dict(zip(("open", "hist"), self._orders()))),
             "/api/strategies": lambda: self._send(200, self._strategies()),
             "/api/ideas": lambda: self._send(200, store.list_docs("ideas")),
             "/api/feed": lambda: self._send(200, store.get_feed(self._qint(q, "limit", 50))),
@@ -192,6 +199,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/setup": self.g_setup,
             "/api/pnl/daily": self.g_pnl_daily,
             "/api/backup": self.g_backup,
+            "/api/backups/last": self.g_backups_last,
             "/api/backtests": lambda: self._send(200, {
                 "results": store.get_doc("backtests", "momo-etf-v3"),
                 "data_provenance": backtest.provenance()}),
@@ -478,6 +486,34 @@ class Handler(BaseHTTPRequestHandler):
                 x["status"] = "spec"
         self._send(200, {"count": len(lib), "spec_files": files, "strategies": lib})
 
+    def p_lib_journal(self, lib_id):
+        """Add an HFT-library strategy to the caller's Research Journal as an idea."""
+        u = self._user() or {"u": "solo"}
+        lib = store.static("hftLib") or []
+        entry = next((x for x in lib if x.get("id") == lib_id), None)
+        if not entry:
+            return self._err(404, "library strategy not found")
+        import re as _re
+        base = (_re.sub(r"[^a-z0-9]+", "-", entry.get("n", f"lib-{lib_id}").lower())
+                .strip("-") + "-v1")[:36]
+        names = {i["name"] for i in store.list_docs("ideas")}
+        name, n = base, 2
+        while name in names:
+            name, n = f"{base}-{n}", n + 1
+        ac_list = entry.get("ac", ["eq"])
+        doc = logic.new_idea({
+            "name": name, "ac": ac_list[0] if isinstance(ac_list, list) else ac_list,
+            "syms": [], "owner": u["u"],
+            "hyp": f"From HFT library: {entry.get('n', name)}. {entry.get('edge', '')}",
+            "uni": (ac_list if isinstance(ac_list, list) else [ac_list]),
+            "feats": entry.get("sig", "library-import"),
+            "kill": f"Realized SR < 50% of library range ({entry.get('sr', 'n/a')}) over 30 sessions",
+            "public": False, "from_library": lib_id,
+        })
+        store.put_doc("ideas", doc["id"], doc)
+        store.add_feed("info", f"LIBRARY → JOURNAL — {name} by {u['u']}")
+        self._send(201, doc)
+
     def g_drift(self):
         """M9: realized-vs-backtest drift from available data."""
         bt = store.get_doc("backtests", "momo-etf-v3") or {}
@@ -503,6 +539,17 @@ class Handler(BaseHTTPRequestHandler):
                 "notes": store.list_docs("notes"), "alerts": store.list_docs("alerts"),
                 "audit": store.get_audit()}
         self._send(200, data)
+
+    def g_backups_last(self):
+        d = os.path.normpath(os.path.join(HERE, "..", "backups"))
+        files = [f for f in os.listdir(d)] if os.path.isdir(d) else []
+        auto = sorted(f for f in files if f.startswith("auto-") and f.endswith(".json"))
+        if not auto:
+            return self._send(200, {"last": None, "count": len(files)})
+        latest = os.path.join(d, auto[-1])
+        self._send(200, {"last": time.strftime("%Y-%m-%d %H:%M",
+                         time.localtime(os.path.getmtime(latest))),
+                         "file": auto[-1], "count": len(auto)})
 
     # ---------- POST handlers ----------
     def p_idea(self, body):
@@ -568,6 +615,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, {"flattened": flattened, "halted": True, "ms": ms, "venue": venue_note})
 
     def p_golive(self, body):
+        if self._admin_gate() is not None:
+            return
         parity = store.static("parity") or {}
 
         def plookup(strategy):
@@ -651,6 +700,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, target[1])
 
     def p_breach(self):
+        if self._admin_gate() is not None:
+            return
         store.set_kv("halted", "1")
         store.add_feed("err", "BREACH SIMULATED — daily loss limit tripped: all strategies halted")
         store.add_audit("breach_test", "simulated daily-loss breach")
@@ -865,6 +916,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send(202, {"status": "recording", "product": product, "seconds": secs})
 
     def p_risk_reset(self):
+        if self._admin_gate() is not None:
+            return
         store.set_kv("halted", "0")
         store.add_feed("info", "RISK — breakers re-armed by operator; order submission enabled")
         store.add_audit("risk_reset", "operator re-armed after halt")

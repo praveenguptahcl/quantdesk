@@ -156,6 +156,8 @@ canvas{width:100%;display:block}
 .btn:hover{border-color:var(--blue)}
 .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+body.nonadmin .admin-only{display:none!important}
+.rolebadge{font-size:10px;color:var(--dim);border:1px dashed var(--line);border-radius:4px;padding:2px 6px;margin-left:6px}
 .btn:disabled{opacity:.35;cursor:not-allowed}
 input[type=text],input[type=number],textarea,select.inp{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);padding:9px 10px;border-radius:6px;font-size:13px;width:100%}
 textarea{font-family:var(--sans);resize:vertical;min-height:60px}
@@ -267,7 +269,7 @@ label.fl b{color:var(--red)}
     <span class="mode-pill" id="modePill">PAPER</span>
     <span class="mode-desc" id="modeDesc">All venues in paper / sandbox mode — no real capital at risk</span>
     <span id="clock"></span>
-    <button id="killswitch" onclick="UI.killSwitch()">⏻ KILL SWITCH</button>
+    <button id="killswitch" class="admin-only" onclick="UI.killSwitch()">⏻ KILL SWITCH</button>
   </div>
 
   <!-- ============ SYMBOL BAR (global filter) ============ -->
@@ -307,7 +309,7 @@ label.fl b{color:var(--red)}
     <button class="nav-item" data-s="admin" id="navAdmin" style="display:none"><span class="ic">🛠</span>Admin</button>
     <div class="nav-sec">Venues</div>
     <div id="venueList" style="padding:0 12px;font-size:12px;line-height:2;color:var(--muted)"></div>
-    <div class="foot">LEAN CLI · NautilusTrader<br>Docker stack: <span class="dot g"></span>6/6 up<br><span class="mono" style="font-size:10px">v0.3 · <span id="footMode">connecting…</span></span></div>
+    <div class="foot">LEAN CLI · NautilusTrader<br><span id="footStack">single-process backend</span><br><span class="mono" style="font-size:10px">v0.3 · <span id="footMode">connecting…</span></span></div>
   </nav>
 
   <!-- ============ MAIN ============ -->
@@ -336,7 +338,7 @@ label.fl b{color:var(--red)}
           </div>
           <div class="flex" style="margin-top:10px">
             <button class="btn" onclick="UI.ticketCheck()">Check risk</button>
-            <button class="btn primary" id="tk-go" onclick="UI.ticketSubmit()">Submit order</button>
+            <button class="btn primary admin-only" id="tk-go" onclick="UI.ticketSubmit()">Submit order</button>
           </div>
           <div class="mut" id="tk-out" style="margin-top:8px;font-size:12px"></div>
         </div>
@@ -348,7 +350,7 @@ label.fl b{color:var(--red)}
         <div class="card">
           <h2 style="margin-top:0">🔁 Strategy Rebalance <span class="mut" style="text-transform:none">(momo-etf-v3)</span></h2>
           <div class="flex"><button class="btn" onclick="UI.rebalance(false)">Preview plan (dry-run)</button>
-          <button class="btn primary" onclick="UI.rebalance(true)">Execute plan…</button></div>
+          <button class="btn primary admin-only" onclick="UI.rebalance(true)">Execute plan…</button></div>
           <div id="rbOut" class="mut" style="margin-top:10px;font-size:12px">Runs the same decision chain as the live signal. Preview shows every order + its risk check before anything is sent.</div>
         </div>
       </div>
@@ -818,7 +820,7 @@ label.fl b{color:var(--red)}
       <div class="grid g4">
         <div class="card kpi"><div class="lbl">Working orders</div><div class="val" id="ordWork">—</div><div class="delta mut" id="ordWorkN"></div></div>
         <div class="card kpi"><div class="lbl">Orders today</div><div class="val" id="ordFills">—</div><div class="delta mut" id="ordFillsN"></div></div>
-        <div class="card kpi"><div class="lbl">Avg slippage (30d)</div><div class="val warn">+1.8 bp <span class="tag warn">DEMO</span></div><div class="delta mut">real slippage needs fill history</div></div>
+        <div class="card kpi"><div class="lbl">Avg slippage (30d)</div><div class="val warn" id="ordSlip">—</div><div class="delta mut" id="ordSlipN">real slippage needs fill history</div></div>
         <div class="card kpi"><div class="lbl">Reject rate (30d)</div><div class="val">0.5% <span class="tag warn">DEMO</span></div><div class="delta mut">demo until fills accumulate</div></div>
       </div>
       <div class="grid g2" style="margin-top:14px">
@@ -869,7 +871,7 @@ label.fl b{color:var(--red)}
           <div class="flex" style="flex-wrap:wrap">
             <button class="btn" onclick="UI.exportCSV()">⬇ Trades CSV</button>
             <button class="btn" onclick="UI.exportBackup()">⬇ Full backup (JSON)</button>
-            <button class="btn" onclick="UI.toast('Tax-lot report stub — requires broker statements ingest (Blueprint M14)','ok')">⬇ Tax lots</button>
+            <button class="btn" onclick="UI.toast('Tax-lot report needs broker statement ingest — not available yet','err')">⬇ Tax lots</button>
           </div>
         </div>
       </div>
@@ -891,24 +893,27 @@ label.fl b{color:var(--red)}
           <table><thead><tr><th>Account</th><th>Equity</th><th>Buying pwr</th><th>Margin</th></tr></thead><tbody id="acctRows"></tbody></table>
           <h2>Market clock</h2>
           <div class="mktclock" id="mktClock">—</div>
+          <h2>Broker connectivity <span class="rolebadge admin-only">admin</span></h2>
+          <div class="flex admin-only"><button class="btn" onclick="UI.paperTest()">🧪 Test paper order (place → cancel)</button></div>
+          <div class="mut admin-only" id="paperTestOut" style="font-size:11px;margin-top:6px">Places a 1-share far-from-market limit on Alpaca paper and immediately cancels it — verifies the broker round-trip.</div>
           <h2>Upcoming events (strategy-gating)</h2>
           <div id="econRows"></div>
         </div>
         <div class="card">
           <h2 style="margin-top:0">Dead-man's switch</h2>
           <div class="hb"><span class="hn">Heartbeat (GUI ↔ backend)</span><span class="tag ok" id="hbTag">—</span></div>
-          <div class="hb"><span class="hn">Auto-flatten if node unreachable &gt; 5 min</span><div class="switch on" onclick="UI.toggleSwitch(this,'auto-flatten')"><i></i></div></div>
-          <div class="hb"><span class="hn">Broker-side stop orders as backstop</span><div class="switch on" onclick="UI.toggleSwitch(this,'broker stops')"><i></i></div></div>
-          <div class="hb"><span class="hn">Auto-flatten on power/network loss (VPS watchdog)</span><div class="switch" onclick="UI.toggleSwitch(this,'vps watchdog')"><i></i></div></div>
-          <p class="mut" style="margin-top:8px">If this machine dies mid-session, the node must fail safe without you. Test quarterly: pull the network cable in paper mode and watch the flatten happen.</p>
+          <div class="hb"><span class="hn">Auto-flatten if node unreachable &gt; 5 min <span class="rolebadge">planned</span></span><div class="switch" onclick="UI.toggleSwitch(this,'auto-flatten')"><i></i></div></div>
+          <div class="hb"><span class="hn">Broker-side stop orders as backstop <span class="rolebadge">planned</span></span><div class="switch" onclick="UI.toggleSwitch(this,'broker stops')"><i></i></div></div>
+          <div class="hb"><span class="hn">Auto-flatten on power/network loss (VPS watchdog) <span class="rolebadge">planned</span></span><div class="switch" onclick="UI.toggleSwitch(this,'vps watchdog')"><i></i></div></div>
+          <p class="mut" style="margin-top:8px">These fail-safes require a persistent node watchdog (a later milestone) — the toggles above are front-end preferences for now, not live protection. The one real safeguard today is the manual Kill Switch on the Risk screen.</p>
           <h2>Remote monitoring</h2>
           <div class="hb"><span class="hn">Telegram bot (status / P&amp;L / FLATTEN command)</span><span class="tag off">not configured</span></div>
-          <div class="hb"><span class="hn">Email alerts</span><span class="tag ok">configured</span></div>
-          <button class="btn" onclick="UI.toast('Telegram setup stub — Blueprint M14: bot token in .env, /status /pnl /flatten commands with typed confirmation','ok')">Configure Telegram</button>
+          <div class="hb"><span class="hn">Email alerts</span><span class="tag off">not configured</span></div>
+          <button class="btn" onclick="UI.toast('Telegram alerts are a planned feature — not available yet','err')">Configure Telegram</button>
           <h2>Backups</h2>
-          <div class="hb"><span class="hn">Last automatic backup (Postgres + configs)</span><span class="mono mut">today 03:00</span></div>
+          <div class="hb"><span class="hn">Last automatic backup</span><span class="mono mut" id="lastBackup">—</span></div>
           <div class="flex"><button class="btn" onclick="UI.exportBackup()">Backup now</button>
-          <button class="btn" onclick="UI.toast('Restore stub — select a backup JSON; applies ideas/settings/journal (Blueprint M14)','ok')">Restore…</button></div>
+          <button class="btn" onclick="UI.toast('Restore-from-backup is a planned feature — not available yet','err')">Restore…</button></div>
         </div>
         <div class="card">
           <div class="flex spread"><h2 style="margin-top:0">Alerts Center</h2><button class="btn" onclick="UI.addAlert()">＋ Alert</button></div>
@@ -1046,15 +1051,15 @@ label.fl b{color:var(--red)}
       <div class="grid g3">
         <div class="card"><h2 style="margin-top:0">Circuit Breakers</h2>
           <div class="kv">
-            <span class="k">Daily loss limit</span><span class="v">−$2,000 <span class="tag ok">Armed</span></span>
-            <span class="k">Today's P&amp;L</span><span class="v up">+$1,204.55 <span class="tag warn">DEMO</span></span>
-            <span class="k">Max-DD auto-halt</span><span class="v">−8.0% <span class="tag ok">Armed</span></span>
-            <span class="k">Current DD</span><span class="v">−3.42%</span>
+            <span class="k">Daily loss limit</span><span class="v" id="rkDaily">−$2,000 <span class="tag ok" id="rkArm1">Armed</span></span>
+            <span class="k">Today's P&amp;L</span><span class="v" id="rkPnl">—</span>
+            <span class="k">Max-DD auto-halt</span><span class="v" id="rkDDlim">−8.0% <span class="tag ok" id="rkArm2">Armed</span></span>
+            <span class="k">Current DD</span><span class="v" id="rkDD">—</span>
           </div>
-          <div class="bar-outer"><div class="bar-inner" style="width:43%;background:var(--green)"></div></div>
-          <div class="mut" style="margin-top:6px">Drawdown headroom used: 43%</div>
-          <div class="flex" style="margin-top:14px"><button class="btn" onclick="if(QD.on){QD.post('/api/risk/simulate-breach').then(()=>{QD.updState();UI.toast('BREACH SIMULATED — halted. Use Re-arm to resume.','err')})}else UI.toast('backend offline','err')">⚡ Simulate breach (test)</button>
-          <button class="btn green" style="background:var(--green);border-color:var(--green);color:#04140b" onclick="UI.riskReset()">🔄 Re-arm breakers</button></div>
+          <div class="bar-outer"><div class="bar-inner" id="rkBar" style="width:0%;background:var(--green)"></div></div>
+          <div class="mut" style="margin-top:6px" id="rkHead">Drawdown headroom used: —</div>
+          <div class="flex" style="margin-top:14px"><button class="btn admin-only" onclick="if(QD.on){QD.post('/api/risk/simulate-breach').then(r=>{if(r&&!r.err){QD.updState();UI.toast('BREACH SIMULATED — halted. Use Re-arm to resume.','err')}})}else UI.toast('backend offline','err')">⚡ Simulate breach (test)</button>
+          <button class="btn green admin-only" style="background:var(--green);border-color:var(--green);color:#04140b" onclick="UI.riskReset()">🔄 Re-arm breakers</button></div>
         </div>
         <div class="card"><h2 style="margin-top:0">Per-Asset-Class Limits</h2>
           <div class="kv">
@@ -1065,14 +1070,14 @@ label.fl b{color:var(--red)}
             <span class="k">Crypto max position</span><span class="v">vol-adjusted, $8,000 cap</span>
             <span class="k">Crypto leverage</span><span class="v">1.0× (spot only)</span>
           </div>
-          <button class="btn" onclick="UI.toast('Limits editor stub — persist to risk/limits.yaml and hot-reload validation layer','ok')">✎ Edit limits</button>
+          <button class="btn" onclick="UI.toast('Limits are edited in risk/limits.yaml on disk — in-app editor is planned','err')">✎ Edit limits</button>
         </div>
         <div class="card"><h2 style="margin-top:0">Order Validation Layer</h2>
           <div class="kv">
             <span class="k">Price sanity band</span><span class="v">±3% of last</span>
             <span class="k">Max single order</span><span class="v">$10,000 notional</span>
             <span class="k">Orders validated</span><span class="v">1,284 (30d) <span class="tag warn">DEMO</span></span>
-            <span class="k">Rejected</span><span class="v warn">7 (0.5%)</span>
+            <span class="k">Rejected</span><span class="v warn">7 (0.5%) <span class="tag warn">DEMO</span></span>
           </div>
           <h2>Recent rejections <span class="tag warn">DEMO</span></h2>
           <div class="feed" style="max-height:120px">
@@ -1085,8 +1090,8 @@ label.fl b{color:var(--red)}
       <h2>Kill Switch</h2>
       <div class="card flex spread">
         <div><b>Manual kill switch</b><div class="mut" style="margin-top:4px">Immediately flattens all positions on all venues and disables new order submission. Test regularly — Phase 7 checkpoint requires a verified flatten-and-halt.</div></div>
-        <div class="flex"><button class="btn" onclick="UI.toast('Dry-run: flatten orders generated for 5 positions, halt signal verified in 380ms. No orders sent.','ok')">Dry-run test</button>
-        <button class="btn danger" onclick="UI.killSwitch()">⏻ Activate</button></div>
+        <div class="flex"><button class="btn admin-only" onclick="UI.killDryRun()">Dry-run test</button>
+        <button class="btn danger admin-only" onclick="UI.killSwitch()">⏻ Activate</button></div>
       </div>
     </section>
 
@@ -1561,6 +1566,7 @@ const UI = {
       if(b.dataset.s==='me') this.renderMe();
       if(b.dataset.s==='admin') this.renderAdmin();
       if(b.dataset.s==='sig') this.renderSig();
+      if(b.dataset.s==='risk') this.renderRisk();
       history.replaceState(null,'','#/'+b.dataset.s);
     });
     const h=(location.hash||'').replace(/^#\/?/,'');
@@ -1665,7 +1671,7 @@ const UI = {
       <div class="mut" style="margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:8px;color:${i.gate==='pass'?'var(--green)':'var(--amber)'}">${i.gate==='pass'?'✓ ':'⛔ '}${i.gateNote}</div>
       <div class="flex" style="margin-top:14px">
         <button class="btn primary" ${canPromote?'':'disabled'} onclick="UI.promote(${i.id})">Promote to ${API.stages[Math.min(i.stage+1,6)]} →</button>
-        <button class="btn" onclick="UI.toast('Opening research notebook (stub — launch lean research)','ok')">Open notebook</button>
+        <button class="btn" onclick="UI.toast('Jupyter/LEAN research notebook launch is a planned feature — not available yet','err')">Open notebook</button>
         <button class="btn danger" style="margin-left:auto" onclick="UI.deleteIdea(${i.id})">🗑</button>
         ${i.stage===4?`<button class="btn" onclick="document.querySelector('[data-s=parity]').click()">View parity →</button>`:''}
       </div>
@@ -1869,8 +1875,12 @@ const UI = {
     Filt.ac = sym==='ALL'?null:(API.symbols.find(v=>v.s===sym)||{}).ac||null;
     this.renderSymbols(); this.rerender();
   },
-  rmSym(sym){
+  async rmSym(sym){
     if(!confirm(`Remove ${sym} from the workspace? (Spine data stays in the catalog)`))return;
+    if(QD.on){
+      const r=await fetch('/api/spine/'+encodeURIComponent(sym),{method:'DELETE'});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); this.toast('⛔ '+(d.error||'could not remove'),'err'); return; }
+    }
     API.symbols=API.symbols.filter(v=>v.s!==sym);
     if(Filt.sym===sym)Filt.sym='ALL';
     this.renderSymbols(); this.rerender();
@@ -1893,6 +1903,7 @@ const UI = {
       's-me':()=>this.renderMe(),
       's-admin':()=>this.renderAdmin(),
       's-sig':()=>this.renderSig(),
+      's-risk':()=>this.renderRisk(),
     }[act.id]||(()=>{}))();
   },
   addSymbol(){
@@ -1917,22 +1928,22 @@ const UI = {
     document.getElementById('overlay').classList.add('show');
     setTimeout(()=>document.getElementById('ns-sym').focus(),50);
   },
-  queueSpine(){
+  async queueSpine(){
     const sym=document.getElementById('ns-sym').value.trim().toUpperCase();
     const e=document.getElementById('ns-err');
     if(!/^[A-Z0-9.]{1,10}$/.test(sym)){e.style.display='block';e.textContent='⛔ invalid symbol';return;}
     if(API.symbols.some(v=>v.s===sym)){e.style.display='block';e.textContent='⛔ already in workspace';return;}
     const ac=document.querySelector('#ns-ac .chip.sel').dataset.v;
     const tiers=[...document.querySelectorAll('[data-tier]')].filter(c=>c.checked).map(c=>c.dataset.tier);
-    if(QD.on)QD.post('/api/spine',{symbol:sym, ac, tiers});
-    API.symbols.push({s:sym, ac, spine:'dl', note:'downloading: '+tiers.join(' · ')});
+    let doc={s:sym, ac, spine:'dl', note:'downloading: '+tiers.join(' · ')};
+    if(QD.on){
+      const r=await QD.post('/api/spine',{symbol:sym, ac, tiers});
+      if(!r||r.err){ e.style.display='block'; e.textContent='⛔ '+((r&&r.err)||'could not register'); return; }
+      doc=r;
+    }
+    API.symbols.push(doc);
     this.closeModal(); this.renderSymbols();
-    document.getElementById('feed').innerHTML=
-      `<div><span class="t">${new Date().toLocaleTimeString()}</span> <span class="lv-info">SPINE — ${sym} queued: ${tiers.join(', ')} (stub — wire to /api/spine)</span></div>`
-      +document.getElementById('feed').innerHTML;
-    this.toast(`${sym} queued — spine downloading ${tiers.length} tiers`,'ok');
-    setTimeout(()=>{ const v=API.symbols.find(x=>x.s===sym); if(v){v.spine=tiers.includes('l2')?'full':'part'; v.note=tiers.join(' · ')+' — complete'; this.renderSymbols();
-      this.toast(`${sym} spine complete — available on all screens`,'ok');} },3500);
+    this.toast(`${sym} registered — spine download queued (${tiers.length} tiers)`,'ok');
   },
 
   /* ---- dashboard (now data-driven + filtered) ---- */
@@ -2086,14 +2097,16 @@ const UI = {
 
   /* ---- HFT library ---- */
   libCls:'all',
-  renderLib(){
+  async renderLib(){
+    if(QD.on&&!this._libLoaded){ try{ const d=await(await fetch('/api/library')).json();
+      if(d&&d.strategies){ API.hftLib=d.strategies; this._libLoaded=true; } }catch(e){} }
     const classes=[['all','All'],['mm','Market Making'],['flow','Order Flow'],['arb','Arbitrage'],['event','Event'],['liq','Liquidity'],['scalp','Scalping']];
     document.getElementById('libFilters').innerHTML=classes.map(([k,l])=>
       `<span class="chip ${this.libCls===k?'sel':''}" onclick="UI.libCls='${k}';UI.renderLib()">${l}</span>`).join('');
     const items=API.hftLib.filter(x=>(this.libCls==='all'||x.cls===this.libCls)&&Filt.hitAc(x.ac));
     document.getElementById('libGrid').innerHTML=items.map(x=>
       `<div class="lib" id="lib-${x.id}" onclick="document.getElementById('lib-${x.id}').classList.toggle('open')">
-        <div class="ln"><span>#${x.id} ${x.n}</span><span class="mono mut" style="font-size:11px">SR ${x.sr}</span></div>
+        <div class="ln"><span>#${x.id} ${x.n}${x.status==='in-journal'?' <span class="tag ok">in journal</span>':x.status==='engine-ready'?' <span class="tag ok">engine-ready</span>':''}</span><span class="mono mut" style="font-size:11px">SR ${x.sr}</span></div>
         <div class="lm"><span class="tag ${x.cls}">${x.cls}</span><span class="tag ${x.infra}">${x.infra==='colo'?'COLO':x.infra==='lowlat'?'LOW-LAT':'RETAIL'}</span>
           ${x.ac.map(a=>`<span class="tag ${a}">${a.toUpperCase()}</span>`).join('')}<span class="tag off">${x.hold}</span></div>
         <div class="le">${x.edge}</div>
@@ -2106,8 +2119,15 @@ const UI = {
           <button class="btn primary" onclick="event.stopPropagation();UI.libToJournal(${x.id})">＋ Add to journal</button>
         </div></div>`).join('')||'<p class="mut">No strategies match this scope/class.</p>';
   },
-  libToJournal(id){
+  async libToJournal(id){
     const x=API.hftLib.find(v=>v.id===id);
+    if(QD.on){
+      const r=await QD.post('/api/library/'+id+'/journal'); if(!r||r.err)return;
+      API.ideas.push(r); this._libLoaded=false;
+      this.renderPipeline(); this.renderJournal(); this.renderLib();
+      this.toast(`${r.name} added to journal — spec from library #${id}`,'ok');
+      return;
+    }
     const slug=x.n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')+'-v1';
     if(API.ideas.some(i=>i.name===slug)){this.toast('Already in journal','err');return;}
     API.addIdea({name:slug, ac:x.ac[0], syms:Filt.sym!=='ALL'?[Filt.sym]:[],
@@ -2128,7 +2148,8 @@ const UI = {
         const vals=Object.values(pd).filter(v=>v!==null&&v!==undefined);
         const gross=vals.reduce((a2,b2)=>a2+b2,0);
         const days=Math.max(vals.length,1);
-        const costs=401.90/21*days;   // monthly run-rate pro-rated to trading days observed
+        const monthlyCost=(API.costs||[]).reduce((a2,[,v])=>a2+(parseFloat(String(v).replace(/[^0-9.]/g,''))||0),0);
+        const costs=monthlyCost/21*days;   // real monthly run-rate (sum of cost line items) pro-rated to trading days observed
         const fmt=v=>(v<0?'−':'+')+'$'+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:0});
         document.getElementById('dNet').textContent=fmt(gross-costs);
         document.getElementById('dNet').className='val '+(gross-costs>=0?'up':'down');
@@ -2178,9 +2199,10 @@ const UI = {
     document.getElementById('noteList').innerHTML=API.notes.map(n=>
       `<div class="hb"><div class="hn"><b class="mono" style="font-size:11px">${n.d}</b> · <span class="mut">${esc(n.s)}</span><div style="margin-top:3px">${esc(n.txt)}</div></div>
        <span class="tag ${n.tag==='incident'?'fail':n.tag==='discipline'?'warn':'off'}">${n.tag}</span></div>`).join('');
+    const costTotal=(API.costs||[]).reduce((a2,[,v])=>a2+(parseFloat(String(v).replace(/[^0-9.]/g,''))||0),0);
     document.getElementById('costRows').innerHTML=API.costs.map(([k,v])=>
       `<tr><td class="s">${k}</td><td style="text-align:right">${v}</td></tr>`).join('')
-      +'<tr><td class="s"><b>Total / month</b></td><td style="text-align:right"><b>$401.90</b></td></tr>';
+      +`<tr><td class="s"><b>Total / month</b></td><td style="text-align:right"><b>$${costTotal.toFixed(2)}</b></td></tr>`;
   },
   addNote(){
     const box=document.getElementById('modalBox'); box.className='modal';
@@ -2193,11 +2215,12 @@ const UI = {
     box.querySelectorAll('#jn-tag .chip').forEach(ch=>ch.onclick=()=>{box.querySelectorAll('#jn-tag .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
     document.getElementById('overlay').classList.add('show');
   },
-  saveNote(){
+  async saveNote(){
     const txt=document.getElementById('jn-t').value.trim(); if(!txt){this.toast('Empty note','err');return;}
     const noteDoc={s:document.getElementById('jn-s').value.trim()||'—', txt, tag:document.querySelector('#jn-tag .chip.sel').dataset.v};
-    if(QD.on)QD.post('/api/notes',noteDoc);
-    API.notes.unshift({d:new Date().toLocaleDateString('en-US',{month:'short',day:'2-digit'}),...noteDoc});
+    let saved={d:new Date().toLocaleDateString('en-US',{month:'short',day:'2-digit'}),...noteDoc};
+    if(QD.on){ const r=await QD.post('/api/notes',noteDoc); if(!r||r.err)return; saved=r; }
+    API.notes.unshift(saved);
     this.closeModal(); this.renderDesk(); this.toast('Note saved to journal','ok');
   },
   exportCSV(){
@@ -2206,8 +2229,10 @@ const UI = {
     this._download('trades.csv', rows.map(r=>r.join(',')).join('\n'), 'text/csv');
     this.toast('trades.csv downloaded','ok');
   },
-  exportBackup(){
-    const data={exported:new Date().toISOString(), ideas:API.ideas, symbols:API.symbols, notes:API.notes, alerts:API.alerts};
+  async exportBackup(){
+    let data;
+    if(QD.on){ try{ data=await(await fetch('/api/backup')).json(); }catch(e){} }
+    if(!data)data={exported:new Date().toISOString(), ideas:API.ideas, symbols:API.symbols, notes:API.notes, alerts:API.alerts};
     this._download('quantdesk-backup.json', JSON.stringify(data,null,2), 'application/json');
     this.toast('Full backup downloaded — store it off this machine','ok');
   },
@@ -2215,6 +2240,44 @@ const UI = {
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  },
+
+  async paperTest(){
+    if(!QD.on)return this.toast('backend offline','err');
+    const out=document.getElementById('paperTestOut'); out.textContent='Placing test order…';
+    try{
+      const r=await fetch('/api/paper/test-order',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+      const d=await r.json();
+      if(!r.ok){ out.innerHTML='⛔ '+(d.error||'failed'); return this.toast('Paper test failed — '+(d.error||''),'err'); }
+      out.innerHTML=`✅ ${d.symbol} 1sh @ $${d.limit}: placed (${d.placed_status}) → canceled (${d.final_status}) in ${d.roundtrip_ms}ms`;
+      this.toast('Paper broker round-trip verified','ok');
+    }catch(e){ out.textContent='⛔ backend unreachable'; }
+  },
+
+  /* ---- risk controls (live) ---- */
+  async renderRisk(){
+    if(!QD.on)return;
+    try{
+      const [st,rk]=await Promise.all([
+        fetch('/api/state').then(r=>r.json()),
+        fetch('/api/risk').then(r=>r.json())]);
+      const demo=st.source==='demo-seed';
+      const tag=demo?' <span class="tag warn">DEMO</span>':'';
+      const pnl=document.getElementById('rkPnl');
+      pnl.className='v '+(st.day_pnl>=0?'up':'down');
+      pnl.innerHTML=`${st.day_pnl>=0?'+':'−'}$${Math.abs(st.day_pnl).toLocaleString(undefined,{minimumFractionDigits:2})}${tag}`;
+      const dd=document.getElementById('rkDD');
+      dd.innerHTML=`${st.max_dd}%${tag}`;
+      const lim=Math.abs(rk.max_dd_halt||8);
+      const used=Math.min(100,Math.abs(st.max_dd)/lim*100);
+      const bar=document.getElementById('rkBar');
+      bar.style.width=used+'%'; bar.style.background=used>75?'var(--red)':used>50?'var(--amber)':'var(--green)';
+      document.getElementById('rkHead').textContent=`Drawdown headroom used: ${Math.round(used)}%${demo?' (demo)':''}`;
+      document.getElementById('rkDaily').innerHTML=`$${(rk.daily_loss_limit||-2000).toLocaleString()} `+
+        (st.halted?'<span class="tag fail">HALTED</span>':'<span class="tag ok">Armed</span>');
+      document.getElementById('rkDDlim').innerHTML=`${rk.max_dd_halt||-8}% `+
+        (st.halted?'<span class="tag fail">HALTED</span>':'<span class="tag ok">Armed</span>');
+    }catch(e){}
   },
 
   /* ---- accounts & safety ---- */
@@ -2225,14 +2288,18 @@ const UI = {
       `<div class="hb"><span class="mono" style="width:96px;color:var(--muted);flex:none">${d}</span><span class="hn">${e}</span><span class="mut" style="font-size:11px">${g}</span></div>`).join('');
     document.getElementById('alertRows').innerHTML=API.alerts.map((al,i)=>
       `<div class="hb"><span class="hn">${esc(al.r)} ${al.fired?'<span class="tag fail">FIRED</span>':''}<div class="mut" style="font-size:11px">${al.ch}${/^[A-Z]{1,6}\s*[<>]/.test(al.r)?' · auto-evaluates every 60s':' · manual/reference only'}</div></span>
-       <div class="switch ${al.on?'on':''}" onclick="API.alerts[${i}].on=!API.alerts[${i}].on;UI.renderSafe()"><i></i></div>
-       <button class="btn" style="padding:2px 7px;font-size:10px" onclick="if(QD.on&&API.alerts[${i}].id)fetch('/api/alerts/'+API.alerts[${i}].id,{method:'DELETE'});API.alerts.splice(${i},1);UI.renderSafe()">✕</button></div>`).join('');
+       <div class="switch ${al.on?'on':''}" onclick="UI.toggleAlert(${i})"><i></i></div>
+       <button class="btn" style="padding:2px 7px;font-size:10px" onclick="UI.deleteAlert(${i})">✕</button></div>`).join('');
     document.getElementById('setupList').innerHTML=API.setup.map(([l,pc])=>
       `<div class="setupbar"><span class="sbl">${l}</span>
        <div class="bar-outer" style="flex:1;margin:0"><div class="bar-inner" style="width:${pc}%;background:${pc===100?'var(--green)':pc>0?'var(--blue)':'var(--border)'}"></div></div>
        <span class="mono mut" style="width:40px;text-align:right">${pc}%</span></div>`).join('');
     this._mktClock(); clearInterval(this._mkI); this._mkI=setInterval(()=>this._mktClock(),1000);
-    if(QD.on){ fetch('/api/data/inventory').then(r=>r.json()).then(d=>{
+    if(QD.on){ fetch('/api/backups/last').then(r=>r.json()).then(b=>{
+      const lb=document.getElementById('lastBackup');
+      if(lb)lb.textContent=b.last?`${b.last} (${b.count} snapshot${b.count>1?'s':''})`:'none yet — runs daily while server is up';
+    }).catch(()=>{});
+    fetch('/api/data/inventory').then(r=>r.json()).then(d=>{
       const dl=document.getElementById('diskLine');
       if(dl)dl.textContent=`${d.catalog_mb} MB used · ${d.disk_free_gb} GB free`;
       const gl=document.getElementById('gapLine');
@@ -2252,9 +2319,25 @@ const UI = {
     else { msg=`<span class="down">● NYSE CLOSED</span> — crypto venues 24/7`; }
     el.innerHTML=`${msg}<div class="mut" style="font-size:11px;margin-top:4px">ET ${et.toLocaleTimeString('en-US',{hour12:false})} · local ${now.toLocaleTimeString('en-US',{hour12:false})}</div>`;
   },
+  async toggleAlert(i){
+    const al=API.alerts[i]; if(!al)return;
+    if(QD.on && al.id!=null){
+      const r=await QD.post('/api/alerts/'+al.id+'/toggle'); if(!r||r.err)return;
+      al.on=r.on;
+    } else { al.on=!al.on; }
+    this.renderSafe();
+  },
+  async deleteAlert(i){
+    const al=API.alerts[i]; if(!al)return;
+    if(QD.on && al.id!=null){
+      const r=await fetch('/api/alerts/'+al.id,{method:'DELETE'});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); this.toast('⛔ '+(d.error||'could not delete'),'err'); return; }
+    }
+    API.alerts.splice(i,1); this.renderSafe();
+  },
   toggleSwitch(el,name){
     el.classList.toggle('on');
-    this.toast(`${name}: ${el.classList.contains('on')?'ARMED':'disarmed'} (stub — wire to node watchdog, Blueprint M14)`, el.classList.contains('on')?'ok':'err');
+    this.toast(`${name}: ${el.classList.contains('on')?'ARMED':'disarmed'} — front-end preference only (node watchdog wiring is a later milestone)`, el.classList.contains('on')?'ok':'err');
   },
   addAlert(){
     const box=document.getElementById('modalBox'); box.className='modal';
@@ -2266,12 +2349,15 @@ const UI = {
     box.querySelectorAll('#al-c .chip').forEach(ch=>ch.onclick=()=>{box.querySelectorAll('#al-c .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
     document.getElementById('overlay').classList.add('show');
   },
-  saveAlert(){
+  async saveAlert(){
     const r=document.getElementById('al-r').value.trim(); if(!r){this.toast('Empty rule','err');return;}
     const alertDoc={r, ch:document.querySelector('#al-c .chip.sel').dataset.v};
-    if(QD.on)QD.post('/api/alerts',alertDoc);
-    API.alerts.unshift({...alertDoc, on:true});
-    this.closeModal(); this.renderSafe(); this.toast('Alert created (stub — evaluated server-side, Blueprint M14)','ok');
+    let saved={...alertDoc, on:true};
+    if(QD.on){ const resp=await QD.post('/api/alerts',alertDoc); if(!resp||resp.err)return; saved=resp; }
+    API.alerts.unshift(saved);
+    const priceRule=/^[A-Z]{1,6}\s*[<>]/.test(r);
+    this.closeModal(); this.renderSafe();
+    this.toast(priceRule?'Alert created — auto-evaluated server-side every 60s':'Alert saved (manual/reference rule)','ok');
   },
 
   /* ---- trade ticket / watchlist / rebalance ---- */
@@ -2283,7 +2369,9 @@ const UI = {
       limit_price:document.getElementById('tk-px').value||null};
   },
   async ticketCheck(){
+    if(!QD.on){this.toast('backend offline — connect to check risk','err');return;}
     const t=this._ticket(); t.check_only=true;
+    if(!t.sym||!t.qty){this.toast('symbol and qty required','err');return;}
     const r=await QD.post('/api/orders/place',t); if(!r)return;
     const el=document.getElementById('tk-out');
     if(r.err){el.innerHTML='⛔ '+r.err;return;}
@@ -2291,13 +2379,16 @@ const UI = {
       :`⛔ risk would reject: ${r.reasons.join('; ')}`;
   },
   async ticketSubmit(){
+    if(!QD.on){this.toast('backend offline — connect to place orders','err');return;}
     const t=this._ticket();
     if(!t.sym||!t.qty){this.toast('symbol and qty required','err');return;}
     if(!confirm(`PAPER order: ${t.side.toUpperCase()} ${t.qty} ${t.sym} ${t.type}${t.limit_price?' @'+t.limit_price:''} — submit?`))return;
     const r=await QD.post('/api/orders/place',t); if(!r||r.err)return;
     document.getElementById('tk-out').innerHTML=`✅ submitted ${r.id.slice(0,8)} — status ${r.status}`;
     this.toast(`Order ${r.status}: ${t.side.toUpperCase()} ${t.qty} ${t.sym}`,'ok');
-    API.positions=await(await fetch('/api/positions')).json(); this.renderDash();
+    API.positions=await(await fetch('/api/positions')).json();
+    try{ const o=await(await fetch('/api/orders')).json(); if(o&&!o.error){API.openOrders=o.open||API.openOrders; API.orderHist=o.hist||API.orderHist;} }catch(e){}
+    this.renderDash(); this.renderOrders();
   },
   async refreshWatchlist(){
     if(!QD.on)return;
@@ -2352,10 +2443,29 @@ const UI = {
   },
   async deleteIdea(id){
     if(!confirm('Delete this idea from the journal permanently?'))return;
-    if(QD.on)await fetch('/api/ideas/'+id,{method:'DELETE'});
+    if(QD.on){
+      const r=await fetch('/api/ideas/'+id,{method:'DELETE'});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok){ this.toast('⛔ '+(d.error||('could not delete ('+r.status+')')),'err'); return; }
+    }
     API.ideas=API.ideas.filter(i=>i.id!==id);
     document.getElementById('drawer').classList.remove('open');
     this.renderPipeline(); this.renderJournal(); this.toast('Idea deleted','ok');
+  },
+
+  applyRoleGates(){
+    // In multi-user mode, shared paper-account actions are admin-only. Solo mode = admin.
+    const nonAdmin = !!(this.me && this.me.multiuser!==false && this.me.role && this.me.role!=='admin');
+    document.body.classList.toggle('nonadmin', nonAdmin);
+  },
+  async killDryRun(){
+    if(!QD.on)return this.toast('backend offline','err');
+    try{
+      const r=await fetch('/api/paper/status'); const d=await r.json();
+      if(!r.ok)return this.toast('Dry-run needs Alpaca paper keys in .env — '+(d.error||''),'err');
+      const nPos=(d.positions||[]).length, nOrd=(d.open_orders||[]).length;
+      this.toast(`Dry-run: kill switch would flatten ${nPos} real paper position(s) and cancel ${nOrd} open order(s). No orders sent.`,'ok');
+    }catch(e){ this.toast('Dry-run failed — backend unreachable','err'); }
   },
 
   /* ---- community: auth / leaderboard / panel / admin / chat ---- */
@@ -2366,6 +2476,7 @@ const UI = {
       if(d.anon&&d.multiuser){ document.getElementById('loginOverlay').style.display='flex'; return false; }
       this.me=d.u?d:{u:'solo',name:'Solo Trader',role:'admin',cash:100000};
       document.getElementById('navAdmin').style.display=this.me.role==='admin'?'flex':'none';
+      this.applyRoleGates();
       if(this.me.must_change){ this.toast('⚠ Change your temporary password in My Panel','err');
         document.querySelector('[data-s=me]').click(); }
       return true;
@@ -2681,8 +2792,9 @@ const UI = {
     document.getElementById('admUserDetail').style.display='none'; this.renderAdmin();
   },
   async userDetail(u){
-    const d=await(await fetch('/api/community/user?u='+u)).json();
-    if(d.err){this.toast(d.err,'err');return;}
+    const resp=await fetch('/api/community/user?u='+u);
+    const d=await resp.json().catch(()=>({}));
+    if(!resp.ok||d.error){this.toast('⛔ '+(d.error||('could not load '+u)),'err');return;}
     const el=document.getElementById('admUserDetail'); el.style.display='block';
     const st=d.strategies.map(x=>`<div>• <b>${x.name}</b> — stage ${x.stage}, ${x.public?'🌐 public':'🔒 private'}${x.params&&Object.keys(x.params).length?' · <span class="mut">'+JSON.stringify(x.params)+'</span>':''}</div>`).join('')||'<div class="mut">no strategies</div>';
     const iv=d.investments.map(x=>`<div>• $${x.amount.toLocaleString()} → ${x.strategy} <span style="color:${x.week_return_pct>=0?'var(--green)':'var(--red)'}">${x.week_return_pct>=0?'+':''}${x.week_return_pct}% this week</span></div>`).join('')||'<div class="mut">no open investments</div>';
@@ -3053,7 +3165,17 @@ const UI = {
   },
 
   /* ---- orders ---- */
-  renderOrders(){
+  async renderOrders(){
+    if(QD.on){ try{ const o=await(await fetch('/api/orders')).json();
+      if(o&&!o.error){ API.openOrders=o.open||[]; API.orderHist=o.hist||[]; }
+      const dr=await(await fetch('/api/drift')).json();
+      if(dr&&!dr.error){
+        const sl=document.getElementById('ordSlip'), sn=document.getElementById('ordSlipN');
+        if(sl){ if(dr.realized_slippage_bp!=null){ sl.innerHTML=`+${dr.realized_slippage_bp} bp`;
+            sn.textContent=`vs model ${dr.assumed_slippage_bp} bp — ${dr.verdict}`; }
+          else { sl.innerHTML='—'; sn.textContent='no fills yet — accumulates from real orders'; } }
+      }
+    }catch(e){} }
     const open_=API.openOrders.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym));
     const hist=API.orderHist.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym));
     const w=document.getElementById('ordWork'); if(w){w.textContent=open_.length;
@@ -3094,14 +3216,17 @@ const UI = {
       `<div class="step ${i<s?'done':i===s?'cur':''}"><div class="n">${i<s?'✓':i+1}</div>${w.t}</div>`).join('');
     const body=document.getElementById('wizBody');
     if(s===0){
+      const venues=(API.venues||[]).filter(v=>v.ok).map(v=>v.name.replace(/·.*/,'').trim());
+      const vOpts=(venues.length?venues:['Alpaca']).map(v=>`<option>${v}</option>`).join('');
+      const paperStrats=(API.ideas||[]).filter(i=>(i.stage||1)>=5);
+      const sOpts=paperStrats.length?paperStrats.map(i=>`<option>${i.name}</option>`).join('')
+        :'<option value="">— no strategy has reached Paper stage yet —</option>';
       body.innerHTML=`<h2 style="margin-top:0">Scope — one venue, one strategy</h2>
         <div class="grid g2">
-          <div><label class="fl">Venue</label><select id="wizVenue" class="inp">
-            <option>IBKR</option><option>Binance</option><option>Bybit</option><option>Coinbase</option></select></div>
-          <div><label class="fl">Strategy (must be in Paper stage with gate passed)</label><select id="wizStrat" class="inp">
-            <option>momo-etf-v3</option><option>fut-carry-v1</option><option>crypto-mr-v2</option></select></div>
+          <div><label class="fl">Venue (connected only)</label><select id="wizVenue" class="inp">${vOpts}</select></div>
+          <div><label class="fl">Strategy (must be Paper stage + parity gate passed)</label><select id="wizStrat" class="inp">${sOpts}</select></div>
         </div>
-        <p class="mut" style="margin-top:14px">Rolling out multiple venues or strategies simultaneously is not permitted by this wizard — run it once per pair.</p>`;
+        <p class="mut" style="margin-top:14px">Only strategies that reached Paper stage AND passed the dual-backtest parity gate can go live — the server re-checks both and rejects otherwise. Run this once per venue/strategy pair.</p>`;
     } else if(s===3){
       const v=this.wizVenue||'IBKR', st=this.wizStrat||'momo-etf-v3';
       body.innerHTML=`<h2 style="margin-top:0;color:var(--red)">Final human confirmation</h2>
@@ -3136,11 +3261,11 @@ const UI = {
   },
   async goLive(){
     const v=this.wizVenue, st=this.wizStrat, ts=new Date().toISOString();
-    if(QD.on){
-      const checklist=[...(this.wizChecks.s1||[]),...(this.wizChecks.s2||[])];
-      const r=await QD.post('/api/golive',{venue:v,strategy:st,confirm:v+' GO LIVE',checklist});
-      if(!r||r.err)return;   // server rejected (parity gate, checklist, phrase) — toast already shown
-    }
+    if(!QD.on){ this.toast('backend offline — go-live requires the server (nothing was changed)','err'); return; }
+    if(!st){ this.toast('no eligible strategy — a strategy must reach Paper stage and pass parity first','err'); return; }
+    const checklist=[...(this.wizChecks.s1||[]),...(this.wizChecks.s2||[])];
+    const r=await QD.post('/api/golive',{venue:v,strategy:st,confirm:v+' GO LIVE',checklist});
+    if(!r||r.err)return;   // server rejected (parity gate, checklist, phrase) — toast already shown
     document.getElementById('auditLog').innerHTML =
       `<div><span class="t">${ts}</span> <span class="lv-err">GO-LIVE CONFIRMED</span> ${st} on ${v} — typed confirmation recorded, operator: local</div>`
       + document.getElementById('auditLog').innerHTML;
@@ -3208,6 +3333,7 @@ QD.sync=async function(){
       accounts:d.accounts,costs:d.costs,econ:d.econ,setup:d.setup,notes:d.notes,alerts:d.alerts});
     QD.on=true;
     const fm=document.getElementById('footMode'); if(fm)fm.textContent='live backend';
+    const fs=document.getElementById('footStack'); if(fs)fs.textContent=`${(API.venues||[]).filter(v=>v.ok).length}/${(API.venues||[]).length} venues connected`;
     if(d.mode==='live'){document.getElementById('modebar').classList.add('live');
       document.getElementById('modePill').textContent='LIVE';}
     document.getElementById('feed').innerHTML=API.feed.map(([t,lv,m])=>

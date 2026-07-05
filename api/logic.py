@@ -47,7 +47,10 @@ def validate_golive(body, parity_lookup=None):
         return False, 403, f'typed confirmation must be exactly "{venue} GO LIVE"'
     if parity_lookup:
         p = parity_lookup(strategy)
-        if p is not None and not p.get("pass", False):
+        if p is None:
+            return False, 409, (f"no parity record for {strategy} — a strategy must pass the "
+                                "dual-backtest parity gate before it can go live")
+        if not p.get("pass", False):
             return False, 409, f"parity gate failed for {strategy} — promotion to live blocked"
     return True, 200, "ok"
 
