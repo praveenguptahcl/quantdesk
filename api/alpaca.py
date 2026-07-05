@@ -123,8 +123,15 @@ def close_all_positions():
 
 
 def last_price(symbol):
+    """Market data lives on data.alpaca.markets (IEX feed on free tier)."""
+    cfg = _cfg()
+    if cfg is None:
+        return None
+    key, sec, _ = cfg
+    url = f"https://data.alpaca.markets/v2/stocks/{symbol}/trades/latest?feed=iex"
+    req = urllib.request.Request(url, headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": sec})
     try:
-        d = _req("GET", f"/v2/stocks/{symbol}/trades/latest")
+        d = json.loads(urllib.request.urlopen(req, timeout=10).read())
         return float(d["trade"]["p"])
     except Exception:
         return None
