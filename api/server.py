@@ -92,8 +92,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/bootstrap": self.g_bootstrap,
             "/api/state": self.g_state,
             "/api/venues": lambda: self._send(200, self._venues()),
-            "/api/positions": lambda: self._send(200, store.static("positions")),
-            "/api/strategies": lambda: self._send(200, store.static("strategies")),
+            "/api/positions": lambda: self._send(200, self._positions()),
+            "/api/strategies": lambda: self._send(200, self._strategies()),
             "/api/ideas": lambda: self._send(200, store.list_docs("ideas")),
             "/api/feed": lambda: self._send(200, store.get_feed(self._qint(q, "limit", 50))),
             "/api/audit": lambda: self._send(200, store.get_audit()),
@@ -107,7 +107,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/paper/status": self.g_paper_status,
             "/api/econ": lambda: self._send(200, store.static("econ")),
             "/api/setup": self.g_setup,
-            "/api/pnl/daily": lambda: self._send(200, logic.daily_pnl()),
+            "/api/pnl/daily": self.g_pnl_daily,
             "/api/backup": self.g_backup,
             "/api/backtests": lambda: self._send(200, {
                 "results": store.get_doc("backtests", "momo-etf-v3"),
@@ -184,10 +184,10 @@ class Handler(BaseHTTPRequestHandler):
             "alerts": store.list_docs("alerts"),
             "feed": store.get_feed(50),
             "venues": self._venues(),
-            "positions": store.static("positions"),
-            "strategies": store.static("strategies"),
-            "openOrders": store.static("openOrders"),
-            "orderHist": store.static("orderHist"),
+            "positions": self._positions(),
+            "strategies": self._strategies(),
+            "openOrders": self._bootstrap_orders()[0],
+            "orderHist": self._bootstrap_orders()[1],
             "accounts": self._accounts(),
             "costs": store.static("costs"),
             "econ": store.static("econ"),
@@ -195,12 +195,97 @@ class Handler(BaseHTTPRequestHandler):
         })
 
     def g_state(self):
-        self._send(200, {
-            "mode": store.get_kv("mode", "paper"),
-            "halted": store.get_kv("halted") == "1",
-            "equity": 104382.19, "day_pnl": 1204.55, "total_pnl": 4382.19,
-            "max_dd": -3.42, "open_risk": 18240,
-        })
+        out = {"mode": store.get_kv("mode", "paper"),
+               "halted": store.get_kv("halted") == "1",
+               "equity": 104382.19, "day_pnl": 1204.55, "total_pnl": 4382.19,
+               "max_dd": -3.42, "open_risk": 18240, "source": "demo-seed"}
+        if alpaca.configured():
+            try:
+                a = alpaca.account()
+                h = alpaca.portfolio_history("1M")
+                pls = [x for x in (h.get("profit_loss") or []) if x is not None]
+                eqs = [x for x in (h.get("equity") or []) if x]
+                mdd = 0.0
+                peak = eqs[0] if eqs else 1
+                for v in eqs:
+                    peak = max(peak, v)
+                    mdd = min(mdd, (v / peak - 1) * 100)
+                pos = alpaca.positions()
+                out.update({
+                    "equity": a["equity"],
+                    "day_pnl": pls[-1] if pls else 0.0,
+                    "total_pnl": sum(pls) if pls else 0.0,
+                    "max_dd": round(mdd, 2),
+                    "open_risk": round(sum(abs(float(x["market_value"])) for x in pos), 2),
+                    "source": "alpaca-paper", "n_positions": len(pos),
+                })
+            except alpaca.AlpacaError:
+                out["source"] = "alpaca-error"
+        self._send(200, out)
+
+    _orders_cache = None
+
+    def _bootstrap_orders(self):
+        if Handler._orders_cache is None or time.time() - Handler._orders_cache[0] > 10:
+            Handler._orders_cache = (time.time(), self._orders())
+        return Handler._orders_cache[1]
+
+    def _positions(self):
+        if alpaca.configured():
+            try:
+                real = alpaca.positions()
+                return [{"sym": x["sym"], "venue": "Alpaca·paper",
+                         "qty": ("+" if float(x["qty"]) >= 0 else "") + str(x["qty"]),
+                         "px": x["avg_px"], "pnl": float(x["unrealized_pl"]),
+                         "strat": "momo-etf-v3" if x["sym"] in ("XLK", "XLE", "XLI", "XLF", "XLV", "XLP", "XLY", "XLU", "XLB") else "manual"}
+                        for x in real]
+            except alpaca.AlpacaError:
+                pass
+        return store.static("positions")
+
+    def _orders(self):
+        if alpaca.configured():
+            try:
+                opens = [{"id": o["id"], "sym": o["sym"], "side": o["side"], "type": o["type"],
+                          "qty": o["qty"], "px": o["px"], "venue": "Alpaca·paper", "state": o["state"]}
+                         for o in alpaca.open_orders()]
+                return opens, alpaca.closed_orders()
+            except alpaca.AlpacaError:
+                pass
+        return store.static("openOrders"), store.static("orderHist")
+
+    def _strategies(self):
+        rows = []
+        for i in store.list_docs("ideas"):
+            stage = logic.STAGES[i.get("stage", 1)]
+            running = i["name"] == "momo-etf-v3" and alpaca.configured()
+            rows.append({"n": i["name"], "syms": i.get("syms", []),
+                         "stage": stage, "sr": "—",
+                         "st": "Node ready · paper" if running else stage,
+                         "c": "ok" if running else ("paper" if stage == "Paper" else "off")})
+        return rows
+
+    def g_pnl_daily(self):
+        if alpaca.configured():
+            try:
+                import datetime
+                h = alpaca.portfolio_history("1M")
+                out = {}
+                today = datetime.date.today()
+                for ts, pl in zip(h.get("timestamp") or [], h.get("profit_loss") or []):
+                    d = datetime.date.fromtimestamp(ts)
+                    if d.month == today.month and d.year == today.year:
+                        out[d.day] = round(pl, 2) if pl is not None else None
+                for day in range(1, 32):
+                    try:
+                        wd = datetime.date(today.year, today.month, day).weekday()
+                    except ValueError:
+                        continue
+                    out.setdefault(day, None)
+                return self._send(200, out)
+            except alpaca.AlpacaError:
+                pass
+        self._send(200, logic.daily_pnl())
 
     def g_risk(self):
         limits_path = os.path.join(HERE, "..", "risk", "limits.yaml")

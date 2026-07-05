@@ -311,10 +311,10 @@ label.fl b{color:var(--red)}
       <h1>Ops Dashboard</h1>
       <div class="sub">Paper-trading session · all times ET</div>
       <div class="grid g4">
-        <div class="card kpi"><div class="lbl">Equity (paper)</div><div class="val">$104,382.19</div><div class="delta up">▲ +$1,204.55 today (+1.17%)</div></div>
-        <div class="card kpi"><div class="lbl">Total P&amp;L (30d paper)</div><div class="val up">+$4,382.19</div><div class="delta mut">vs backtest expectation +$4,910</div></div>
-        <div class="card kpi"><div class="lbl">Max Drawdown</div><div class="val">−3.42%</div><div class="delta mut">limit −8.00% · <span class="up">headroom OK</span></div></div>
-        <div class="card kpi"><div class="lbl">Open Risk</div><div class="val">$18,240</div><div class="delta mut">gross exposure 17.5% of equity</div></div>
+        <div class="card kpi"><div class="lbl">Equity (paper)</div><div class="val" id="kEq">$104,382.19</div><div class="delta mut" id="kEqD">demo data — connect backend for live</div></div>
+        <div class="card kpi"><div class="lbl">P&amp;L (30d paper)</div><div class="val" id="kPnl">+$4,382.19</div><div class="delta mut" id="kPnlD">demo data</div></div>
+        <div class="card kpi"><div class="lbl">Max Drawdown (30d)</div><div class="val" id="kDD">−3.42%</div><div class="delta mut" id="kDDD">limit −8.00%</div></div>
+        <div class="card kpi"><div class="lbl">Open Risk</div><div class="val" id="kRisk">$18,240</div><div class="delta mut" id="kRiskD">gross exposure</div></div>
       </div>
 
       <h2>Equity Curve — paper vs backtest expectation</h2>
@@ -1660,20 +1660,24 @@ const UI = {
   },
 
   /* ---- P&L & journal ---- */
-  renderDesk(){
+  async renderDesk(){
     document.getElementById('dNet').textContent='+$3,980';
     document.getElementById('dNetNote').textContent='gross +$4,382 − costs $402 (YTD run-rate)';
     document.getElementById('dCosts').textContent='$2,412';
     document.getElementById('dAlpha').innerHTML='<span class="up">+1.4pp</span>';
     document.getElementById('dReal').textContent='+$2,140';
     document.getElementById('dWash').textContent='⚠ 1 potential wash sale: QQQ (Jun 12/Jun 30)';
-    // calendar
-    const pnl=API.dailyPnl(9);
+    // calendar — REAL Alpaca portfolio history when connected
+    let pnl=null, realCal=false;
+    if(QD.on){ try{ const r=await fetch('/api/pnl/daily'); if(r.ok){pnl=await r.json(); realCal=true;} }catch(e){} }
+    if(!pnl) pnl=API.dailyPnl(9);
+    const calT=document.getElementById('calTitle');
+    if(calT) calT.textContent='Daily P&L — '+new Date().toLocaleString('en-US',{month:'long',year:'numeric'})+(realCal?' (REAL — Alpaca portfolio history)':' (demo)');
     const dow=['S','M','T','W','T','F','S'];
     let html=dow.map(d=>`<div class="ch">${d}</div>`).join('');
     const first=new Date(2026,6,1).getDay();
     for(let i=0;i<first;i++)html+='<div class="cd off"></div>';
-    let today=5;
+    let today=new Date().getDate();
     for(let d=1;d<=31;d++){ const v=pnl[d];
       const future=d>today;
       if(v===null){html+=`<div class="cd off"><span class="dn">${d}</span></div>`;continue;}
@@ -2002,14 +2006,34 @@ QD.sync=async function(){
     document.getElementById('venueList').innerHTML=API.venues.map(v=>
       `<div><span class="dot ${v.ok?'g':'a'}"></span>${v.name} <span style="color:var(--dim)">· ${v.env} · ${v.lat}</span></div>`).join('');
     UI.renderSymbols(); UI.renderDash(); UI.renderPipeline(); UI.renderJournal(); UI.rerender();
+    QD.updState();
     UI.toast('Connected to backend — live state loaded','ok');
-    // light polling for feed/state
+    // polling: feed every 5s; state/positions every 15s
     setInterval(async()=>{ if(!QD.on)return;
       try{ const f=await(await fetch('/api/feed?limit=50')).json(); API.feed=f;
         const el=document.getElementById('feed');
         if(el)el.innerHTML=f.map(([t,lv,m])=>`<div><span class="t">${t}</span> <span class="lv-${lv}">${m}</span></div>`).join('');
       }catch(e){} },5000);
+    setInterval(async()=>{ if(!QD.on)return; QD.updState();
+      try{ API.positions=await(await fetch('/api/positions')).json(); UI.renderDash(); }catch(e){} },15000);
   }catch(e){ /* offline demo mode */ }
+};
+QD.updState=async function(){
+  try{
+    const d=await(await fetch('/api/state')).json();
+    const usd=v=>(v<0?'−':'')+'$'+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:2});
+    const set=(id,txt,cls)=>{const e=document.getElementById(id); if(e){e.textContent=txt; if(cls!==undefined)e.className='val '+cls;}};
+    const live=d.source==='alpaca-paper';
+    set('kEq',usd(d.equity));
+    document.getElementById('kEqD').textContent= live?`LIVE from Alpaca paper (${d.n_positions??0} positions)`:'demo seed — no live venue';
+    set('kPnl',(d.total_pnl>=0?'+':'')+usd(d.total_pnl).replace('$−','−$'), d.total_pnl>=0?'up':'down');
+    document.getElementById('kPnlD').textContent= live?`today: ${d.day_pnl>=0?'+':''}${usd(d.day_pnl)} (real portfolio history)`:'demo seed';
+    set('kDD',(d.max_dd??0).toFixed(2)+'%');
+    document.getElementById('kDDD').textContent='limit −8.00% · '+(d.max_dd>-8?'headroom OK':'BREACHED');
+    set('kRisk',usd(d.open_risk));
+    document.getElementById('kRiskD').textContent= live?'gross |market value| of real positions':'demo seed';
+    if(d.halted){document.getElementById('modeDesc').textContent='⛔ HALTED — kill switch or breaker engaged';}
+  }catch(e){}
 };
 UI.init();
 QD.sync();

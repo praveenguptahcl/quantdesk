@@ -137,6 +137,21 @@ def last_price(symbol):
         return None
 
 
+def closed_orders(limit=15):
+    out = []
+    for o in _req("GET", f"/v2/orders?status=closed&limit={limit}&direction=desc"):
+        out.append({"t": (o.get("submitted_at") or "")[11:19], "sym": o["symbol"],
+                    "sq": f"{o['side'].upper()} {o['qty']}",
+                    "px": o.get("filled_avg_price") or "—", "slip": "—",
+                    "st": o["status"]})
+    return out
+
+
+def portfolio_history(period="1M"):
+    """Real daily equity/P&L series from Alpaca."""
+    return _req("GET", f"/v2/account/portfolio/history?period={period}&timeframe=1D")
+
+
 def phase5_checkpoint(symbol="SPY"):
     """Place → confirm → cancel one tiny far-from-market limit order (1 share,
     ~50% below market so it can never fill). Returns an audit-able summary."""
