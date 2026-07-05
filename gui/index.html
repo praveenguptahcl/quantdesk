@@ -1493,7 +1493,47 @@ const UI = {
   },
 
   /* ---- microstructure (HFT) ---- */
-  renderMicro(){
+  async renderMicro(){
+    // Real recorded data first (M11) — synthetic fallback below
+    const symMap={BTCUSDT:'BTC-USD',ETHUSDT:'ETH-USD'};
+    const gsym=Filt.sym!=='ALL'?Filt.sym:'BTCUSDT';
+    if(QD.on && symMap[gsym]){
+      try{
+        const r=await fetch('/api/micro/'+gsym);
+        if(r.ok){ this.renderMicroReal(gsym, await r.json()); return; }
+      }catch(e){}
+    }
+    this.renderMicroSynth();
+  },
+  renderMicroReal(sym,d){
+    document.getElementById('microSym').textContent='· '+sym+' (REAL · '+d.source+')';
+    document.getElementById('microFeedInfo').textContent=`${d.snapshots} snapshots · ${d.duration_s}s · ${d.file}`;
+    const maxs=Math.max(...d.bids.map(x=>x[1]),...d.asks.map(x=>x[1]));
+    let rows='';
+    for(let i=d.asks.length-1;i>=0;i--){const [p,sz]=d.asks[i];
+      rows+=`<div class="lrow"><span></span><span></span><span class="pxc" style="color:var(--red)">${p.toLocaleString()}</span>
+        <span class="bar ba" style="width:${sz/maxs*100}%"></span><span class="sz szr">${sz.toFixed(3)}</span></div>`;}
+    rows+=`<div class="mid">${d.mid.toLocaleString()} · spread ${d.spread.toFixed(2)} (${d.spread_bps} bps)</div>`;
+    for(const [p,sz] of d.bids){
+      rows+=`<div class="lrow"><span class="sz">${sz.toFixed(3)}</span><span class="bar bb" style="width:${sz/maxs*100}%"></span>
+        <span class="pxc" style="color:var(--green)">${p.toLocaleString()}</span><span></span><span></span></div>`;}
+    document.getElementById('bookLadder').innerHTML=rows;
+    document.getElementById('mSpread').textContent=d.spread.toFixed(2);
+    document.getElementById('mSpreadBps').textContent=d.spread_bps+' bps · avg '+d.avg_spread_bps+' bps · top depth '+d.top_depth;
+    document.getElementById('mMsg').textContent=d.trades_per_min+'/min';
+    document.getElementById('mLat').textContent='—';
+    document.getElementById('mLatNote').textContent='latency instrumentation lands with the live TradingNode (M6/M11)';
+    document.getElementById('mAdv').textContent='—';
+    document.getElementById('mCancel').textContent='—'; document.getElementById('mQueue').textContent='—';
+    document.getElementById('mFillR').textContent='—'; document.getElementById('mMix').textContent='—';
+    if(d.ofi.length>2)CH.multi('ofiChart',[{pts:d.ofi,color:'#9d7bff',fill:'rgba(157,123,255,.10)'}],{labels:false});
+    if(d.microprice_bps.length>2)CH.multi('mpChart',[{pts:d.microprice_bps,color:'#39c5cf',fill:'rgba(57,197,207,.10)'}],{labels:false});
+    const s2=CH.setup('latChart'); if(s2){s2.x.fillStyle='#5c6478';s2.x.font='11px sans-serif';s2.x.fillText('no in-process latency yet — needs live node',10,s2.H/2);}
+    document.getElementById('tape').innerHTML=d.tape.map(t=>
+      `<div><span class="t">${t.t}</span> <span class="${t.side==='buy'?'b':'a'}">${t.side==='buy'?'▲':'▼'} ${parseFloat(t.sz).toFixed(4)} @ ${parseFloat(t.px).toLocaleString()}</span></div>`).join('')
+      ||'<div class="mut">no trades captured in window</div>';
+  },
+  renderMicroSynth(){
     const meta={AAPL:[254.80,0.01],SPY:[618.34,0.01],QQQ:[551.02,0.01],XLK:[241.20,0.01],
       MES:[6412.25,0.25],BTCUSDT:[112480,0.1],ETHUSDT:[4182.1,0.05]};
     const sym=(Filt.sym!=='ALL'&&meta[Filt.sym])?Filt.sym:'AAPL';
