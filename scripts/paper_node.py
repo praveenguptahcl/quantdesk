@@ -106,8 +106,27 @@ def main():
         ok, reasons = logic.validate_order(order, limits)
         plan.append((s, delta, px, ok, reasons))
 
+    as_json = "--json" in sys.argv
     if not plan:
-        print("portfolio already at target — no orders")
+        if as_json:
+            print(json.dumps({"asof": asof, "risk_on": risk_on, "equity": equity, "orders": [],
+                              "executed": False, "note": "portfolio already at target"}))
+        else:
+            print("portfolio already at target — no orders")
+        return
+    if as_json:
+        out = {"asof": asof, "risk_on": risk_on, "equity": equity, "executed": execute, "orders": []}
+        for s, delta, px, ok, reasons in plan:
+            o = {"sym": s, "side": "BUY" if delta > 0 else "SELL", "qty": abs(delta),
+                 "px": px, "risk_ok": ok, "risk_reasons": reasons}
+            if execute and ok:
+                r = alpaca.submit_order(s, abs(delta), "buy" if delta > 0 else "sell",
+                                        order_type="limit",
+                                        limit_price=round(px * (1.002 if delta > 0 else 0.998), 2))
+                o["order_id"] = r["id"][:8]
+                o["status"] = r["status"]
+            out["orders"].append(o)
+        print(json.dumps(out))
         return
     print(f"{'EXECUTING' if execute else 'DRY-RUN'} — account equity ${equity:,.0f}:")
     for s, delta, px, ok, reasons in plan:

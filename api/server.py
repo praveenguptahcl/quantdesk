@@ -115,6 +115,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/drift": self.g_drift,
             "/api/data/inventory": self.g_data_inventory,
             "/api/equity/history": self.g_equity_history,
+            "/api/quotes": lambda: self.g_quotes(q),
             "/api/signals": lambda: (lambda sig: self._send(200, sig) if sig else self._err(
                 503, "catalog data missing"))(backtest.current_signal()),
         }.get(path)
@@ -154,6 +155,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/data/record": lambda: self.p_data_record(body),
             "/api/orders/validate": lambda: self.p_validate_order(body),
             "/api/paper/test-order": self.p_paper_test,
+            "/api/orders/place": lambda: self.p_place_order(body),
+            "/api/positions/close": lambda: self.p_close_position(body),
+            "/api/node/rebalance": lambda: self.p_rebalance(body),
             "/api/signals/history": lambda: (lambda h: self._send(200, h) if h else self._err(
                 503, "catalog data missing"))(backtest.signal_history(
                     sym=body.get("sym", "XLK"), params=body.get("params"))),
@@ -180,6 +184,29 @@ class Handler(BaseHTTPRequestHandler):
         return self._err(404, "not found")
 
     def do_DELETE(self):
+        for kind, pat in (("ideas", r"^/api/ideas/(\d+)$"), ("notes", r"^/api/notes/(\d+)$"),
+                          ("alerts", r"^/api/alerts/(\d+)$")):
+            m = re.match(pat, self.path)
+            if m:
+                store.delete_doc(kind, m.group(1))
+                return self._send(200, {"ok": True})
+        m = re.match(r"^/api/orders/([\w-]+)$", self.path)
+        if m and alpaca.configured():
+            try:
+                # short ids from open_orders: find full id
+                target = m.group(1)
+                full = None
+                for o in alpaca._req("GET", "/v2/orders?status=open"):
+                    if o["id"].startswith(target):
+                        full = o["id"]
+                        break
+                if not full:
+                    return self._err(404, "order not found")
+                alpaca.cancel_order(full)
+                store.add_feed("warn", f"ORDER CANCELED by operator: {target}")
+                return self._send(200, {"ok": True})
+            except alpaca.AlpacaError as e:
+                return self._err(502, str(e))
         m = re.match(r"^/api/spine/([\w.]+)$", self.path)
         if m:
             store.delete_doc("symbols", m.group(1))
@@ -717,6 +744,98 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         self._send(200, {"source": "none", "points": []})
 
+    _quote_cache = {}
+
+    def g_quotes(self, q):
+        m = re.search(r"syms=([\w,.-]+)", q)
+        syms = (m.group(1).split(",") if m else ["SPY", "QQQ"])[:12]
+        out = {}
+        now = time.time()
+        for sym in syms:
+            c = Handler._quote_cache.get(sym)
+            if c and now - c[0] < 5:
+                out[sym] = c[1]
+                continue
+            px = alpaca.last_price(sym) if alpaca.configured() else None
+            Handler._quote_cache[sym] = (now, px)
+            out[sym] = px
+        self._send(200, {"quotes": out, "source": "alpaca-iex" if alpaca.configured() else "none",
+                         "ts": time.strftime("%H:%M:%S")})
+
+    def p_place_order(self, body):
+        """Manual trade ticket — paper only, risk-validated, audited."""
+        if not alpaca.configured():
+            return self._err(503, "Alpaca paper keys not configured")
+        if store.get_kv("halted") == "1":
+            return self._err(409, "HALTED — re-arm breakers before trading")
+        sym = (body.get("sym") or "").upper().strip()
+        side = body.get("side", "buy").lower()
+        qty = int(body.get("qty") or 0)
+        otype = body.get("type", "limit").lower()
+        limit_price = body.get("limit_price")
+        if not re.match(r"^[A-Z.]{1,6}$", sym) or side not in ("buy", "sell") or qty <= 0:
+            return self._err(422, "need sym, side buy/sell, qty > 0")
+        ref = alpaca.last_price(sym)
+        if ref is None:
+            return self._err(422, f"no market price for {sym}")
+        px = float(limit_price) if limit_price else ref
+        limits_path = os.path.join(HERE, "..", "risk", "limits.yaml")
+        limits = logic.parse_simple_yaml(open(limits_path).read()) if os.path.exists(limits_path) else {}
+        ok, reasons = logic.validate_order(
+            {"sym": sym, "ac": "eq", "side": side.upper(), "qty": qty,
+             "price": px, "ref_price": ref}, limits)
+        if body.get("check_only"):
+            return self._send(200, {"ok": ok, "reasons": reasons, "ref_price": ref,
+                                    "notional": round(qty * px, 2)})
+        if not ok:
+            store.add_feed("warn", f"REJECT manual {side.upper()} {qty} {sym} — {'; '.join(reasons)}")
+            return self._err(422, "risk rejected: " + "; ".join(reasons))
+        try:
+            r = alpaca.submit_order(sym, qty, side, order_type=otype,
+                                    limit_price=limit_price if otype == "limit" else None)
+            store.add_feed("info", f"MANUAL ORDER {side.upper()} {qty} {sym} "
+                           f"{otype}{' @' + str(limit_price) if limit_price else ''} → {r['status']}")
+            store.add_audit("manual_order", f"{side} {qty} {sym} {otype} {limit_price or 'mkt'} -> {r['status']}")
+            self._send(200, r)
+        except alpaca.AlpacaError as e:
+            self._err(502, str(e))
+
+    def p_close_position(self, body):
+        if not alpaca.configured():
+            return self._err(503, "Alpaca paper keys not configured")
+        sym = (body.get("sym") or "").upper()
+        try:
+            alpaca.close_position(sym)
+            store.add_feed("warn", f"POSITION CLOSED by operator: {sym} (market)")
+            store.add_audit("close_position", sym)
+            self._send(200, {"ok": True})
+        except alpaca.AlpacaError as e:
+            self._err(502, str(e))
+
+    def p_rebalance(self, body):
+        """Run the paper node from the GUI: dry-run plan, or execute with typed confirm."""
+        import subprocess
+        execute = bool(body.get("execute"))
+        if execute and body.get("confirm") != "REBALANCE":
+            return self._err(403, 'typed confirmation must be exactly "REBALANCE"')
+        if store.get_kv("halted") == "1":
+            return self._err(409, "HALTED — re-arm breakers first")
+        script = os.path.join(HERE, "..", "scripts", "paper_node.py")
+        args = [sys.executable, script, "--json"] + (["--execute"] if execute else [])
+        try:
+            p2 = subprocess.run(args, capture_output=True, text=True, timeout=90)
+            line = [ln for ln in p2.stdout.strip().splitlines() if ln.startswith("{")]
+            if not line:
+                return self._err(502, (p2.stdout or p2.stderr)[:200])
+            plan = json.loads(line[-1])
+            if execute:
+                store.add_feed("info", f"REBALANCE executed from GUI: {len(plan['orders'])} orders")
+                store.add_audit("rebalance", json.dumps(
+                    [(o['side'], o['qty'], o['sym']) for o in plan['orders']]))
+            self._send(200, plan)
+        except subprocess.TimeoutExpired:
+            self._err(504, "node timed out")
+
     # ---------- helpers ----------
     @staticmethod
     def _parity_key(name):
@@ -733,6 +852,35 @@ class Handler(BaseHTTPRequestHandler):
             return self._err(404, "not found")
         ctype = "text/html" if fp.endswith(".html") else "application/octet-stream"
         self._send(200, open(fp, "rb").read(), ctype)
+
+
+def _alert_loop():
+    """M14: evaluate price-rule alerts ('SYM > 123') every 60s against live quotes."""
+    import threading
+
+    def run():
+        while True:
+            time.sleep(60)
+            if not alpaca.configured():
+                continue
+            for al in store.list_docs("alerts"):
+                if not al.get("on") or al.get("fired"):
+                    continue
+                parsed = logic.parse_alert_rule(al.get("r", ""))
+                if not parsed:
+                    continue
+                sym, op, price = parsed
+                try:
+                    last = alpaca.last_price(sym)
+                except Exception:
+                    last = None
+                if last is not None and logic.alert_fires(op, price, last):
+                    al["fired"] = True
+                    al["on"] = False
+                    store.put_doc("alerts", al.get("id", al["r"]), al)
+                    store.add_feed("err", f"🔔 ALERT FIRED: {al['r']} (last {last})")
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 def _backup_loop():
@@ -806,6 +954,7 @@ def main():
     print(f"QuantDesk backend on http://127.0.0.1:{PORT}  (db: {store.db_path})", flush=True)
     _backup_loop()
     _redis_feed_loop()
+    _alert_loop()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

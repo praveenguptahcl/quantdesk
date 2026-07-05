@@ -318,6 +318,35 @@ label.fl b{color:var(--red)}
         <div class="card kpi"><div class="lbl">Open Risk</div><div class="val" id="kRisk">$18,240</div><div class="delta mut" id="kRiskD">gross exposure</div></div>
       </div>
 
+      <div class="grid g3" style="margin-top:14px">
+        <div class="card">
+          <h2 style="margin-top:0">⚡ Trade Ticket <span class="mut" style="text-transform:none">(paper · risk-checked)</span></h2>
+          <div class="f2">
+            <div><label class="fl">Symbol</label><input type="text" id="tk-sym" placeholder="SPY" style="text-transform:uppercase"></div>
+            <div><label class="fl">Qty</label><input type="number" id="tk-qty" placeholder="10"></div>
+            <div><label class="fl">Side</label><div class="chips" id="tk-side"><span class="chip sel" data-v="buy">BUY</span><span class="chip" data-v="sell">SELL</span></div></div>
+            <div><label class="fl">Type</label><div class="chips" id="tk-type"><span class="chip sel" data-v="limit">LIMIT</span><span class="chip" data-v="market">MKT</span></div></div>
+            <div style="grid-column:1/3"><label class="fl">Limit price (blank = last)</label><input type="number" id="tk-px" step="0.01"></div>
+          </div>
+          <div class="flex" style="margin-top:10px">
+            <button class="btn" onclick="UI.ticketCheck()">Check risk</button>
+            <button class="btn primary" id="tk-go" onclick="UI.ticketSubmit()">Submit order</button>
+          </div>
+          <div class="mut" id="tk-out" style="margin-top:8px;font-size:12px"></div>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">👁 Watchlist <span class="mut" id="wlTs" style="text-transform:none"></span></h2>
+          <table><tbody id="wlRows"><tr><td class="s mut">connect backend</td></tr></tbody></table>
+          <p class="mut" style="margin-top:6px;font-size:11px">Live last-trade prices (Alpaca IEX, ~10s refresh). Scope bar symbols + SPY/QQQ.</p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">🔁 Strategy Rebalance <span class="mut" style="text-transform:none">(momo-etf-v3)</span></h2>
+          <div class="flex"><button class="btn" onclick="UI.rebalance(false)">Preview plan (dry-run)</button>
+          <button class="btn primary" onclick="UI.rebalance(true)">Execute plan…</button></div>
+          <div id="rbOut" class="mut" style="margin-top:10px;font-size:12px">Runs the same decision chain as the live signal. Preview shows every order + its risk check before anything is sent.</div>
+        </div>
+      </div>
+
       <h2>Equity Curve — paper vs backtest expectation</h2>
       <div class="card"><canvas id="eqChart" height="190"></canvas>
         <div class="legend"><span><span class="dot g"></span>Paper equity</span><span><span class="dot" style="background:var(--blue)"></span>Backtest expectation</span></div>
@@ -326,7 +355,7 @@ label.fl b{color:var(--red)}
       <div class="grid g2" style="margin-top:14px">
         <div class="card">
           <h2 style="margin-top:0">Open Positions</h2>
-          <table><thead><tr><th>Symbol</th><th>Venue</th><th>Qty</th><th>Avg Px</th><th>Unrl P&amp;L</th><th>Strategy</th></tr></thead>
+          <table><thead><tr><th>Symbol</th><th>Venue</th><th>Qty</th><th>Avg Px</th><th>Unrl P&amp;L</th><th>Strategy</th><th></th></tr></thead>
           <tbody id="posRows"></tbody></table>
         </div>
         <div class="card">
@@ -1318,6 +1347,11 @@ const UI = {
     document.getElementById('feed').innerHTML = API.feed.map(([t,lv,m])=>
       `<div><span class="t">${t}</span> <span class="lv-${lv}">${m}</span></div>`).join('');
     this.renderSymbols(); this.renderDash(); this.setupAI();
+    ['tk-side','tk-type'].forEach(gid=>{
+      document.querySelectorAll('#'+gid+' .chip').forEach(ch=>ch.onclick=()=>{
+        document.querySelectorAll('#'+gid+' .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});});
+    setInterval(()=>this.refreshWatchlist(),10000);
+    setTimeout(()=>this.refreshWatchlist(),1500);
     this.renderPipeline(); this.renderJournal(); this.renderWizard();
     this.drawDashEquity();
     this.renderParity();
@@ -1408,6 +1442,7 @@ const UI = {
       <div class="flex" style="margin-top:14px">
         <button class="btn primary" ${canPromote?'':'disabled'} onclick="UI.promote(${i.id})">Promote to ${API.stages[Math.min(i.stage+1,6)]} →</button>
         <button class="btn" onclick="UI.toast('Opening research notebook (stub — launch lean research)','ok')">Open notebook</button>
+        <button class="btn danger" style="margin-left:auto" onclick="UI.deleteIdea(${i.id})">🗑</button>
         ${i.stage===4?`<button class="btn" onclick="document.querySelector('[data-s=parity]').click()">View parity →</button>`:''}
       </div>
       ${canPromote?'':'<p class="mut" style="margin-top:12px">Promotion blocked — resolve the checkpoint above. Gates are hard: the GUI will not advance an idea past a failing checkpoint.</p>'}
@@ -1665,8 +1700,9 @@ const UI = {
     document.getElementById('posRows').innerHTML=API.positions
       .filter(x=>Filt.sym==='ALL'||x.sym===Filt.sym)
       .map(x=>`<tr><td>${x.sym}</td><td class="s">${x.venue}</td><td>${x.qty}</td><td>${x.px}</td>
-        <td class="${x.pnl>=0?'up':'down'}">${x.pnl>=0?'+':'−'}$${Math.abs(x.pnl).toFixed(2)}</td><td class="s">${x.strat}</td></tr>`)
-      .join('')||'<tr><td colspan="6" class="s mut">No positions in scope</td></tr>';
+        <td class="${x.pnl>=0?'up':'down'}">${x.pnl>=0?'+':'−'}$${Math.abs(x.pnl).toFixed(2)}</td><td class="s">${x.strat}</td>
+        <td><button class="btn" style="padding:2px 8px;font-size:10px" onclick="UI.closePos('${x.sym}')" title="close at market">✕</button></td></tr>`)
+      .join('')||'<tr><td colspan="7" class="s mut">No positions in scope</td></tr>';
     document.getElementById('stratRows').innerHTML=API.strategies
       .filter(x=>Filt.hit(x.syms))
       .map(x=>`<tr><td class="s">${x.n}</td><td class="s"><span class="tag ${x.stage==='Paper'?'paper':'off'}">${x.stage}</span></td>
@@ -1922,8 +1958,9 @@ const UI = {
     document.getElementById('econRows').innerHTML=API.econ.map(([d,e,g])=>
       `<div class="hb"><span class="mono" style="width:96px;color:var(--muted);flex:none">${d}</span><span class="hn">${e}</span><span class="mut" style="font-size:11px">${g}</span></div>`).join('');
     document.getElementById('alertRows').innerHTML=API.alerts.map((al,i)=>
-      `<div class="hb"><span class="hn">${al.r}<div class="mut" style="font-size:11px">${al.ch}</div></span>
-       <div class="switch ${al.on?'on':''}" onclick="API.alerts[${i}].on=!API.alerts[${i}].on;UI.renderSafe()"><i></i></div></div>`).join('');
+      `<div class="hb"><span class="hn">${al.r} ${al.fired?'<span class="tag fail">FIRED</span>':''}<div class="mut" style="font-size:11px">${al.ch}${/^[A-Z]{1,6}\s*[<>]/.test(al.r)?' · auto-evaluates every 60s':' · manual/reference only'}</div></span>
+       <div class="switch ${al.on?'on':''}" onclick="API.alerts[${i}].on=!API.alerts[${i}].on;UI.renderSafe()"><i></i></div>
+       <button class="btn" style="padding:2px 7px;font-size:10px" onclick="if(QD.on&&API.alerts[${i}].id)fetch('/api/alerts/'+API.alerts[${i}].id,{method:'DELETE'});API.alerts.splice(${i},1);UI.renderSafe()">✕</button></div>`).join('');
     document.getElementById('setupList').innerHTML=API.setup.map(([l,pc])=>
       `<div class="setupbar"><span class="sbl">${l}</span>
        <div class="bar-outer" style="flex:1;margin:0"><div class="bar-inner" style="width:${pc}%;background:${pc===100?'var(--green)':pc>0?'var(--blue)':'var(--border)'}"></div></div>
@@ -1961,6 +1998,90 @@ const UI = {
     if(QD.on)QD.post('/api/alerts',alertDoc);
     API.alerts.unshift({...alertDoc, on:true});
     this.closeModal(); this.renderSafe(); this.toast('Alert created (stub — evaluated server-side, Blueprint M14)','ok');
+  },
+
+  /* ---- trade ticket / watchlist / rebalance ---- */
+  _ticket(){
+    return {sym:(document.getElementById('tk-sym').value||'').toUpperCase().trim(),
+      qty:+document.getElementById('tk-qty').value||0,
+      side:document.querySelector('#tk-side .chip.sel').dataset.v,
+      type:document.querySelector('#tk-type .chip.sel').dataset.v,
+      limit_price:document.getElementById('tk-px').value||null};
+  },
+  async ticketCheck(){
+    const t=this._ticket(); t.check_only=true;
+    const r=await QD.post('/api/orders/place',t); if(!r)return;
+    const el=document.getElementById('tk-out');
+    if(r.err){el.innerHTML='⛔ '+r.err;return;}
+    el.innerHTML=r.ok?`✅ risk OK — ~$${r.notional.toLocaleString()} notional, last ${r.ref_price}`
+      :`⛔ risk would reject: ${r.reasons.join('; ')}`;
+  },
+  async ticketSubmit(){
+    const t=this._ticket();
+    if(!t.sym||!t.qty){this.toast('symbol and qty required','err');return;}
+    if(!confirm(`PAPER order: ${t.side.toUpperCase()} ${t.qty} ${t.sym} ${t.type}${t.limit_price?' @'+t.limit_price:''} — submit?`))return;
+    const r=await QD.post('/api/orders/place',t); if(!r||r.err)return;
+    document.getElementById('tk-out').innerHTML=`✅ submitted ${r.id.slice(0,8)} — status ${r.status}`;
+    this.toast(`Order ${r.status}: ${t.side.toUpperCase()} ${t.qty} ${t.sym}`,'ok');
+    API.positions=await(await fetch('/api/positions')).json(); this.renderDash();
+  },
+  async refreshWatchlist(){
+    if(!QD.on)return;
+    const syms=[...new Set(['SPY','QQQ',...API.symbols.filter(v=>v.ac==='eq').map(v=>v.s)])].slice(0,8);
+    try{
+      const d=await(await fetch('/api/quotes?syms='+syms.join(','))).json();
+      document.getElementById('wlTs').textContent=d.source==='none'?'(no keys)':'· '+d.ts;
+      document.getElementById('wlRows').innerHTML=syms.map(sy=>{
+        const px=d.quotes[sy];
+        const prev=this._wlPrev?this._wlPrev[sy]:null;
+        const cls=prev&&px?(px>prev?'up':px<prev?'down':''):'';
+        return `<tr><td style="cursor:pointer" onclick="UI.pickSym('${sy}')">${sy}</td>
+          <td class="${cls}" style="text-align:right">${px?px.toLocaleString(undefined,{minimumFractionDigits:2}):'—'}</td></tr>`;
+      }).join('');
+      this._wlPrev=d.quotes;
+    }catch(e){}
+  },
+  async rebalance(execute){
+    if(!QD.on){this.toast('backend offline','err');return;}
+    let body={execute:false};
+    if(execute){
+      const c=prompt('Execute the rebalance on the PAPER account.\nType exactly: REBALANCE');
+      if(c!=='REBALANCE'){this.toast('cancelled — confirmation did not match','err');return;}
+      body={execute:true,confirm:'REBALANCE'};
+    }
+    document.getElementById('rbOut').innerHTML='running node…';
+    const r=await QD.post('/api/node/rebalance',body);
+    if(!r||r.err){document.getElementById('rbOut').innerHTML='⛔ '+(r?r.err:'failed');return;}
+    const rows=(r.orders||[]).map(o=>
+      `<tr><td class="${o.side==='BUY'?'up':'down'}">${o.side}</td><td>${o.qty}</td><td>${o.sym}</td><td>$${o.px.toLocaleString()}</td>
+       <td class="s">${o.risk_ok?(o.order_id?`<span class="tag ok">sent ${o.order_id}</span>`:'<span class="tag ok">risk OK</span>'):`<span class="tag fail">${o.risk_reasons[0]||'rejected'}</span>`}</td></tr>`).join('');
+    document.getElementById('rbOut').innerHTML=
+      `<div class="mut" style="margin-bottom:6px">signal ${r.asof} · ${r.risk_on?'RISK-ON':'RISK-OFF'} · equity $${r.equity.toLocaleString()} · ${r.executed?'<b class="down">EXECUTED</b>':'dry-run'}</div>`
+      +(rows?`<table><thead><tr><th>Side</th><th>Qty</th><th>Sym</th><th>~Px</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`
+      :`<div class="mut">${r.note||'no orders needed'}</div>`);
+    if(r.executed){API.positions=await(await fetch('/api/positions')).json();this.renderDash();}
+  },
+  async closePos(sym){
+    if(!confirm(`Close ${sym} at MARKET on the paper account?`))return;
+    const r=await QD.post('/api/positions/close',{sym}); if(!r||r.err)return;
+    this.toast(`${sym} closing at market`,'ok');
+    setTimeout(async()=>{API.positions=await(await fetch('/api/positions')).json();this.renderDash();},1500);
+  },
+  async cancelOrder(id){
+    if(!QD.on){this.toast('backend offline','err');return;}
+    try{
+      const r=await fetch('/api/orders/'+id,{method:'DELETE'});
+      const d=await r.json();
+      if(!r.ok){this.toast('⛔ '+d.error,'err');return;}
+      this.toast('Order '+id+' canceled','ok');
+    }catch(e){this.toast('cancel failed','err');}
+  },
+  async deleteIdea(id){
+    if(!confirm('Delete this idea from the journal permanently?'))return;
+    if(QD.on)await fetch('/api/ideas/'+id,{method:'DELETE'});
+    API.ideas=API.ideas.filter(i=>i.id!==id);
+    document.getElementById('drawer').classList.remove('open');
+    this.renderPipeline(); this.renderJournal(); this.toast('Idea deleted','ok');
   },
 
   /* ---- data & artifacts (real inventory) ---- */
@@ -2206,7 +2327,7 @@ const UI = {
     document.getElementById('openOrders').innerHTML=API.openOrders.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym)).map(o=>
       `<tr><td>${o.id}</td><td>${o.sym}</td><td class="${o.side==='BUY'?'up':'down'}">${o.side}</td><td>${o.type}</td><td>${o.qty}</td><td>${o.px}</td><td class="s">${o.venue}</td>
        <td class="s"><span class="tag warn">${o.state}</span></td>
-       <td><button class="btn" style="padding:3px 10px;font-size:11px" onclick="UI.toast('Cancel ${o.id} sent (stub — wire to TradingNode command bus)','ok')">✕</button></td></tr>`).join('');
+       <td><button class="btn" style="padding:3px 10px;font-size:11px" onclick="UI.cancelOrder('${o.id}')">✕</button></td></tr>`).join('')||'<tr><td colspan="9" class="s mut">no working orders</td></tr>';
     document.getElementById('orderHist').innerHTML=API.orderHist.filter(o=>Filt.sym==='ALL'||o.sym.startsWith(Filt.sym)).map(o=>
       `<tr><td>${o.t}</td><td>${o.sym}</td><td>${o.sq}</td><td>${o.px}</td><td>${o.slip}</td>
        <td class="s"><span class="tag ${o.st==='filled'?'ok':o.st==='rejected'?'fail':'off'}">${o.st}</span></td></tr>`).join('');

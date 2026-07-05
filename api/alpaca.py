@@ -65,6 +65,7 @@ def account():
         "pattern_day_trader": a.get("pattern_day_trader"),
         "account_blocked": a.get("account_blocked"),
         "number_masked": "…" + str(a.get("account_number", ""))[-4:],
+        "daytrade_count": a.get("daytrade_count"),
     }
 
 
@@ -120,6 +121,11 @@ def cancel_all_orders():
 def close_all_positions():
     """Kill-switch path: flatten everything on the paper account."""
     return _req("DELETE", "/v2/positions?cancel_orders=true")
+
+
+def close_position(symbol):
+    """Close one position at market (paper)."""
+    return _req("DELETE", f"/v2/positions/{symbol}")
 
 
 def last_price(symbol):

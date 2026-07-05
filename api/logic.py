@@ -252,6 +252,23 @@ def validate_order(order, limits):
     return len(reasons) == 0, reasons
 
 
+# ---------------- alert rules (server-evaluated) ----------------
+ALERT_RE = re.compile(r"^([A-Z]{1,6})\s*([<>])\s*\$?([\d,]+(?:\.\d+)?)$")
+
+
+def parse_alert_rule(rule):
+    """Supported live-evaluated form: 'SYM > 123.45' or 'SYM < 600'.
+    Returns (sym, op, price) or None (unparseable rules stay manual/reference)."""
+    m = ALERT_RE.match((rule or "").strip())
+    if not m:
+        return None
+    return m.group(1), m.group(2), float(m.group(3).replace(",", ""))
+
+
+def alert_fires(op, price, last):
+    return last > price if op == ">" else last < price
+
+
 # ---------------- daily P&L + wash-sale ----------------
 def daily_pnl(seed=9, year=2026, month=7):
     """Deterministic mock matching the GUI's generator until real fills exist (M14)."""
