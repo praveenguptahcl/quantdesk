@@ -301,10 +301,12 @@ def divest_all(store, username):
     return total
 
 
-def _builtin_policy(pack):
+def _builtin_policy(pack, me=None):
     """Keyless fallback: pick the strategy with the best REAL evidence
-    (optimizer plateau Sharpe if computed, else live full-period Sharpe)."""
-    best, best_score, why = None, -9, ""
+    (optimizer plateau Sharpe if computed, else live full-period Sharpe).
+    Conviction rule: a bot keeps ITS OWN variant unless another strategy beats
+    it by >0.15 Sharpe — otherwise every keyless bot converges on one pick."""
+    scored = []
     for st in pack["public_strategies"]:
         if st["optimizer"] and st["optimizer"]["plateau_mean"] is not None:
             score = st["optimizer"]["plateau_mean"]
@@ -313,10 +315,18 @@ def _builtin_policy(pack):
             r = backtest.engine_a(st["params"] or None)
             score = round(r["sharpe"], 2) if r else -9
             src = f"live full-period SR {score}"
-        if score > best_score:
-            best, best_score, why = st, score, src
-    if not best:
+        scored.append((score, st, src))
+    if not scored:
         return None
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best_score, best, why = scored[0]
+    own = [t for t in scored if t[1].get("owner") == me]
+    if own and best.get("owner") != me and own[0][0] >= best_score - 0.15:
+        o_score, o_st, o_src = own[0]
+        return {"action": "keep", "strategy_id": o_st["id"], "params": o_st["params"] or {},
+                "amount": 20000,
+                "reason": f"conviction: my own {o_st['name']} ({o_src}) is within 0.15 SR of "
+                          f"the field's best {best['name']} ({why}) — not worth switching"}
     return {"action": "switch", "strategy_id": best["id"], "params": best["params"] or {},
             "amount": 20000,
             "reason": f"builtin policy: highest real evidence — {best['name']} ({why}); "
@@ -358,7 +368,7 @@ def run_llm_traders(store, runnable):
             except Exception:
                 decision = None
         if not decision:
-            decision = _builtin_policy(pack)
+            decision = _builtin_policy(pack, me=u["u"])
             used = "builtin"
         if not decision:
             continue

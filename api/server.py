@@ -228,6 +228,8 @@ class Handler(BaseHTTPRequestHandler):
         routes = {
             "/api/auth/login": lambda: self.p_login(body),
             "/api/auth/password": lambda: self.p_password(body),
+            "/api/auth/logout": lambda: self.p_logout(),
+            "/api/admin/multiuser": lambda: self.p_multiuser(body),
             "/api/community/users": lambda: self.p_create_user(body),
             "/api/community/publish": lambda: self.p_publish(body),
             "/api/community/invest": lambda: self.p_invest(body),
@@ -1116,6 +1118,42 @@ class Handler(BaseHTTPRequestHandler):
                                            "must_change", "demo", "provider")}
                     for r in rows]
         self._send(200, rows)
+
+    def p_multiuser(self, body):
+        """Solo->multiuser switch from the GUI: persist QD_MULTIUSER=1 in .env,
+        then re-exec this process so the flag takes effect. Admin/solo only."""
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        on = "1" if (body or {}).get("on") else "0"
+        env_path = os.path.join(HERE, "..", ".env")
+        lines = []
+        if os.path.exists(env_path):
+            lines = [l for l in open(env_path).read().splitlines()
+                     if not l.strip().startswith("QD_MULTIUSER")]
+        lines.append(f"QD_MULTIUSER={on}")
+        open(env_path, "w").write("\n".join(lines) + "\n")
+        store.add_feed("warn", f"MULTI-USER MODE -> {on} (server restarting)")
+        self._send(200, {"ok": True, "restarting": True})
+
+        def _restart():
+            import time as _t
+            _t.sleep(1.0)
+            os.environ["QD_MULTIUSER"] = on
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+        threading.Thread(target=_restart, daemon=True).start()
+
+    def p_logout(self):
+        t = self._token()
+        if t:
+            store.set_kv(f"sess:{t}", "")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Set-Cookie", "qds=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0")
+        body = b'{"ok": true}'
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def p_login(self, body):
         token = community.login(store, (body.get("u") or "").strip(), body.get("pw") or "")

@@ -881,7 +881,8 @@ label.fl b{color:var(--red)}
     <section class="screen" id="s-me">
       <div class="flex spread"><div><h1>My Panel</h1>
       <div class="sub">Your virtual book, your strategies, your visibility choices.</div></div>
-      <span id="meWho" class="tag paper" style="font-size:12px;padding:6px 14px"></span></div>
+      <span id="meWho" class="tag paper" style="font-size:12px;padding:6px 14px"></span>
+      <button class="btn" style="margin-left:8px" onclick="UI.switchUser()">⇄ Switch user</button></div>
       <div class="grid g2">
         <div class="card">
           <h2 style="margin-top:0">Virtual book</h2>
@@ -2366,6 +2367,18 @@ const UI = {
       `<div class="hb"><span class="hn">${x.strategy} · $${x.amount.toLocaleString()}</span>
        <span class="mut" style="font-size:11px">${Object.keys(x.params||{}).length?JSON.stringify(x.params):'frozen params'} · since ${x.opened}</span></div>`).join('')
       ||'<p class="mut">none — invest above to join the leaderboard</p>';
+  },
+  async switchUser(){
+    if(!community_enabled_hint()){
+      if(confirm('You are in SOLO mode — one admin profile, no login.\n\nEnable MULTI-USER mode now? The server sets QD_MULTIUSER=1 in .env and restarts (takes ~20s). You will then sign in as admin / changeme, and can log in as any account (demo humans: maya / ravi / sofia, password demo123).')){
+        const r=await QD.post('/api/admin/multiuser',{on:1}); if(!r||r.err)return;
+        this.toast('Multi-user enabled — server restarting… page reloads in 25s','ok');
+        setTimeout(()=>location.reload(),25000);
+      }
+      return;
+    }
+    await fetch('/api/auth/logout',{method:'POST'});
+    location.reload();   // 401 -> login overlay appears
   },
   async togglePub(id,pub){
     const r=await QD.post('/api/community/publish',{idea_id:id,public:pub}); if(!r||r.err)return;
