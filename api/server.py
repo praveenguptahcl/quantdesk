@@ -119,6 +119,10 @@ class Handler(BaseHTTPRequestHandler):
                 "multiuser": community.enabled()}),
             "/api/leaderboard": lambda: self._send(200, community.standings(store)),
             "/api/strategies/runnable": self.g_runnable,
+            "/api/community/export": lambda: self._send(200, community.tuning_pack(
+                store, (self._user() or {"u": "solo"})["u"], self._runnable_list())),
+            "/api/community/llmlog": lambda: self._send(
+                200, store.get_doc("static", "llm_log") or []),
             "/api/community/users": self.g_users,
             "/api/community/public": lambda: self._send(200, [
                 {k: i.get(k) for k in ("id", "name", "owner", "hyp", "kill", "copied_from", "stage")}
@@ -190,6 +194,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/community/invest": lambda: self.p_invest(body),
             "/api/community/copy": lambda: self.p_copy(body),
             "/api/community/finalize": lambda: self.p_finalize(),
+            "/api/community/llm-users": lambda: self.p_llm_user(body),
+            "/api/community/llm-run": lambda: self.p_llm_run(),
             "/api/chat": lambda: self.p_chat(body),
             "/api/strategies/adopt": lambda: self.p_adopt(body),
             "/api/ideas": lambda: self.p_idea(body),
@@ -987,6 +993,24 @@ class Handler(BaseHTTPRequestHandler):
         store.add_feed("info", f"STRATEGY ADOPTED — {name} by {u['u']} (Research stage, runnable)")
         self._send(201, doc)
 
+    def p_llm_user(self, body):
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        doc, err = community.create_llm_user(store, (body.get("u") or "").strip(),
+                                             body.get("name"), body.get("provider", "builtin"))
+        if err:
+            return self._err(422, err)
+        store.add_feed("info", f"🤖 LLM trader created: {doc['u']} (provider {doc['provider']})")
+        self._send(201, {"u": doc["u"], "provider": doc["provider"]})
+
+    def p_llm_run(self):
+        u = self._user()
+        if not u or u.get("role") != "admin":
+            return self._err(403, "admin only")
+        results = community.run_llm_traders(store, self._runnable_list())
+        self._send(200, {"ran": len(results), "results": results})
+
     # ---------- community handlers ----------
     def g_users(self):
         u = self._user()
@@ -1212,9 +1236,15 @@ def main():
     import threading as _th
 
     def _week_loop():
+        last_final = None
         while True:
             try:
+                week = community.current_week_id()
                 community.maybe_finalize_week(store)
+                if store.get_kv(f"finalized:{week}") == "1" and last_final != week:
+                    # new week begins: platform initiates LLM trader interaction
+                    community.run_llm_traders(store, Handler._runnable_list(Handler))
+                    last_final = week
             except Exception:
                 pass
             time.sleep(600)

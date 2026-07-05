@@ -895,6 +895,8 @@ label.fl b{color:var(--red)}
           </div>
           <button class="btn primary" style="margin-top:12px" onclick="UI.doInvest()">Invest → joins leaderboard</button>
           <p class="mut" style="margin-top:8px">⚠ Investing makes the strategy PUBLIC automatically — that's the transparency rule. Parameter tweaks create YOUR variant, scored by its real weekly engine return.</p>
+          <div class="flex" style="margin-top:10px"><button class="btn" onclick="UI.downloadPack()">⬇ Weekly tuning pack (JSON)</button>
+          <span class="mut" style="font-size:11px">your results + all public strategies' params &amp; real stats — same brief the LLM traders get</span></div>
           <h2>My open investments</h2>
           <div id="meInv" class="mut">—</div>
         </div>
@@ -946,6 +948,18 @@ label.fl b{color:var(--red)}
           <h2 style="margin-top:0">Contest control</h2>
           <p class="mut">The week closes automatically Saturday 23:59 ET. Manual finalize (e.g. classroom demo):</p>
           <button class="btn danger" onclick="UI.admFinalize()">🏁 Finalize current week now</button>
+          <h2>🤖 LLM traders (AI leaderboard participants)</h2>
+          <p class="mut">The platform briefs each LLM trader with the weekly tuning pack (its results + everyone's public strategies with real stats), takes its pick, and reinvests its book — automatically after each Saturday close, or on demand:</p>
+          <div class="f2">
+            <div><label class="fl">Bot username</label><input type="text" id="llmU" placeholder="claudebot"></div>
+            <div><label class="fl">Provider</label><div class="chips" id="llmP"><span class="chip sel" data-v="builtin">builtin policy</span><span class="chip" data-v="anthropic">Claude (needs key)</span></div></div>
+          </div>
+          <div class="flex" style="margin-top:10px">
+            <button class="btn primary" onclick="UI.llmCreate()">Create LLM trader</button>
+            <button class="btn" style="border-color:var(--purple);color:var(--purple)" onclick="UI.llmRun()">▶ Run LLM traders now</button>
+          </div>
+          <h2>LLM decision log (public reasoning)</h2>
+          <div id="llmLog" class="feed" style="max-height:180px;font-family:var(--sans);font-size:12px">—</div>
           <h2>All investments (admin view)</h2>
           <div id="admInv" class="feed" style="max-height:220px;font-family:var(--sans);font-size:12px">—</div>
         </div>
@@ -2362,6 +2376,12 @@ const UI = {
     const inv=await(await fetch('/api/community/investments')).json();
     document.getElementById('admInv').innerHTML=inv.map(x=>
       `<div>${x.user}: $${x.amount.toLocaleString()} → ${x.strategy} (${Object.keys(x.params||{}).length?JSON.stringify(x.params):'frozen'})</div>`).join('')||'none';
+    try{ const log=await(await fetch('/api/community/llmlog')).json();
+      document.getElementById('llmLog').innerHTML=log.map(e=>
+        `<div><b>🤖 ${e.user}</b> <span class="mut">[${e.provider} · ${e.at}]</span> ${e.error?'⛔ '+e.error:('$'+(e.invested||0).toLocaleString()+' → '+(e.decision.reason||'').slice(0,130))}</div>`).join('')||'no decisions yet — press Run';
+    }catch(e){}
+    document.querySelectorAll('#llmP .chip').forEach(ch=>ch.onclick=()=>{
+      document.querySelectorAll('#llmP .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
     document.querySelectorAll('#auR .chip').forEach(ch=>ch.onclick=()=>{
       document.querySelectorAll('#auR .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});
   },
@@ -2370,6 +2390,23 @@ const UI = {
       name:document.getElementById('auN').value.trim(),pw:document.getElementById('auP').value,
       role:document.querySelector('#auR .chip.sel').dataset.v});
     if(!r||r.err)return; this.toast(`User ${r.u} created (${r.role})`,'ok'); this.renderAdmin();
+  },
+  async llmCreate(){
+    const r=await QD.post('/api/community/llm-users',{u:document.getElementById('llmU').value.trim(),
+      provider:document.querySelector('#llmP .chip.sel').dataset.v});
+    if(!r||r.err)return; this.toast(`🤖 ${r.u} created (${r.provider}) — will trade each week automatically`,'ok'); this.renderAdmin();
+  },
+  async llmRun(){
+    this.toast('Briefing LLM traders with the tuning pack…','ok');
+    const r=await QD.post('/api/community/llm-run'); if(!r||r.err)return;
+    this.toast(`🤖 ${r.ran} LLM trader(s) made their picks — see decision log & leaderboard`,'ok');
+    this.renderAdmin(); 
+  },
+  async downloadPack(){
+    try{ const d=await(await fetch('/api/community/export')).json();
+      this._download('tuning-pack-'+d.week+'.json',JSON.stringify(d,null,2),'application/json');
+      this.toast('Tuning pack downloaded — study it, tune, reinvest before Saturday 23:59 ET','ok');
+    }catch(e){this.toast('backend offline','err');}
   },
   async admFinalize(){
     if(!confirm('Finalize the current week NOW and record the winner?'))return;

@@ -204,6 +204,134 @@ def maybe_finalize_week(store):
     store.set_kv(f"finalized:{week}", "1")
 
 
+# ---------------- LLM traders (autonomous leaderboard participants) ----------------
+def create_llm_user(store, u, name, provider="builtin"):
+    if not u.isalnum() or store.get_doc("users", u):
+        return None, "username taken or invalid"
+    doc = {"u": u, "name": name or u, "role": "llm", "provider": provider,
+           "salt": "-", "pw": "-", "disabled": False, "cash": 100_000.0}
+    store.put_doc("users", u, doc)
+    return doc, None
+
+
+def tuning_pack(store, username, runnable):
+    """The weekly export every participant (human or LLM) gets: own results,
+    leaderboard, and every public strategy's params + real stats."""
+    s = standings(store)
+    mine = [inv for inv in store.list_docs("investments") if inv["user"] == username]
+    for inv in mine:
+        inv["week_return_pct"] = round(_strategy_week_return(inv.get("params")) * 100, 2)
+    strategies = []
+    for r in runnable:
+        if r.get("params") is None:
+            continue
+        opt = store.get_doc("optimize", r["name"])
+        strategies.append({
+            "id": r["id"], "name": r["name"], "owner": r["owner"], "stage": r["stage"],
+            "params": r["params"],
+            "week_return_pct": round(_strategy_week_return(r["params"]) * 100, 2),
+            "optimizer": ({"frozen_sharpe": opt["grid"]["frozen"]["sharpe"],
+                           "plateau_mean": opt["grid"]["frozen"]["plateau_mean"],
+                           "wf": opt["wf"]["verdict"]} if opt else None)})
+    sig = backtest.current_signal() or {}
+    return {"week": s["week"], "closes": s["closes"],
+            "regime": sig.get("regime", {}).get("risk_on"),
+            "my_investments": mine, "leaderboard": s["rows"],
+            "public_strategies": strategies, "past_winners": s["winners"][:8]}
+
+
+def divest_all(store, username):
+    total = 0.0
+    for inv in list(store.list_docs("investments")):
+        if inv["user"] == username:
+            total += inv["amount"]
+            store.delete_doc("investments", inv["id"])
+    udoc = store.get_doc("users", username)
+    if udoc:
+        udoc["cash"] = udoc.get("cash", 0) + total
+        store.put_doc("users", username, udoc)
+    return total
+
+
+def _builtin_policy(pack):
+    """Keyless fallback: pick the strategy with the best REAL evidence
+    (optimizer plateau Sharpe if computed, else live full-period Sharpe)."""
+    best, best_score, why = None, -9, ""
+    for st in pack["public_strategies"]:
+        if st["optimizer"] and st["optimizer"]["plateau_mean"] is not None:
+            score = st["optimizer"]["plateau_mean"]
+            src = f"optimizer plateau SR {score}"
+        else:
+            r = backtest.engine_a(st["params"] or None)
+            score = round(r["sharpe"], 2) if r else -9
+            src = f"live full-period SR {score}"
+        if score > best_score:
+            best, best_score, why = st, score, src
+    if not best:
+        return None
+    return {"action": "switch", "strategy_id": best["id"], "params": best["params"] or {},
+            "amount": 20000,
+            "reason": f"builtin policy: highest real evidence — {best['name']} ({why}); "
+                      f"last week {best['week_return_pct']:+.2f}%"}
+
+
+def _llm_policy(pack, provider):
+    prompt = ("You are an autonomous paper-trading agent in a weekly contest. "
+              "Given this tuning pack (your results, leaderboard, public strategies with "
+              "REAL backtest stats), reply ONLY with JSON: "
+              '{"action":"keep|switch","strategy_id":<id>,"params":{...engine params...},'
+              '"amount":<usd<=cash>,"reason":"<one sentence>"} . Prefer robust plateau '
+              "Sharpe over last week's noise. Pack: " + json.dumps(pack)[:6000])
+    r = llm_mod._post("https://api.anthropic.com/v1/messages",
+                      {"model": os.environ.get("AI_MODEL", "claude-sonnet-5"),
+                       "max_tokens": 400, "messages": [{"role": "user", "content": prompt}]},
+                      {"x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
+                       "anthropic-version": "2023-06-01"})
+    txt = "".join(b.get("text", "") for b in r.get("content", []))
+    import re as _re
+    m = _re.search(r"\{.*\}", txt, _re.S)
+    return json.loads(m.group(0)) if m else None
+
+
+def run_llm_traders(store, runnable):
+    """The platform initiates the interaction: brief each LLM user, take their pick,
+    reinvest their book, and log the reasoning publicly."""
+    results = []
+    for u in store.list_docs("users"):
+        if u.get("role") != "llm" or u.get("disabled"):
+            continue
+        pack = tuning_pack(store, u["u"], runnable)
+        decision = None
+        used = "builtin"
+        if u.get("provider") == "anthropic" and os.environ.get("ANTHROPIC_API_KEY"):
+            try:
+                decision = _llm_policy(pack, "anthropic")
+                used = "anthropic"
+            except Exception:
+                decision = None
+        if not decision:
+            decision = _builtin_policy(pack)
+            used = "builtin"
+        if not decision:
+            continue
+        freed = divest_all(store, u["u"])
+        udoc = store.get_doc("users", u["u"])
+        amount = min(float(decision.get("amount", 20000)), udoc["cash"])
+        user_view = {"u": u["u"], "cash": udoc["cash"], "role": "llm"}
+        res, err = invest(store, user_view, decision.get("strategy_id"),
+                          amount, decision.get("params"))
+        entry = {"user": u["u"], "provider": used, "week": current_week_id(),
+                 "decision": decision, "freed": freed, "invested": None if err else amount,
+                 "error": err, "at": datetime.datetime.now().isoformat()[:16]}
+        log = store.get_doc("static", "llm_log") or []
+        log.insert(0, entry)
+        store.put_doc("static", "llm_log", log[:60])
+        store.add_feed("info", f"🤖 LLM TRADER {u['u']} ({used}): "
+                       + (err or f"${amount:,.0f} → {decision.get('reason','')[:110]}"))
+        results.append(entry)
+    return results
+
+
 # ---------------- LLM chatbot ----------------
 SYSTEM = """You are QuantDesk's assistant. The platform: signals (docs/SIGNALS.md,
 regime SPY>SMA200 then 12-1 momentum top-3, sigmoid confidence, vol-target sizing),
