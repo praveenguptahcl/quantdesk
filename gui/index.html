@@ -388,8 +388,8 @@ label.fl b{color:var(--red)}
       <div class="flex" style="margin-bottom:16px;flex-wrap:wrap">
         <span class="mut">Strategy:</span>
         <select id="paritySel" class="inp" style="width:auto" onchange="UI.renderParity()">
-          <option value="momo">momo-etf-v3 · 2023-01 → 2025-12</option>
-          <option value="pairs">pairs-stat-v1 · 2022-06 → 2025-12</option>
+          <option value="momo">momo-etf-v3</option>
+          <option value="pairs">pairs-stat-v1 (teaching demo)</option>
         </select>
         <button class="btn primary" onclick="UI.runParityBacktest(false)">▶ Run dual backtest</button>
         <button class="btn" onclick="UI.runParityBacktest(true)" title="Shortens engine B's warm-up by 20 bars to demo a parity failure">⚠ Run with injected bug</button>
@@ -803,7 +803,7 @@ label.fl b{color:var(--red)}
         </div>
         <div class="card">
           <h2 style="margin-top:0">Dead-man's switch</h2>
-          <div class="hb"><span class="hn">Heartbeat monitor (GUI ↔ node)</span><span class="tag ok">alive · 2s ago</span></div>
+          <div class="hb"><span class="hn">Heartbeat (GUI ↔ backend)</span><span class="tag ok" id="hbTag">—</span></div>
           <div class="hb"><span class="hn">Auto-flatten if node unreachable &gt; 5 min</span><div class="switch on" onclick="UI.toggleSwitch(this,'auto-flatten')"><i></i></div></div>
           <div class="hb"><span class="hn">Broker-side stop orders as backstop</span><div class="switch on" onclick="UI.toggleSwitch(this,'broker stops')"><i></i></div></div>
           <div class="hb"><span class="hn">Auto-flatten on power/network loss (VPS watchdog)</span><div class="switch" onclick="UI.toggleSwitch(this,'vps watchdog')"><i></i></div></div>
@@ -821,10 +821,8 @@ label.fl b{color:var(--red)}
           <div class="flex spread"><h2 style="margin-top:0">Alerts Center</h2><button class="btn" onclick="UI.addAlert()">＋ Alert</button></div>
           <div id="alertRows"></div>
           <h2>Data health</h2>
-          <div class="hb"><span class="hn">Catalog disk usage</span><span class="mono mut">184 / 500 GB</span></div>
-          <div class="bar-outer"><div class="bar-inner" style="width:37%;background:var(--blue)"></div></div>
-          <div class="hb" style="margin-top:8px"><span class="hn">Gap check (last night)</span><span class="tag warn">2 gaps: ETHUSDT-1H</span></div>
-          <div class="hb"><span class="hn">Clock drift (NTP)</span><span class="tag ok">+0.4 ms</span></div>
+          <div class="hb"><span class="hn">Catalog size / disk free</span><span class="mono mut" id="diskLine">—</span></div>
+          <div class="hb"><span class="hn">Bar-data freshness</span><span class="tag ok" id="gapLine">—</span></div>
           <h2>Disaster runbook</h2>
           <div class="cp done"><span class="ck">✓</span>Kill switch tested this month</div>
           <div class="cp done"><span class="ck">✓</span>Broker phone numbers on paper, not just in the app</div>
@@ -1521,7 +1519,7 @@ const UI = {
     this.toast(bug?'Running dual backtest with injected warm-up bug…':'Running dual backtest (engine A + engine B) on catalog data…','ok');
     const r=await QD.post('/api/backtests/run/momo-etf-v3',{bug:!!bug});
     if(!r||r.err)return;
-    API.parity.momo=Object.assign({},API.parity.momo,r.parity);
+    API.parity.momo=Object.assign({},API.parity.momo,r.parity); API.parity._fetched=true;
     document.getElementById('paritySel').value='momo';
     this.renderParity();
     // refresh journal gates (server synced momo's gate to the computed verdict)
@@ -1530,10 +1528,18 @@ const UI = {
   },
 
   /* ---- backtest & parity tearsheet ---- */
-  renderParity(){
-    const k=document.getElementById('paritySel').value, p=API.parity[k];
+  async renderParity(){
+    const k=document.getElementById('paritySel').value;
+    if(QD.on&&k==='momo'&&!API.parity._fetched){
+      try{ const r=await fetch('/api/parity/momo-etf-v3');
+        if(r.ok){ Object.assign(API.parity.momo, await r.json()); API.parity._fetched=true; }
+      }catch(e){}
+    }
+    const p=API.parity[k];
+    const demoNote=(k==='pairs')?' — DEMO teaching scenario (deliberate failure)':(API.parity._fetched?'':' — demo until backend run');
     // status badge
     document.getElementById('parityBadge').innerHTML =
+      `<span class="mut" style="margin-right:10px">${(p.window||'').slice(0,60)}${demoNote}</span>`+
       `<span class="tag ${p.pass?'ok':'fail'}" style="font-size:12px;padding:6px 14px">${p.pass?'✓ PARITY PASSED':'⛔ PARITY FAILED'}</span>`;
     // KPI cards: LEAN big, Nautilus small, delta badge
     const defs=[['CAGR','cagr'],['Sharpe','sharpe'],['Sortino','sortino'],['Max DD','dd'],['Win rate','win'],['Trades','trades']];
@@ -1996,6 +2002,14 @@ const UI = {
        <div class="bar-outer" style="flex:1;margin:0"><div class="bar-inner" style="width:${pc}%;background:${pc===100?'var(--green)':pc>0?'var(--blue)':'var(--border)'}"></div></div>
        <span class="mono mut" style="width:40px;text-align:right">${pc}%</span></div>`).join('');
     this._mktClock(); clearInterval(this._mkI); this._mkI=setInterval(()=>this._mktClock(),1000);
+    if(QD.on){ fetch('/api/data/inventory').then(r=>r.json()).then(d=>{
+      const dl=document.getElementById('diskLine');
+      if(dl)dl.textContent=`${d.catalog_mb} MB used · ${d.disk_free_gb} GB free`;
+      const gl=document.getElementById('gapLine');
+      if(gl){ const worst=Math.max(...d.bars.map(b2=>b2.stale_days??99));
+        gl.textContent=worst<=4?`fresh (≤${worst}d)`:`stale ${worst}d — refresh on Data screen`;
+        gl.className='tag '+(worst<=4?'ok':'warn'); }
+    }).catch(()=>{}); }
   },
   _mktClock(){
     const el=document.getElementById('mktClock'); if(!el)return;
@@ -2542,7 +2556,8 @@ QD.updState=async function(){
     const d=await(await fetch('/api/state')).json();
     if(QD.guiM&&d.gui_mtime&&d.gui_mtime!==QD.guiM&&!QD.staleWarned){QD.staleWarned=true;
       UI.toast('⚠ A newer version of this GUI exists — press Cmd+Shift+R to reload','err');}
-    QD.guiM=QD.guiM||d.gui_mtime;
+    QD.guiM=QD.guiM||d.gui_mtime; QD.lastPoll=Date.now();
+    const hb=document.getElementById('hbTag'); if(hb){hb.textContent='alive · live poll'; hb.className='tag ok';}
     const usd=v=>(v<0?'−':'')+'$'+Math.abs(v).toLocaleString(undefined,{maximumFractionDigits:2});
     const set=(id,txt,cls)=>{const e=document.getElementById(id); if(e){e.textContent=txt; if(cls!==undefined)e.className='val '+cls;}};
     const live=d.source==='alpaca-paper';

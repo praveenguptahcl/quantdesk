@@ -603,7 +603,9 @@ class Handler(BaseHTTPRequestHandler):
                 a = alpaca.account()
                 live = {"n": f"Alpaca paper ({a['number_masked']}) · LIVE DATA", "eq": f"${a['equity']:,.0f}",
                         "bp": f"${a['buying_power']:,.0f}", "mg": a["status"]}
-                rows = [live] + [r for r in rows if "Alpaca" not in r["n"]]
+                # real account connected -> drop the seeded example accounts entirely
+                rows = [live, {"n": "IB / crypto venues — not connected", "eq": "add keys in .env",
+                               "bp": "—", "mg": "—"}]
             except alpaca.AlpacaError as e:
                 rows = [{"n": "Alpaca paper — ERROR", "eq": str(e)[:40], "bp": "—", "mg": "—"}] + rows
         return rows
@@ -688,6 +690,10 @@ class Handler(BaseHTTPRequestHandler):
                          "bars_available": have, "ok": have >= need,
                          "note": f"needs {need} daily bars (252 momentum + 1) per symbol; regime SMA needs 200"},
             "refreshing": store.get_kv("data_refreshing") == "1",
+            "catalog_mb": round(sum(b2["kb"] for b2 in bars) / 1024 +
+                                sum(f["mb"] for f in l2), 2),
+            "disk_free_gb": round(os.statvfs(cat).f_bavail * os.statvfs(cat).f_frsize / 1e9, 1)
+            if os.path.isdir(cat) else None,
         })
 
     def p_data_refresh(self):
