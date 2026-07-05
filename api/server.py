@@ -158,6 +158,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/orders/place": lambda: self.p_place_order(body),
             "/api/positions/close": lambda: self.p_close_position(body),
             "/api/node/rebalance": lambda: self.p_rebalance(body),
+            "/api/clientlog": lambda: (open(os.path.join(HERE, "..", "logs_and_artifacts",
+                "client_errors.log"), "a").write(
+                f"{time.strftime('%H:%M:%S')} {json.dumps(body)}\n"), self._send(200, {"ok": True}))[-1],
             "/api/signals/history": lambda: (lambda h: self._send(200, h) if h else self._err(
                 503, "catalog data missing"))(backtest.signal_history(
                     sym=body.get("sym", "XLK"), params=body.get("params"))),

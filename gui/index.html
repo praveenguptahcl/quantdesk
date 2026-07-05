@@ -301,7 +301,7 @@ label.fl b{color:var(--red)}
     <button class="nav-item" data-s="golive"><span class="ic">▶</span>Go-Live Wizard</button>
     <div class="nav-sec">Venues</div>
     <div id="venueList" style="padding:0 12px;font-size:12px;line-height:2;color:var(--muted)"></div>
-    <div class="foot">LEAN CLI · NautilusTrader<br>Docker stack: <span class="dot g"></span>6/6 up<br><span class="mono" style="font-size:10px">v0.2 · mock data mode</span></div>
+    <div class="foot">LEAN CLI · NautilusTrader<br>Docker stack: <span class="dot g"></span>6/6 up<br><span class="mono" style="font-size:10px">v0.3 · <span id="footMode">connecting…</span></span></div>
   </nav>
 
   <!-- ============ MAIN ============ -->
@@ -567,9 +567,8 @@ label.fl b{color:var(--red)}
     <section class="screen" id="s-lab">
       <div class="flex spread"><div><h1>Strategy Lab</h1>
       <div class="sub">The anatomy of a strategy — every stage of the decision chain, live. This is what the code in STRATEGY_GUIDE.md produces.</div></div>
-      <select id="labSel" class="inp" style="width:auto" onchange="UI.renderLab()">
-        <option value="11">momo-etf-v3</option><option value="22">fut-carry-v1</option><option value="33">crypto-mr-v2</option>
-      </select></div>
+      <span class="tag paper" style="font-size:12px;padding:6px 14px">momo-etf-v3</span></div>
+      <input type="hidden" id="labSel" value="11">
 
       <div class="anat" id="labAnat"></div>
 
@@ -1167,8 +1166,11 @@ const CH = {
     return {eq:out, rets};
   },
   setup(id,h){ const c=document.getElementById(id); if(!c)return null;
-    const W=c.clientWidth||880, H=h||c.getAttribute('height')*1;
-    c.width=W*2; c.height=H*2; const x=c.getContext('2d'); x.scale(2,2); return {c,x,W,H}; },
+    if(!c.dataset.h) c.dataset.h = h || c.getAttribute('height') || 160;   // remember DESIGN height once
+    const H = +c.dataset.h, W = c.clientWidth || 880;
+    c.width = W*2; c.height = H*2;                 // retina backing store
+    c.style.height = H + 'px';                     // pin display size — redraws never compound
+    const x = c.getContext('2d'); x.scale(2,2); return {c,x,W,H}; },
   grid(x,W,H,rows=4){ x.strokeStyle='#1c2231'; x.lineWidth=1;
     for(let i=1;i<=rows;i++){ x.beginPath(); x.moveTo(0,H*i/(rows+1)); x.lineTo(W,H*i/(rows+1)); x.stroke(); } },
   line(x,pts,color,W,H,min,max,dash,fill){
@@ -1653,6 +1655,9 @@ const UI = {
       's-lib':()=>this.renderLib(),
       's-lab':()=>this.renderLab(),
       's-parity':()=>this.renderParity(),
+      's-data':()=>this.renderData(),
+      's-desk':()=>this.renderDesk(),
+      's-safe':()=>this.renderSafe(),
     }[act.id]||(()=>{}))();
   },
   addSymbol(){
@@ -1706,7 +1711,7 @@ const UI = {
     document.getElementById('stratRows').innerHTML=API.strategies
       .filter(x=>Filt.hit(x.syms))
       .map(x=>`<tr><td class="s">${x.n}</td><td class="s"><span class="tag ${x.stage==='Paper'?'paper':'off'}">${x.stage}</span></td>
-        <td>${x.sr}</td><td class="s"><span class="tag ${x.c}">${x.st}</span></td></tr>`)
+        <td>${x.sr}</td><td class="s">${x.st&&x.st!==x.stage?`<span class="tag ${x.c}">${x.st}</span>`:'<span class="mut">—</span>'}</td></tr>`)
       .join('')||'<tr><td colspan="4" class="s mut">No strategies in scope</td></tr>';
   },
 
@@ -2268,6 +2273,24 @@ const UI = {
         <div class="verdict ${reg.risk_on?'pass':'fail'}" style="margin-top:4px">${d.decision}</div>
         <p class="mut" style="margin-top:8px">Pipeline: ${d.pipeline.join(' → ')}. Full derivation with formulas and citations: <b>docs/SIGNALS.md</b>.
         These exact numbers feed the paper node — <span class="mono">python3 scripts/paper_node.py</span> turns them into orders.</p>`;
+      // REAL anatomy chips (replace the synthetic ones — no more contradictions)
+      const top1=d.table[0];
+      const anaEl=document.getElementById('labAnat');
+      if(anaEl){
+        const dec=d.decision.startsWith('FLAT')?null:top1;
+        const anat=[
+          ['Data','9 ETFs + SPY<br>daily · '+d.data_provenance,true],
+          ['History','380d warm-up<br>252 mom + 200 SMA',true],
+          ['Regime',`SPY ${reg.spy_close.toLocaleString()} vs SMA ${reg.sma200.toLocaleString()}<br><b style="color:${reg.risk_on?'var(--green)':'var(--red)'}">${reg.risk_on?'RISK-ON':'RISK-OFF'}</b>`,reg.risk_on],
+          ['Trigger',`top-3 by 12-1 mom<br>#1 ${top1.sym} ${top1.mom_12_1_pct}%`,reg.risk_on],
+          ['Confidence',`sigmoid(mom z)<br>#1 = ${top1.confidence} ≥ 0.50`,top1.confidence>=0.5],
+          ['Sizing',`vol-target 10%<br>${d.table.filter(r=>r.target_weight_pct>0).map(r=>r.sym+' '+r.target_weight_pct+'%').join(' · ')||'0%'}`,!!dec],
+          ['Risk layer','pre-route caps<br>risk/limits.yaml',true],
+          ['Order',d.decision.startsWith('FLAT')?'liquidate / none':'rebalance deltas<br>(paper node)',!!dec],
+        ];
+        anaEl.innerHTML=anat.map(([t,v,on])=>
+          `<div class="an ${on?'on':'hold'}"><div class="t">${t}</div><div class="v">${v}</div></div>`).join('');
+      }
       // fill the current-bar condition panel with REAL values
       const sel=document.getElementById('labEtf')?document.getElementById('labEtf').value:'XLK';
       const row=d.table.find(r=>r.sym===sel)||d.table[0];
@@ -2469,6 +2492,7 @@ QD.sync=async function(){
       strategies:d.strategies,feed:d.feed,openOrders:d.openOrders,orderHist:d.orderHist,
       accounts:d.accounts,costs:d.costs,econ:d.econ,setup:d.setup,notes:d.notes,alerts:d.alerts});
     QD.on=true;
+    const fm=document.getElementById('footMode'); if(fm)fm.textContent='live backend';
     if(d.mode==='live'){document.getElementById('modebar').classList.add('live');
       document.getElementById('modePill').textContent='LIVE';}
     document.getElementById('feed').innerHTML=API.feed.map(([t,lv,m])=>
@@ -2505,7 +2529,11 @@ QD.updState=async function(){
     if(d.halted){document.getElementById('modeDesc').textContent='⛔ HALTED — kill switch or breaker engaged';}
   }catch(e){}
 };
+window.addEventListener('error',e=>{try{fetch('/api/clientlog',{method:'POST',body:JSON.stringify({msg:String(e.message).slice(0,300),src:(e.filename||'').split('/').pop()+':'+e.lineno})});}catch(_){}});
+window.addEventListener('unhandledrejection',e=>{try{fetch('/api/clientlog',{method:'POST',body:JSON.stringify({msg:('promise: '+String(e.reason)).slice(0,300)})});}catch(_){}});
 UI.init();
+(function(){const scr=new URLSearchParams(location.search).get('screen');
+  if(scr){const b=document.querySelector('[data-s="'+scr+'"]'); if(b)b.click();}})();
 QD.sync();
 window.addEventListener('resize',()=>{UI.renderParity(); if(UI._labHist)UI.drawLabHistory();});
 </script>
