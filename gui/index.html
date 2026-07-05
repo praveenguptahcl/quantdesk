@@ -158,6 +158,81 @@ canvas{width:100%;display:block}
 .btn.danger{background:var(--red);border-color:var(--red);color:#fff}
 body.nonadmin .admin-only{display:none!important}
 .rolebadge{font-size:10px;color:var(--dim);border:1px dashed var(--line);border-radius:4px;padding:2px 6px;margin-left:6px}
+
+/* ===== AlphaPulse Conviction Console ===== */
+body.console-view #modebar,body.console-view #symbar{display:none}
+body.console-view #app{grid-template-rows:1fr}
+body.console-view #main{padding:0}
+#s-console{--cvbg:#070D19;--cvpanel:#0C1424;--cvline:#16223A;--cvtx:#E6EDF7;--cvmut:#5B7099;--cvred:#FF5C5C;--cvgreen:#2FD576;--cvblue:#4D8DFF;--cvamber:#F5A623;background:var(--cvbg);padding:0;min-height:100vh}
+.cv-hud{display:flex;align-items:center;gap:26px;padding:16px 22px;border-bottom:1px solid var(--cvline);flex-wrap:wrap}
+.cv-brand{font:800 20px/1 'JetBrains Mono',monospace;color:var(--cvtx);letter-spacing:.5px}
+.cv-brand b{color:var(--cvblue)}
+.cv-badge{font:700 10px/1 monospace;letter-spacing:1px;color:#7FE6C0;border:1px solid #1c5a45;background:#0d2b22;padding:4px 8px;border-radius:4px}
+.cv-tag2{font:600 10px/1.3 monospace;color:var(--cvmut);max-width:220px}
+.cv-stat{display:flex;flex-direction:column;gap:3px}
+.cv-stat .l{font:600 9px/1 monospace;letter-spacing:.8px;color:var(--cvmut)}
+.cv-stat .v{font:700 20px/1 'JetBrains Mono',monospace;color:var(--cvtx)}
+.cv-stat .v.up{color:var(--cvgreen)}.cv-stat .v.down{color:var(--cvred)}
+.cv-pips{display:flex;gap:3px;margin-top:3px}
+.cv-pip{width:8px;height:8px;transform:rotate(45deg);background:var(--cvline)}
+.cv-pip.on{background:var(--cvgreen);box-shadow:0 0 6px var(--cvgreen)}
+.cv-kill{margin-left:auto;display:flex;align-items:center;gap:6px;background:#1a0e12;border:1px solid var(--cvred);color:var(--cvred);font:700 11px/1.2 monospace;padding:9px 12px;border-radius:6px;cursor:pointer;text-align:center}
+.cv-clock{font:600 13px/1 'JetBrains Mono',monospace;color:var(--cvmut)}
+.cv-halted-banner{background:#2a1608;border:1px solid var(--cvamber);color:var(--cvamber);text-align:center;font:700 12px/1 monospace;padding:8px;letter-spacing:1px}
+.cv-scope{display:flex;align-items:center;gap:8px;padding:10px 22px;border-bottom:1px solid var(--cvline);overflow-x:auto}
+.cv-scope .sl{font:600 10px/1 monospace;color:var(--cvmut);letter-spacing:1px}
+.cv-chip2{font:600 12px/1 'JetBrains Mono',monospace;color:var(--cvmut);border:1px solid var(--cvline);background:var(--cvpanel);padding:6px 12px;border-radius:16px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.cv-chip2.sel{color:var(--cvtx);border-color:var(--cvblue)}
+.cv-chip2 .dot{width:7px;height:7px;border-radius:50%}
+.cv-body{display:grid;grid-template-columns:1fr 380px;gap:0}
+.cv-gauges{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;padding:16px 22px;align-content:start;overflow-y:auto;max-height:calc(100vh - 200px)}
+.cv-gauge{background:var(--cvpanel);border:1px solid var(--cvline);border-radius:12px;padding:14px 16px 18px;position:relative;overflow:hidden;cursor:pointer;transition:border-color .2s}
+.cv-gauge:hover{border-color:var(--cvblue)}
+.cv-gauge.fire{animation:cvfire .9s ease}
+@keyframes cvfire{0%{box-shadow:0 0 0 0 rgba(47,213,118,.5)}100%{box-shadow:0 0 0 22px rgba(47,213,118,0)}}
+.cv-gauge.fire.short{animation:cvfireS .9s ease}
+@keyframes cvfireS{0%{box-shadow:0 0 0 0 rgba(255,92,92,.5)}100%{box-shadow:0 0 0 22px rgba(255,92,92,0)}}
+.cv-g-top{display:flex;justify-content:space-between;align-items:baseline;position:relative;z-index:2}
+.cv-g-sym{font:700 16px/1 'JetBrains Mono',monospace;color:var(--cvtx)}
+.cv-g-ac{font:600 9px/1 monospace;color:var(--cvmut);border:1px solid var(--cvline);border-radius:3px;padding:2px 5px;margin-left:6px}
+.cv-g-px{font:600 13px/1 'JetBrains Mono',monospace;color:var(--cvmut)}
+.cv-g-body{position:relative;height:140px;margin-top:2px}
+.cv-g-svg{position:relative;z-index:2}
+.cv-g-center{position:absolute;left:0;right:0;bottom:6px;text-align:center;z-index:3}
+.cv-g-pnl{font:700 22px/1 'JetBrains Mono',monospace}
+.cv-g-net{font:600 11px/1 monospace;margin-top:4px}
+.cv-g-agent{font:600 11px/1 monospace;color:var(--cvblue);margin-top:5px}
+.cv-g-meta{font:500 10px/1 monospace;color:var(--cvmut);margin-top:3px}
+.cv-g-fire{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:4;font:700 10px/1.3 monospace;padding:4px 9px;border-radius:5px;white-space:nowrap;text-align:center}
+.cv-g-fire.long{background:#0d2b1c;border:1px solid var(--cvgreen);color:var(--cvgreen)}
+.cv-g-fire.short{background:#2b0d10;border:1px solid var(--cvred);color:var(--cvred)}
+.cv-rail{border-left:1px solid var(--cvline);padding:16px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:calc(100vh - 200px)}
+.cv-panel{background:var(--cvpanel);border:1px solid var(--cvline);border-radius:12px;padding:14px}
+.cv-panel-h{display:flex;justify-content:space-between;align-items:center;font:700 11px/1 monospace;letter-spacing:1px;color:var(--cvmut);margin-bottom:10px}
+.cv-pnl{color:var(--cvgreen);font-family:'JetBrains Mono',monospace}
+.cv-count{color:var(--cvtx);font-family:monospace}
+.cv-tabs{display:flex;gap:6px;margin-bottom:10px}
+.cv-tab{font:600 10px/1 monospace;color:var(--cvmut);border:1px solid var(--cvline);border-radius:5px;padding:5px 10px;cursor:pointer}
+.cv-tab.sel{color:var(--cvgreen);border-color:var(--cvgreen)}
+.cv-equity{width:100%;height:60px;display:block}
+.cv-rail-scale{display:flex;justify-content:space-between;font:600 9px/1 monospace;color:var(--cvmut);margin-top:4px}
+.cv-pos{border:1px solid var(--cvline);border-radius:9px;padding:11px;margin-bottom:9px;cursor:pointer}
+.cv-pos:hover{border-color:var(--cvblue)}
+.cv-pos-top{display:flex;align-items:center;gap:8px;font:700 12px/1 'JetBrains Mono',monospace;color:var(--cvtx)}
+.cv-side{font:700 9px/1 monospace;padding:3px 7px;border-radius:4px}
+.cv-side.long{background:#0d2b1c;color:var(--cvgreen)}
+.cv-side.short{background:#2b0d10;color:var(--cvred)}
+.cv-pos-str{display:flex;align-items:center;gap:6px;font:500 10px/1.3 monospace;color:var(--cvmut);margin-top:6px}
+.cv-str-chip{color:var(--cvamber);cursor:pointer}
+.cv-track{position:relative;height:5px;background:var(--cvline);border-radius:3px;margin:10px 0 6px}
+.cv-track-fill{position:absolute;top:0;bottom:0;left:0;background:linear-gradient(90deg,var(--cvred),var(--cvmut),var(--cvgreen));border-radius:3px}
+.cv-track-diamond{position:absolute;top:50%;width:11px;height:11px;background:var(--cvtx);transform:translate(-50%,-50%) rotate(45deg);box-shadow:0 0 6px var(--cvtx)}
+.cv-track-lbl{display:flex;justify-content:space-between;font:600 9px/1 monospace;color:var(--cvmut)}
+.cv-closed-row{display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--cvline);font:600 11px/1 'JetBrains Mono',monospace}
+.cv-closed-row .rs{border-left:3px solid var(--cvgreen);padding-left:7px}
+.cv-closed-row.loss .rs{border-left-color:var(--cvred)}
+.cv-slideover{position:fixed;top:0;right:-460px;width:440px;height:100vh;background:var(--cvpanel);border-left:1px solid var(--cvblue);z-index:250;padding:22px;overflow-y:auto;transition:right .25s;box-shadow:-10px 0 40px rgba(0,0,0,.5)}
+.cv-slideover.open{right:0}
 .btn:disabled{opacity:.35;cursor:not-allowed}
 input[type=text],input[type=number],textarea,select.inp{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);padding:9px 10px;border-radius:6px;font-size:13px;width:100%}
 textarea{font-family:var(--sans);resize:vertical;min-height:60px}
@@ -283,6 +358,7 @@ label.fl b{color:var(--red)}
   <!-- ============ SIDEBAR ============ -->
   <nav id="sidebar">
     <div class="brand">Quant<span>Desk</span></div>
+    <button class="nav-item active" data-s="console"><span class="ic">◎</span>Conviction Console</button>
     <div class="nav-sec">Research</div>
     <button class="nav-item" data-s="learn"><span class="ic">🎓</span>Docs &amp; Learn</button>
     <button class="nav-item" data-s="research"><span class="ic">✦</span>Research Journal</button>
@@ -295,7 +371,7 @@ label.fl b{color:var(--red)}
     <button class="nav-item" data-s="parity"><span class="ic">⇄</span>Backtest &amp; Parity</button>
     <button class="nav-item" data-s="opt"><span class="ic">◬</span>Optimize &amp; WF</button>
     <div class="nav-sec">Operations</div>
-    <button class="nav-item active" data-s="dash"><span class="ic">◧</span>Ops Dashboard</button>
+    <button class="nav-item" data-s="dash"><span class="ic">◧</span>Ops Dashboard</button>
     <button class="nav-item" data-s="micro"><span class="ic">≣</span>Microstructure</button>
     <button class="nav-item" data-s="orders"><span class="ic">⇅</span>Orders &amp; Fills</button>
     <button class="nav-item" data-s="desk"><span class="ic">▤</span>P&amp;L &amp; Journal</button>
@@ -315,8 +391,34 @@ label.fl b{color:var(--red)}
   <!-- ============ MAIN ============ -->
   <main id="main">
 
+    <!-- ======== CONVICTION CONSOLE (default) ======== -->
+    <section class="screen active" id="s-console">
+      <div id="cvHud" class="cv-hud"></div>
+      <div class="cv-scope" id="cvScope"></div>
+      <div class="cv-body">
+        <div class="cv-gauges" id="cvGauges"></div>
+        <div class="cv-rail">
+          <div class="cv-panel">
+            <div class="cv-panel-h"><span>EXECUTION TAPE</span><span id="cvTapePnl" class="cv-pnl">—</span></div>
+            <div class="cv-tabs"><span class="cv-tab sel" data-t="live">● LIVE</span><span class="cv-tab" data-t="rec">24H RECORDED</span></div>
+            <canvas id="cvEquity" class="cv-equity"></canvas>
+            <div class="cv-rail-scale"><span id="cvScaleL">▲ 0W</span><span id="cvScaleR">0L ▼</span></div>
+          </div>
+          <div class="cv-panel">
+            <div class="cv-panel-h"><span>OPEN POSITIONS</span><span id="cvOpenN" class="cv-count">0</span></div>
+            <div id="cvOpen"></div>
+          </div>
+          <div class="cv-panel">
+            <div class="cv-panel-h"><span>CLOSED</span><span id="cvClosedN" class="cv-count">0</span></div>
+            <div id="cvClosed"></div>
+          </div>
+        </div>
+      </div>
+      <div id="cvStratPanel" class="cv-slideover"></div>
+    </section>
+
     <!-- ======== DASHBOARD ======== -->
-    <section class="screen active" id="s-dash">
+    <section class="screen" id="s-dash">
       <h1>Ops Dashboard</h1>
       <div class="sub">Paper-trading session · all times ET</div>
       <div class="grid g4">
@@ -1010,6 +1112,8 @@ label.fl b{color:var(--red)}
           <div class="flex" style="margin-top:8px">
             <button class="btn" onclick="UI.seedDemo()">🎭 Seed demo community</button>
             <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="UI.removeDemo()">🗑 Remove ALL demo accounts</button>
+            <button class="btn" onclick="UI.cvSeed()">◎ Seed console sample data</button>
+            <button class="btn" style="border-color:var(--red);color:var(--red)" onclick="UI.cvReset()">🗑 Reset Conviction Console</button>
           </div>
           <p class="mut" style="font-size:11px">Demo fills every screen with sample data: 6 LLM traders (grok, chatgpt, deepseek, claude, copilot, gemini) + 3 humans (maya / ravi / sofia, password <code>demo123</code>) — each with a live strategy variant, real weekly returns, and public reasoning. Click any row to manage that account.</p>
           <div id="admUserDetail" style="display:none;margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:12px"></div>
@@ -1567,6 +1671,8 @@ const UI = {
       if(b.dataset.s==='admin') this.renderAdmin();
       if(b.dataset.s==='sig') this.renderSig();
       if(b.dataset.s==='risk') this.renderRisk();
+      if(b.dataset.s==='console') this.renderConsole();
+      document.body.classList.toggle('console-view', b.dataset.s==='console');
       history.replaceState(null,'','#/'+b.dataset.s);
     });
     const h=(location.hash||'').replace(/^#\/?/,'');
@@ -1577,6 +1683,7 @@ const UI = {
     document.getElementById('feed').innerHTML = API.feed.map(([t,lv,m])=>
       `<div><span class="t">${t}</span> <span class="lv-${lv}">${m}</span></div>`).join('');
     this.renderSymbols(); this.renderDash(); this.setupAI();
+    if(document.getElementById('s-console').classList.contains('active')){ document.body.classList.add('console-view'); this.renderConsole(); }
     ['tk-side','tk-type'].forEach(gid=>{
       document.querySelectorAll('#'+gid+' .chip').forEach(ch=>ch.onclick=()=>{
         document.querySelectorAll('#'+gid+' .chip').forEach(x=>x.classList.remove('sel'));ch.classList.add('sel');});});
@@ -1904,6 +2011,7 @@ const UI = {
       's-admin':()=>this.renderAdmin(),
       's-sig':()=>this.renderSig(),
       's-risk':()=>this.renderRisk(),
+      's-console':()=>this.renderConsole(),
     }[act.id]||(()=>{}))();
   },
   addSymbol(){
@@ -2252,6 +2360,180 @@ const UI = {
       out.innerHTML=`✅ ${d.symbol} 1sh @ $${d.limit}: placed (${d.placed_status}) → canceled (${d.final_status}) in ${d.roundtrip_ms}ms`;
       this.toast('Paper broker round-trip verified','ok');
     }catch(e){ out.textContent='⛔ backend unreachable'; }
+  },
+
+  /* ================= CONVICTION CONSOLE (default) ================= */
+  _cv:{data:null, anim:{}, scope:'ALL', raf:null, poll:null, threshold:0.60},
+  async renderConsole(){
+    await this._cvFetch();
+    this._cvScope();
+    this._cvHud();
+    this._cvGauges();
+    this._cvTape();
+    if(!this._cv.raf) this._cvLoop();
+    clearInterval(this._cv.poll);
+    this._cv.poll=setInterval(()=>{ if(document.getElementById('s-console').classList.contains('active')) this._cvFetch().then(()=>{this._cvHud();this._cvTape();this._cvSyncTargets();}); },5000);
+  },
+  async _cvFetch(){
+    if(!QD.on){ this._cv.data=this._cvDemo(); return; }
+    try{ this._cv.data=await(await fetch('/api/console?threshold='+this._cv.threshold)).json(); }
+    catch(e){ this._cv.data=this._cvDemo(); }
+  },
+  _cvDemo(){ return {threshold:.6,session:{pnl:0,hit_rate:0,streak:0,best_streak:0,fires:0,open_risk:0,open_risk_pct:0,day_drawdown:0},symbols:[],open_positions:[],closed:[],equity:[0],clock:'—',seeded:false}; },
+  _cvHud(){
+    const d=this._cv.data, s=d.session, halted=(API&&API.halted);
+    const pips=Array.from({length:Math.max(s.best_streak,5)},(_,i)=>`<span class="cv-pip ${i<s.streak?'on':''}"></span>`).join('');
+    document.getElementById('cvHud').innerHTML=`
+      <div><div class="cv-brand">ALPHA<b>PULSE</b></div><div class="cv-tag2">AGENTS COMPETE ON PAPER · FILLS AT ≥${Math.round(d.threshold*100)}% CERTAINTY · TICK-LEVEL PRICE · VOLUME · SIGNAL</div></div>
+      <span class="cv-badge">● PAPER</span>
+      <div class="cv-stat"><span class="l">SESSION P&L</span><span class="v ${s.pnl>=0?'up':'down'}">${s.pnl>=0?'+':'−'}$${Math.abs(s.pnl).toLocaleString()}</span></div>
+      <div class="cv-stat"><span class="l">HIT RATE</span><span class="v">${Math.round(s.hit_rate*100)}%</span></div>
+      <div class="cv-stat"><span class="l">WIN STREAK · BEST ${s.best_streak}</span><span class="v">${s.streak}</span><div class="cv-pips">${pips}</div></div>
+      <div class="cv-stat"><span class="l">FIRES</span><span class="v">${s.fires}</span></div>
+      <div class="cv-stat"><span class="l">OPEN RISK · HEAT</span><span class="v">$${s.open_risk.toLocaleString()}</span><span class="l">${s.open_risk_pct}%</span></div>
+      <div class="cv-stat"><span class="l">DAY DRAWDOWN</span><span class="v ${s.day_drawdown<0?'down':''}">${s.day_drawdown<0?'−':''}$${Math.abs(s.day_drawdown).toLocaleString()}</span></div>
+      <div class="cv-kill admin-only" onclick="UI.killSwitch()">⏻<br>KILL SWITCH</div>
+      <span class="cv-clock" id="cvClock">${d.clock}</span>`;
+  },
+  _cvScope(){
+    const d=this._cv.data;
+    const chip=(sym,conv)=>{ const col=conv==null?'var(--cvmut)':conv>=0?'var(--cvgreen)':'var(--cvred)';
+      return `<span class="cv-chip2 ${this._cv.scope===sym?'sel':''}" onclick="UI._cv.scope='${sym}';UI._cvScope();UI._cvGauges()">${sym==='ALL'?'':`<span class="dot" style="background:${col}"></span>`}${sym}</span>`; };
+    document.getElementById('cvScope').innerHTML=`<span class="sl">SCOPE</span>`+chip('ALL',null)+
+      d.symbols.map(x=>chip(x.sym,x.conviction)).join('')+
+      `<span style="margin-left:auto" class="sl">SORT P&L</span>`;
+  },
+  _cvGauges(){
+    const d=this._cv.data;
+    let syms=d.symbols;
+    if(this._cv.scope!=='ALL') syms=syms.filter(x=>x.sym===this._cv.scope);
+    document.getElementById('cvGauges').innerHTML=syms.map(x=>this._cvGaugeHTML(x)).join('')||'<p style="color:var(--cvmut);font-family:monospace;padding:20px">No symbols tracked. Admin can reseed sample data from the Admin panel.</p>';
+    // init animation state
+    syms.forEach(x=>{ if(!this._cv.anim[x.sym]) this._cv.anim[x.sym]={cur:x.conviction,target:x.conviction,fired:0}; else this._cv.anim[x.sym].target=x.conviction; });
+  },
+  _cvGaugeHTML(x){
+    const cx=170,cy=150,R=118;
+    const arc=(c0,c1,col,w)=>{ const a0=(90-c0/100*90)*Math.PI/180,a1=(90-c1/100*90)*Math.PI/180;
+      const x0=cx+R*Math.cos(a0),y0=cy-R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy-R*Math.sin(a1);
+      const large=Math.abs(c1-c0)>100?1:0, sweep=c1>c0?1:1;
+      return `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 ${large} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`; };
+    const th=this._cv.data.threshold*100;
+    const tick=c=>{ const a=(90-c/100*90)*Math.PI/180; const xi=cx+(R-16)*Math.cos(a),yi=cy-(R-16)*Math.sin(a),xo=cx+(R+2)*Math.cos(a),yo=cy-(R+2)*Math.sin(a);
+      return `<line x1="${xi.toFixed(1)}" y1="${yi.toFixed(1)}" x2="${xo.toFixed(1)}" y2="${yo.toFixed(1)}" stroke="var(--cvtx)" stroke-width="2" opacity=".5"/>`; };
+    const pnlCol=x.sym_pnl>=0?'var(--cvgreen)':'var(--cvred)';
+    const netCol=x.conviction>=0?'var(--cvgreen)':'var(--cvred)';
+    return `<div class="cv-gauge" id="cvg-${x.sym}" onclick="UI._cvStrat('${x.strategy}',${x.strategy_id})">
+      <div class="cv-g-top"><div><span class="cv-g-sym">${x.sym}</span><span class="cv-g-ac">${x.ac.toUpperCase()}</span></div>
+        <span class="cv-g-px" id="cvpx-${x.sym}">${x.price.toLocaleString()}</span></div>
+      <div class="cv-g-body">
+        <div class="cv-g-fire ${x.side.toLowerCase()}" id="cvfire-${x.sym}" style="display:none"></div>
+        <svg class="cv-g-svg" width="340" height="150" viewBox="0 0 340 150">
+          ${arc(-100,100,'var(--cvline)',18)}
+          ${arc(-100,-th,'var(--cvred)',18)}
+          ${arc(th,100,'var(--cvgreen)',18)}
+          ${tick(-th)}${tick(th)}
+          <g id="cvneedle-${x.sym}" transform="rotate(${(x.conviction/100*90).toFixed(1)} ${cx} ${cy})">
+            <line x1="${cx}" y1="${cy+18}" x2="${cx}" y2="${cy-R+8}" stroke="var(--cvtx)" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="${cx}" cy="${cy-R+8}" r="5" fill="var(--cvtx)"/></g>
+          <circle cx="${cx}" cy="${cy}" r="12" fill="#0D1526" stroke="var(--cvmut)" stroke-width="4"/>
+        </svg>
+        <div class="cv-g-center">
+          <div class="cv-g-pnl" style="color:${pnlCol}">${x.sym_pnl>=0?'+':'−'}$${Math.abs(x.sym_pnl).toLocaleString()} <span style="font-size:10px;color:var(--cvmut)">SYM P&L</span></div>
+          <div class="cv-g-net" id="cvnet-${x.sym}" style="color:${netCol}">NET ${Math.abs(Math.round(x.net_pct))}% ${x.side}</div>
+          <div class="cv-g-agent">${x.agent} · <span style="color:var(--cvmut)">${x.state}</span></div>
+          <div class="cv-g-meta">${x.strategy} · ${x.sig} sig${x.src==='sample'?' · <span style="color:var(--cvamber)">sample</span>':''}</div>
+        </div>
+      </div></div>`;
+  },
+  _cvSyncTargets(){ (this._cv.data.symbols||[]).forEach(x=>{ if(this._cv.anim[x.sym]) this._cv.anim[x.sym].target=x.conviction; }); },
+  _cvLoop(){
+    const step=()=>{
+      const th=this._cv.data?this._cv.data.threshold*100:60;
+      Object.entries(this._cv.anim).forEach(([sym,a])=>{
+        const jitter=(Math.random()-0.5)*3;
+        const goal=Math.max(-100,Math.min(100,a.target+jitter));
+        const prev=a.cur;
+        a.cur+=(goal-a.cur)*0.06;
+        const nd=document.getElementById('cvneedle-'+sym);
+        if(nd) nd.setAttribute('transform',`rotate(${(a.cur/100*90).toFixed(1)} 170 150)`);
+        const net=document.getElementById('cvnet-'+sym);
+        if(net){ const side=a.cur>=0?'LONG':'SHORT'; net.textContent=`NET ${Math.abs(Math.round(a.cur))}% ${side}`; net.style.color=a.cur>=0?'var(--cvgreen)':'var(--cvred)'; }
+        // fire on threshold cross
+        if(Math.abs(a.cur)>=th && Math.abs(prev)<th && Date.now()-a.fired>4000){
+          a.fired=Date.now(); this._cvFire(sym,a.cur>=0);
+        }
+      });
+      const ck=document.getElementById('cvClock'); if(ck) ck.textContent=new Date().toLocaleTimeString('en-US',{hour12:false});
+      this._cv.raf=requestAnimationFrame(step);
+    };
+    this._cv.raf=requestAnimationFrame(step);
+  },
+  _cvFire(sym,long){
+    const g=document.getElementById('cvg-'+sym); if(!g)return;
+    g.classList.remove('fire','short'); void g.offsetWidth;
+    g.classList.add('fire'); if(!long)g.classList.add('short');
+    const f=document.getElementById('cvfire-'+sym);
+    const x=(this._cv.data.symbols||[]).find(s=>s.sym===sym)||{price:0};
+    if(f){ f.className='cv-g-fire '+(long?'long':'short'); f.style.display='block';
+      f.textContent=`⚡ FIRED ${long?'LONG':'SHORT'} @ ${x.price.toLocaleString()}`;
+      setTimeout(()=>{f.style.display='none'},2600); }
+  },
+  _cvTape(){
+    const d=this._cv.data;
+    document.getElementById('cvTapePnl').textContent=(d.session.pnl>=0?'+':'−')+'$'+Math.abs(d.session.pnl).toLocaleString();
+    document.getElementById('cvOpenN').textContent=d.open_positions.length;
+    document.getElementById('cvClosedN').textContent=d.closed.length;
+    const wins=d.closed.filter(c=>c.result==='WIN').length, losses=d.closed.length-wins;
+    document.getElementById('cvScaleL').textContent='▲ '+wins+'W'; document.getElementById('cvScaleR').textContent=losses+'L ▼';
+    document.getElementById('cvOpen').innerHTML=d.open_positions.map(p=>{
+      const rng=Math.max(1,Math.abs(p.pt-p.sl)); const pos=Math.max(0,Math.min(100,(p.last-Math.min(p.sl,p.pt))/rng*100));
+      return `<div class="cv-pos" onclick="UI._cvStrat('${p.strategy}',null)">
+        <div class="cv-pos-top"><span class="cv-side ${p.side.toLowerCase()}">${p.side}</span> ${p.sym}
+          <span style="margin-left:auto;color:${p.pnl>=0?'var(--cvgreen)':'var(--cvred)'}">${p.pnl>=0?'+':'−'}$${Math.abs(p.pnl)}</span></div>
+        <div class="cv-pos-str"><span style="width:7px;height:7px;background:var(--cvamber);display:inline-block"></span><span class="cv-str-chip">${p.strategy}</span> · fired @ ${Math.round(p.fired_at*100)}% <span style="margin-left:auto">${p.opened}</span></div>
+        <div class="cv-track"><div class="cv-track-fill" style="width:100%"></div><div class="cv-track-diamond" style="left:${pos}%"></div></div>
+        <div class="cv-track-lbl"><span style="color:var(--cvred)">SL ${p.sl.toLocaleString()}</span><span>IN ${p.entry.toLocaleString()}</span><span style="color:var(--cvgreen)">PT ${p.pt.toLocaleString()}</span></div>
+        <div style="text-align:right;font:600 9px/1 monospace;color:var(--cvgreen);margin-top:4px">● LIVE</div></div>`;
+    }).join('')||'<p style="color:var(--cvmut);font-family:monospace;font-size:11px">no open fires</p>';
+    document.getElementById('cvClosed').innerHTML=d.closed.map(c=>
+      `<div class="cv-closed-row ${c.result==='LOSS'?'loss':''}"><span class="cv-side ${c.side.toLowerCase()}">${c.side}</span>
+       <span class="rs">${c.sym} <span style="color:var(--cvamber)">${c.strategy}</span></span>
+       <span style="color:${c.pnl>=0?'var(--cvgreen)':'var(--cvred)'}">${c.pnl>=0?'+':'−'}$${Math.abs(c.pnl)}</span></div>`).join('')
+      ||'<p style="color:var(--cvmut);font-family:monospace;font-size:11px">no closed fires yet</p>';
+    // equity sparkline
+    const cv=document.getElementById('cvEquity');
+    if(cv&&d.equity&&d.equity.length>1){ const ctx=cv.getContext('2d'),W=cv.clientWidth||340,H=60;cv.width=W*2;cv.height=H*2;ctx.scale(2,2);
+      const mn=Math.min(...d.equity),mx=Math.max(...d.equity),rg=mx-mn||1;
+      ctx.beginPath(); d.equity.forEach((v,i)=>{const px=i/(d.equity.length-1)*W,py=H-6-(v-mn)/rg*(H-12); i?ctx.lineTo(px,py):ctx.moveTo(px,py);});
+      ctx.strokeStyle=d.equity[d.equity.length-1]>=0?'#2FD576':'#FF5C5C';ctx.lineWidth=2;ctx.stroke(); }
+  },
+  async _cvStrat(name,id){
+    const panel=document.getElementById('cvStratPanel');
+    let idea=(API.ideas||[]).find(i=>i.name===name)||{name};
+    panel.innerHTML=`<div class="flex spread"><h2 style="margin:0;color:var(--cvtx)">${esc(name)}</h2>
+      <button class="btn" onclick="document.getElementById('cvStratPanel').classList.remove('open')">✕</button></div>
+      <p style="color:var(--cvmut);font-family:monospace;font-size:12px;margin-top:8px">${esc(idea.hyp||'Strategy linked to this symbol on the console.')}</p>
+      <div class="kv" style="margin-top:12px">
+        <span class="k">Stage</span><span class="v">${['—','Idea','Research','Backtest','Parity','Paper','Live'][idea.stage||1]}</span>
+        <span class="k">Kill criterion</span><span class="v" style="font-family:var(--sans)">${esc(idea.kill||'—')}</span>
+        <span class="k">Exit policy</span><span class="v">+1.8R target · −1R stop</span></div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button class="btn primary" onclick="UI._cvGoStrat('${esc(name)}')">Open in Research Journal →</button></div>`;
+    panel.classList.add('open');
+  },
+  _cvGoStrat(name){
+    document.getElementById('cvStratPanel').classList.remove('open');
+    document.querySelector('[data-s=research]').click();
+    const i=(API.ideas||[]).find(x=>x.name===name); if(i&&this.openDrawer)this.openDrawer(i.id);
+  },
+  async cvReset(){
+    if(!confirm('Clear the Conviction Console sample data (fired trades + session)? Real conviction gauges keep working.'))return;
+    const r=await QD.post('/api/console/reset'); if(!r||r.err)return;
+    this.toast('Console sample data cleared','ok'); if(this._cv)this._cv.anim={}; this.renderConsole();
+  },
+  async cvSeed(){
+    const r=await QD.post('/api/console/seed'); if(!r||r.err)return;
+    this.toast('Console sample session seeded','ok'); this.renderConsole();
   },
 
   /* ---- risk controls (live) ---- */

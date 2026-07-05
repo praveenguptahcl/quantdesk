@@ -23,6 +23,7 @@ import alpaca  # noqa: E402
 import backtest  # noqa: E402
 import community  # noqa: E402
 import signals_lib  # noqa: E402
+import console as console_mod  # noqa: E402
 import llm  # noqa: E402
 import logic  # noqa: E402
 import micro  # noqa: E402
@@ -61,6 +62,10 @@ if os.environ.get("QD_NO_DEMO", "0") != "1":
         community.seed_demo(store)
     except Exception as e:
         print("demo seed skipped:", e)
+    try:
+        console_mod.seed(store)
+    except Exception as e:
+        print("console seed skipped:", e)
 # warm the weekly-return cache in the background so the first Leaderboard
 # view is instant (one real backtest per distinct param set, cached per day)
 import threading  # noqa: E402
@@ -101,6 +106,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _user(self):
         return community.whoami(store, self._token())
+
+    @staticmethod
+    def _q(qs, key, default=None):
+        import urllib.parse
+        return urllib.parse.parse_qs(qs or "").get(key, [default])[0]
 
     def _admin_gate(self):
         """Multi-user: actions on the SHARED paper account are admin-only.
@@ -170,6 +180,8 @@ class Handler(BaseHTTPRequestHandler):
                 200, store.get_doc("static", "llm_log") or []),
             "/api/community/users": self.g_users,
             "/api/siglib": self.g_siglib,
+            "/api/console": lambda: self._send(200, console_mod.snapshot(
+                store, float(self._q(q, "threshold", "0.60")))),
             "/api/community/user": lambda: self.g_user_detail(q),
             "/api/community/public": lambda: self._send(200, [
                 {k: i.get(k) for k in ("id", "name", "owner", "hyp", "kill", "copied_from", "stage")}
@@ -248,6 +260,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/community/llm-users": lambda: self.p_llm_user(body),
             "/api/community/llm-run": lambda: self.p_llm_run(),
             "/api/community/seed-demo": lambda: self.p_seed_demo(),
+            "/api/console/seed": lambda: self.p_console_seed(),
+            "/api/console/reset": lambda: self.p_console_reset(),
             "/api/community/remove-demo": lambda: self.p_remove_demo(),
             "/api/community/users/delete": lambda: self.p_delete_user(body),
             "/api/siglib/eval": lambda: self.p_sig_eval(body),
@@ -1144,6 +1158,16 @@ class Handler(BaseHTTPRequestHandler):
         if not d:
             return self._err(404, "user not found")
         self._send(200, d)
+
+    def p_console_seed(self):
+        if self._admin_gate() is not None:
+            return
+        self._send(200, console_mod.seed(store, force=True))
+
+    def p_console_reset(self):
+        if self._admin_gate() is not None:
+            return
+        self._send(200, console_mod.reset(store))
 
     def p_seed_demo(self):
         u = self._user()
