@@ -14,8 +14,21 @@ DEST = os.path.join(os.path.dirname(__file__), "..", "data", "catalog")
 UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36"}
 
 
+_OPENER = None
+
+
 def get(url, timeout=30):
-    return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout).read()
+    """Cookie-jar session — Yahoo requires cookies before the chart API responds."""
+    global _OPENER
+    import http.cookiejar
+    if _OPENER is None:
+        _OPENER = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        try:
+            _OPENER.open(urllib.request.Request("https://finance.yahoo.com", headers=UA), timeout=15).read(0)
+        except Exception:
+            pass
+    return _OPENER.open(urllib.request.Request(url, headers=UA), timeout=timeout).read()
 
 
 def from_stooq(sym):
@@ -55,7 +68,9 @@ def main():
     ok, sources = 0, set()
     for sym in SYMBOLS:
         csv = None
-        for name, fn in (("stooq", from_stooq), ("yahoo", from_yahoo)):
+        import time
+        time.sleep(1.2)
+        for name, fn in (("yahoo", from_yahoo), ("stooq", from_stooq)):
             try:
                 csv = fn(sym)
                 sources.add(name)
