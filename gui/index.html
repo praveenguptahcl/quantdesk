@@ -185,8 +185,12 @@ body.console-view #main{padding:0}
 .cv-chip2.sel{color:var(--cvtx);border-color:var(--cvblue)}
 .cv-chip2 .dot{width:7px;height:7px;border-radius:50%}
 .cv-body{display:grid;grid-template-columns:1fr 380px;gap:0}
-.cv-gauges{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;padding:16px 22px;align-content:start;overflow-y:auto;max-height:calc(100vh - 200px)}
-.cv-gauge{background:var(--cvpanel);border:1px solid var(--cvline);border-radius:12px;padding:14px 16px 18px;position:relative;overflow:hidden;cursor:pointer;transition:border-color .2s}
+.cv-gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:16px 22px;align-content:start;overflow-y:auto;max-height:calc(100vh - 200px)}
+@media(max-width:1400px){.cv-gauges{grid-template-columns:repeat(2,1fr)}}
+.cv-gauge{background:var(--cvpanel);border:1px solid var(--cvline);border-radius:12px;padding:14px 16px 18px;position:relative;overflow:hidden;cursor:pointer;transition:border-color .2s;min-height:270px}
+.cv-g-spark{position:absolute;left:0;right:0;bottom:0;height:70px;z-index:1;opacity:.55;pointer-events:none}
+.cv-g-event{position:absolute;left:0;right:0;bottom:8px;text-align:center;z-index:3;font:600 11px/1 'JetBrains Mono',monospace}
+.cv-g-exp{color:var(--cvmut);cursor:pointer;font-size:12px;margin-left:6px}
 .cv-gauge:hover{border-color:var(--cvblue)}
 .cv-gauge.fire{animation:cvfire .9s ease}
 @keyframes cvfire{0%{box-shadow:0 0 0 0 rgba(47,213,118,.5)}100%{box-shadow:0 0 0 22px rgba(47,213,118,0)}}
@@ -196,13 +200,14 @@ body.console-view #main{padding:0}
 .cv-g-sym{font:700 16px/1 'JetBrains Mono',monospace;color:var(--cvtx)}
 .cv-g-ac{font:600 9px/1 monospace;color:var(--cvmut);border:1px solid var(--cvline);border-radius:3px;padding:2px 5px;margin-left:6px}
 .cv-g-px{font:600 13px/1 'JetBrains Mono',monospace;color:var(--cvmut)}
-.cv-g-body{position:relative;height:140px;margin-top:2px}
-.cv-g-svg{position:relative;z-index:2}
-.cv-g-center{position:absolute;left:0;right:0;bottom:6px;text-align:center;z-index:3}
+.cv-g-body{position:relative;height:212px;margin-top:2px}
+.cv-g-svg{position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:2}
+.cv-g-center{position:absolute;left:0;right:0;top:126px;text-align:center;z-index:3}
 .cv-g-pnl{font:700 22px/1 'JetBrains Mono',monospace}
-.cv-g-net{font:600 11px/1 monospace;margin-top:4px}
+.cv-g-net{font:600 11px/1 monospace;margin-top:5px}
 .cv-g-agent{font:600 11px/1 monospace;color:var(--cvblue);margin-top:5px}
 .cv-g-meta{font:500 10px/1 monospace;color:var(--cvmut);margin-top:3px}
+.cv-gauge{min-height:300px!important}
 .cv-g-fire{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:4;font:700 10px/1.3 monospace;padding:4px 9px;border-radius:5px;white-space:nowrap;text-align:center}
 .cv-g-fire.long{background:#0d2b1c;border:1px solid var(--cvgreen);color:var(--cvgreen)}
 .cv-g-fire.short{background:#2b0d10;border:1px solid var(--cvred);color:var(--cvred)}
@@ -2407,7 +2412,15 @@ const UI = {
     try{ this._cv.data=await(await fetch('/api/console?threshold='+this._cv.threshold)).json(); }
     catch(e){ this._cv.data=this._cvDemo(); }
   },
-  _cvDemo(){ return {threshold:.6,session:{pnl:0,hit_rate:0,streak:0,best_streak:0,fires:0,open_risk:0,open_risk_pct:0,day_drawdown:0},symbols:[],open_positions:[],closed:[],equity:[0],clock:'—',seeded:false}; },
+  _cvDemo(){
+    const defs=[['SPY','eq','momo-etf-v3','Cobalt-5'],['QQQ','eq','fast-momo-v1','Vega-2'],['AAPL','eq','gap-fade-v1','Nimbus-7'],['XLK','eq','momo-etf-v3','Cobalt-5'],['MES','fut','fut-carry-v1','Basis-9'],['BTCUSDT','cry','crypto-mr-v2','Orbit-3'],['ETHUSDT','cry','crypto-mr-v2','Orbit-3'],['SPCX','eq','vol-premium-v1','Theta-4']];
+    const px={SPY:527.06,QQQ:456.98,AAPL:254.8,XLK:223.34,MES:5407,BTCUSDT:110224,ETHUSDT:4183,SPCX:92.44};
+    const t=Date.now()/40000;
+    const syms=defs.map((d,i)=>{ const conv=Math.round((Math.sin(t+i)* 58+Math.sin(t*0.4+i*2)*26)*10)/10;
+      const spark=Array.from({length:40},(_,k)=>1+Math.sin(k/4+i)*0.02+ (k/40)*0.03);
+      const state=Math.abs(conv)>=60?'arming':Math.abs(conv)>=36?'cooling':'scanning';
+      return {sym:d[0],ac:d[1],strategy:d[2],strategy_id:null,agent:d[3],conviction:conv,src:'sample',price:px[d[0]],side:conv>=0?'LONG':'SHORT',net_pct:conv,sym_pnl:Math.round((i-3)*70),open_positions:0,state,event:state==='arming'?('▲ '+d[3]+' arming '+(conv>=0?'+':'')+Math.round(conv)+'%'):(d[3]+' · '+state),strat_armed:2,strat_total:2,sig:Math.max(1,Math.round(Math.abs(conv)/14)),spark,spark_vol:Array.from({length:40},()=>0.3+Math.random()*0.6)}; });
+    return {threshold:.6,session:{pnl:1578,hit_rate:0.7,streak:1,best_streak:4,fires:11,open_risk:240,open_risk_pct:0.2,day_drawdown:-180},symbols:syms,open_positions:[],closed:[{side:'LONG',sym:'AAPL',strategy:'fast-momo-v1',pnl:-180,result:'LOSS'},{side:'SHORT',sym:'AAPL',strategy:'gap-fade-v1',pnl:540,result:'WIN'}],equity:[0,120,320,260,480,660,540,780,1578],clock:'—',seeded:false}; },
   _cvHud(){
     const d=this._cv.data, s=d.session, halted=(API&&API.halted);
     const pips=Array.from({length:Math.max(s.best_streak,5)},(_,i)=>`<span class="cv-pip ${i<s.streak?'on':''}"></span>`).join('');
@@ -2442,8 +2455,18 @@ const UI = {
     const sk={pnl:x=>-x.sym_pnl,conv:x=>-Math.abs(x.conviction),fires:x=>-x.sig}[this._cv.sort];
     if(sk) syms.sort((a,b)=>sk(a)-sk(b));
     document.getElementById('cvGauges').innerHTML=syms.map(x=>this._cvGaugeHTML(x)).join('')||'<p style="color:var(--cvmut);font-family:monospace;padding:20px">No symbols tracked. Admin can reseed sample data from the Admin panel.</p>';
-    // init animation state
-    syms.forEach(x=>{ if(!this._cv.anim[x.sym]) this._cv.anim[x.sym]={cur:x.conviction,target:x.conviction,fired:0}; else this._cv.anim[x.sym].target=x.conviction; });
+    // init animation state + draw the faint spark behind each card
+    syms.forEach(x=>{ if(!this._cv.anim[x.sym]) this._cv.anim[x.sym]={cur:x.conviction,target:x.conviction,fired:0}; else this._cv.anim[x.sym].target=x.conviction;
+      this._cvDrawSpark(x); });
+  },
+  _cvDrawSpark(x){
+    const c=document.getElementById('cvspark-'+x.sym); if(!c||!x.spark)return;
+    const W=c.clientWidth||330,H=70; c.width=W*2;c.height=H*2; const g=c.getContext('2d');g.scale(2,2);
+    const s=x.spark,mn=Math.min(...s),mx=Math.max(...s),rg=(mx-mn)||1;
+    const v=x.spark_vol||[]; const vmx=Math.max(...v)||1,bw=W/(v.length||1);
+    v.forEach((val,i)=>{const bh=val/vmx*22;g.fillStyle='rgba(91,112,153,.25)';g.fillRect(i*bw,H-bh,bw*0.6,bh);});
+    g.beginPath();s.forEach((val,i)=>{const px=i/(s.length-1)*W,py=H-24-(val-mn)/rg*(H-30);i?g.lineTo(px,py):g.moveTo(px,py);});
+    g.strokeStyle=s[s.length-1]>=s[0]?'rgba(47,213,118,.5)':'rgba(255,92,92,.5)';g.lineWidth=1.3;g.stroke();
   },
   _cvGaugeHTML(x){
     const cx=170,cy=150,R=118;
@@ -2456,9 +2479,12 @@ const UI = {
       return `<line x1="${xi.toFixed(1)}" y1="${yi.toFixed(1)}" x2="${xo.toFixed(1)}" y2="${yo.toFixed(1)}" stroke="var(--cvtx)" stroke-width="2" opacity=".5"/>`; };
     const pnlCol=x.sym_pnl>=0?'var(--cvgreen)':'var(--cvred)';
     const netCol=x.conviction>=0?'var(--cvgreen)':'var(--cvred)';
+    const evCol=x.state==='filled'?'var(--cvgreen)':x.state==='arming'?'var(--cvamber)':'var(--cvmut)';
+    const showEv=x.state==='filled'||x.state==='arming';
     return `<div class="cv-gauge" id="cvg-${x.sym}" onclick="UI.cvOpenSymbol('${x.sym}')">
-      <div class="cv-g-top"><div><span class="cv-g-sym">${x.sym}</span><span class="cv-g-ac">${x.ac.toUpperCase()}</span></div>
-        <span class="cv-g-px" id="cvpx-${x.sym}">${x.price.toLocaleString()}</span></div>
+      <canvas class="cv-g-spark" id="cvspark-${x.sym}"></canvas>
+      <div class="cv-g-top" style="position:relative;z-index:3"><div><span class="cv-g-sym">${x.sym}</span><span class="cv-g-ac">${x.ac.toUpperCase()}</span></div>
+        <span><span class="cv-g-px" id="cvpx-${x.sym}">${x.price.toLocaleString()}</span><span class="cv-g-exp">⤢</span></span></div>
       <div class="cv-g-body">
         <div class="cv-g-fire ${x.side.toLowerCase()}" id="cvfire-${x.sym}" style="display:none"></div>
         <svg class="cv-g-svg" width="340" height="150" viewBox="0 0 340 150">
@@ -2467,7 +2493,7 @@ const UI = {
           ${arc(th,100,'var(--cvgreen)',18)}
           ${tick(-th)}${tick(th)}
           <g id="cvneedle-${x.sym}" transform="rotate(${(x.conviction/100*90).toFixed(1)} ${cx} ${cy})">
-            <line x1="${cx}" y1="${cy+18}" x2="${cx}" y2="${cy-R+8}" stroke="var(--cvtx)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy-R+8}" stroke="var(--cvtx)" stroke-width="4" stroke-linecap="round"/>
             <circle cx="${cx}" cy="${cy-R+8}" r="5" fill="var(--cvtx)"/></g>
           <circle cx="${cx}" cy="${cy}" r="12" fill="#0D1526" stroke="var(--cvmut)" stroke-width="4"/>
         </svg>
@@ -2475,9 +2501,10 @@ const UI = {
           <div class="cv-g-pnl" style="color:${pnlCol}">${x.sym_pnl>=0?'+':'−'}$${Math.abs(x.sym_pnl).toLocaleString()} <span style="font-size:10px;color:var(--cvmut)">SYM P&L</span></div>
           <div class="cv-g-net" id="cvnet-${x.sym}" style="color:${netCol}">NET ${Math.abs(Math.round(x.net_pct))}% ${x.side}</div>
           <div class="cv-g-agent">${x.agent} · <span style="color:var(--cvmut)">${x.state}</span></div>
-          <div class="cv-g-meta">${x.strategy} · ${x.sig} sig${x.src==='sample'?' · <span style="color:var(--cvamber)">sample</span>':''}</div>
+          <div class="cv-g-meta">${x.strat_armed}/${x.strat_total} strat · ${x.sig} sig</div>
         </div>
-      </div></div>`;
+      </div>
+      ${showEv?`<div class="cv-g-event" style="color:${evCol}">${x.event}</div>`:''}</div>`;
   },
   _cvSyncTargets(){ (this._cv.data.symbols||[]).forEach(x=>{ if(this._cv.anim[x.sym]) this._cv.anim[x.sym].target=x.conviction; }); },
   _cvLoop(){
@@ -2589,6 +2616,7 @@ const UI = {
           </div>
         </div>
         <div class="cv-d-col">
+          <div class="cv-d-col-h">SIGNAL DIALS · FEED INPUTS</div>
           ${d.signals.map(s=>this._cvSigDial(s)).join('')}
         </div>
         <div class="cv-d-col" style="border-right:none">
@@ -2610,12 +2638,15 @@ const UI = {
     const arc=(c0,c1,col,w)=>{ const a0=(90-c0/100*90)*Math.PI/180,a1=(90-c1/100*90)*Math.PI/180;
       const x0=cx+R*Math.cos(a0),y0=cy-R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy-R*Math.sin(a1);
       return `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 ${Math.abs(c1-c0)>100?1:0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`; };
+    const val=x.firing?`<span class="cv-sdial-re">re-arm<br>${x.re_arm_s}s</span>`:`<span style="margin-left:auto;font:700 11px/1 monospace;color:${x.conviction>=0?'var(--cvgreen)':'var(--cvred)'}">${x.conviction>=0?'+':''}${x.pct}%</span>`;
+    const ndCol=x.color||'var(--cvtx)';
     return `<div class="cv-sdial" onclick="UI._cvStrat('${x.strategy}',${x.strategy_id})" style="cursor:pointer">
-      <div class="cv-sdial-top"><span style="color:var(--cvtx)">${x.strategy}</span>
-        <span class="cv-sdial-re">re-arm<br>${x.re_arm_s}s</span></div>
+      <div class="cv-sdial-top"><span style="width:13px;height:13px;border:1px solid ${ndCol};border-radius:3px;display:inline-flex;align-items:center;justify-content:center;color:${ndCol};font-size:9px">✓</span>
+        <span style="width:8px;height:8px;background:${ndCol};display:inline-block;border-radius:2px"></span>
+        <span style="color:var(--cvtx)">${x.strategy}</span>${val}</div>
       <svg width="190" height="86" viewBox="0 0 190 86" style="display:block;margin:2px auto 0">
         ${arc(-100,100,'var(--cvline)',9)}${arc(-100,-th,'var(--cvred)',9)}${arc(th,100,'var(--cvgreen)',9)}
-        <g transform="rotate(${(x.conviction/100*90).toFixed(1)} ${cx} ${cy})"><line x1="${cx}" y1="${cy+8}" x2="${cx}" y2="${cy-R+6}" stroke="var(--cvtx)" stroke-width="2.5" stroke-linecap="round"/><circle cx="${cx}" cy="${cy-R+6}" r="3.5" fill="var(--cvtx)"/></g>
+        <g transform="rotate(${(x.conviction/100*90).toFixed(1)} ${cx} ${cy})"><line x1="${cx}" y1="${cy+8}" x2="${cx}" y2="${cy-R+6}" stroke="${ndCol}" stroke-width="2.5" stroke-linecap="round"/><circle cx="${cx}" cy="${cy-R+6}" r="3.5" fill="${ndCol}"/></g>
         <circle cx="${cx}" cy="${cy}" r="7" fill="#0D1526" stroke="var(--cvmut)" stroke-width="2.5"/></svg>
       <div style="display:flex;justify-content:space-between;font:600 9px/1 monospace;color:var(--cvmut);margin-top:2px"><span>SHORT</span><span>LONG</span></div>
       <div class="cv-sdial-agent">${x.agent}${x.firing?' · <span style="color:var(--cvamber)">firing</span>':''}</div></div>`;

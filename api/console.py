@@ -58,6 +58,62 @@ SIGNAL_DIALS = [
     ("momentum", "MOMENTUM", "DOWN", "UP", "#FF5CA8"),
 ]
 
+# strategy → its brand colour (matches the little square in the dials)
+STRAT_COLORS = {
+    "momo-etf-v3": "#4D8DFF", "fast-momo-v1": "#F5A623", "gap-fade-v1": "#FF5CA8",
+    "crypto-mr-v2": "#2FD576", "fut-carry-v1": "#9B7BE0", "vol-premium-v1": "#5BD6E0",
+    "flow-imbalance": "#E0A15B", "pairs-stat-v1": "#B07BE0",
+}
+
+
+def _sample_conviction(sym):
+    """Lively, slowly-evolving sample conviction in [-92, 92] — until a real
+    per-symbol streaming signal is wired, every gauge animates off this so no
+    dial is ever pinned or blank."""
+    seed = (hash(sym) % 997) / 997.0
+    t = datetime.datetime.now().timestamp() / 40.0
+    v = math.sin(t + seed * 6.283) * 58 + math.sin(t * 0.37 + seed * 3.1) * 26
+    bias = ((hash(sym + "b") % 100) - 50) * 0.5
+    return round(max(-92, min(92, v + bias)), 1)
+
+
+def _spark(sym, n=40):
+    """Small price+volume series for the faint chart behind a gauge card."""
+    rng = random.Random((hash(sym) & 0xFFFF) ^ datetime.date.today().toordinal())
+    ohlcv = backtest.load_bars(sym)
+    if ohlcv and len(ohlcv) >= n:
+        closes = [b[1] for b in ohlcv[-n:]]
+        base = closes[0] or 1
+        px = [round(v / base, 4) for v in closes]
+    else:
+        p, px = 1.0, []
+        for _ in range(n):
+            p *= 1 + rng.uniform(-0.008, 0.0085)
+            px.append(round(p, 4))
+    vol = [round(rng.uniform(0.25, 1.0), 2) for _ in range(n)]
+    return px, vol
+
+
+def _state(conv, threshold, firing_now):
+    a = abs(conv)
+    if firing_now:
+        return "filled"
+    if a >= threshold * 100:
+        return "arming"
+    if a >= threshold * 100 * 0.6:
+        return "cooling"
+    return "scanning"
+
+
+def _event(sym, conv, agent, state):
+    if state == "filled":
+        return f"▶ {agent} filled"
+    if state == "arming":
+        return f"▲ {agent} arming {conv:+.0f}%"
+    if state == "cooling":
+        return f"{agent} · cooling {conv:+.0f}%"
+    return f"{agent} · scanning"
+
 
 # ---------- real conviction ----------
 def _catalog_conviction(sym):
@@ -85,13 +141,18 @@ def _now_hms(offset_s=0):
 def seed(store, force=False):
     """Populate the console with sample fired trades + session stats so the
     dashboard is alive on first load. Admin-resettable. Idempotent."""
-    if store.get_kv("console:seeded") == "1" and not force:
+    if store.get_kv("console:seeded") == "2" and not force:
         return {"seeded": False, "note": "already seeded"}
 
+    def _pos(i, side, sym, strat, fired, sl, entry, pt, last, pnl, age):
+        return {"id": i, "side": side, "sym": sym, "strategy": strat, "fired_at": fired,
+                "sl": sl, "entry": entry, "pt": pt, "last": last, "pnl": pnl,
+                "opened": _now_hms(age), "demo": True}
     opens = [
-        {"id": 1, "side": "LONG", "sym": "ETHUSDT", "strategy": "fast-momo-v1",
-         "fired_at": 0.61, "sl": 4131, "entry": 4160, "pt": 4207, "last": 4183,
-         "pnl": 9, "opened": _now_hms(40), "demo": True},
+        _pos(1, "LONG", "SPY", "gap-fade-v1", 0.60, 524.65, 527.02, 530.58, 528.9, 64, 35),
+        _pos(2, "LONG", "SPCX", "gap-fade-v1", 0.85, 92.07, 92.49, 93.11, 92.8, 332, 180),
+        _pos(3, "LONG", "MES", "momo-etf-v3", 0.88, 5366, 5385, 5419, 5401, 205, 220),
+        _pos(4, "SHORT", "AAPL", "gap-fade-v1", 0.86, 256.4, 254.8, 251.2, 254.1, -35, 300),
     ]
     closed = [
         {"id": 11, "side": "SHORT", "sym": "SPY", "strategy": "gap-fade-v1",
@@ -99,21 +160,27 @@ def seed(store, force=False):
         {"id": 12, "side": "LONG", "sym": "BTCUSDT", "strategy": "crypto-mr-v2",
          "pnl": 168, "result": "WIN", "closed": _now_hms(1500), "demo": True},
         {"id": 13, "side": "LONG", "sym": "AAPL", "strategy": "fast-momo-v1",
-         "pnl": -300, "result": "LOSS", "closed": _now_hms(2100), "demo": True},
+         "pnl": -180, "result": "LOSS", "closed": _now_hms(2100), "demo": True},
         {"id": 14, "side": "SHORT", "sym": "XLK", "strategy": "momo-etf-v3",
          "pnl": -360, "result": "LOSS", "closed": _now_hms(2600), "demo": True},
         {"id": 15, "side": "LONG", "sym": "QQQ", "strategy": "fast-momo-v1",
-         "pnl": 612, "result": "WIN", "closed": _now_hms(3200), "demo": True},
+         "pnl": 205, "result": "WIN", "closed": _now_hms(3200), "demo": True},
         {"id": 16, "side": "SHORT", "sym": "MES", "strategy": "fut-carry-v1",
          "pnl": 244, "result": "WIN", "closed": _now_hms(3900), "demo": True},
         {"id": 17, "side": "LONG", "sym": "SPCX", "strategy": "vol-premium-v1",
          "pnl": 55, "result": "WIN", "closed": _now_hms(4600), "demo": True},
+        {"id": 18, "side": "LONG", "sym": "ETHUSDT", "strategy": "crypto-mr-v2",
+         "pnl": 312, "result": "WIN", "closed": _now_hms(5200), "demo": True},
+        {"id": 19, "side": "SHORT", "sym": "QQQ", "strategy": "vol-premium-v1",
+         "pnl": 128, "result": "WIN", "closed": _now_hms(5900), "demo": True},
+        {"id": 20, "side": "LONG", "sym": "SPY", "strategy": "momo-etf-v3",
+         "pnl": -142, "result": "LOSS", "closed": _now_hms(6600), "demo": True},
     ]
     store.put_doc("console_open", "state", {"rows": opens})
     store.put_doc("console_closed", "state", {"rows": closed})
     store.put_doc("console_session", "state", {
         "best_streak": 5, "started": datetime.datetime.now().isoformat()[:16], "demo": True})
-    store.set_kv("console:seeded", "1")
+    store.set_kv("console:seeded", "2")
     store.add_feed("info", "CONVICTION CONSOLE — sample session seeded "
                    f"({len(opens)} open, {len(closed)} closed fires); admin can reset it")
     return {"seeded": True, "open": len(opens), "closed": len(closed)}
@@ -143,32 +210,30 @@ def snapshot(store, threshold=0.60):
     closed = (store.get_doc("console_closed", "state") or {}).get("rows", [])
     sess = store.get_doc("console_session", "state") or {}
 
-    # per-symbol conviction (real where catalog data exists, else sample)
-    rng = random.Random(datetime.date.today().toordinal())  # stable within a day
+    # per-symbol conviction — lively SAMPLE for every gauge (real per-symbol
+    # streaming signal not yet wired; real price used where the catalog has it)
     symbols = []
     for sym, ac, strat, agent in CONSOLE_SYMBOLS:
+        conv = _sample_conviction(sym)
         real = _catalog_conviction(sym)
-        if real:
-            conv, px = real
-            src = "real"
-        else:
-            # deterministic-ish sample conviction, mild per-symbol bias
-            conv = round(rng.uniform(-72, 72), 1)
-            px = SAMPLE_PX.get(sym, 100.0)
-            src = "sample"
-        # symbol P&L: sum of tape rows for this symbol (open + closed)
+        px = real[1] if real else SAMPLE_PX.get(sym, 100.0)
         sym_pnl = sum(r["pnl"] for r in opens + closed if r["sym"] == sym)
         n_open = sum(1 for r in opens if r["sym"] == sym)
         side = "LONG" if conv >= 0 else "SHORT"
-        state = "cooling" if any(r["sym"] == sym for r in opens) else (
-            "armed" if abs(conv) >= threshold * 100 else "scanning")
+        firing = n_open > 0
+        state = _state(conv, threshold, firing)
+        spark, spark_vol = _spark(sym)
+        n_strat = len(SYMBOL_STRATEGIES.get(sym, [strat]))
         symbols.append({
             "sym": sym, "ac": ac, "strategy": strat,
             "strategy_id": _strategy_id(store, strat), "agent": agent,
-            "conviction": conv, "src": src, "price": px,
+            "conviction": conv, "src": "sample", "price": px,
             "side": side, "net_pct": round(conv, 0), "sym_pnl": sym_pnl,
             "open_positions": n_open, "state": state,
+            "event": _event(sym, conv, agent, state),
+            "strat_armed": n_strat, "strat_total": n_strat,
             "sig": max(1, int(abs(conv) / 14)),
+            "spark": spark, "spark_vol": spark_vol,
         })
 
     # session stats — computed from the tape
@@ -199,7 +264,7 @@ def snapshot(store, threshold=0.60):
         "open_positions": opens,
         "closed": closed,
         "equity": equity,
-        "seeded": store.get_kv("console:seeded") == "1",
+        "seeded": store.get_kv("console:seeded") == "2",
         "clock": datetime.datetime.now().strftime("%H:%M:%S"),
     }
 
@@ -268,11 +333,13 @@ def symbol_detail(store, sym, threshold=0.60):
     for strat, agent in SYMBOL_STRATEGIES.get(sym, []):
         # each strategy reads a variation of the symbol conviction
         c = max(-100, min(100, conv + rng.uniform(-35, 35)))
+        firing = abs(c) >= threshold * 100
         dials.append({"strategy": strat, "strategy_id": _strategy_id(store, strat),
                       "agent": agent, "conviction": round(c, 1),
+                      "color": STRAT_COLORS.get(strat, "#4D8DFF"),
+                      "pct": round(c / 10, 0),   # small reading value like the ref
                       "armed": True,  # both competing strategies enabled on this symbol
-                      "firing": abs(c) >= threshold * 100,
-                      "re_arm_s": rng.randint(1, 12)})
+                      "firing": firing, "re_arm_s": rng.randint(1, 12)})
 
     # ---- alpha-signal dials (0-100) ----
     def _lbl(key, val):
