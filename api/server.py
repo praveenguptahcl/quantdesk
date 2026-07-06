@@ -182,6 +182,10 @@ class Handler(BaseHTTPRequestHandler):
             "/api/siglib": self.g_siglib,
             "/api/console": lambda: self._send(200, console_mod.snapshot(
                 store, float(self._q(q, "threshold", "0.60")))),
+            "/api/console/symbol": lambda: (lambda d: self._send(200, d) if d else self._err(
+                404, "symbol not tracked"))(console_mod.symbol_detail(
+                    store, (self._q(q, "sym", "") or "").upper(),
+                    float(self._q(q, "threshold", "0.60")))),
             "/api/community/user": lambda: self.g_user_detail(q),
             "/api/community/public": lambda: self._send(200, [
                 {k: i.get(k) for k in ("id", "name", "owner", "hyp", "kill", "copied_from", "stage")}

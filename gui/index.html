@@ -233,6 +233,31 @@ body.console-view #main{padding:0}
 .cv-closed-row.loss .rs{border-left-color:var(--cvred)}
 .cv-slideover{position:fixed;top:0;right:-460px;width:440px;height:100vh;background:var(--cvpanel);border-left:1px solid var(--cvblue);z-index:250;padding:22px;overflow-y:auto;transition:right .25s;box-shadow:-10px 0 40px rgba(0,0,0,.5)}
 .cv-slideover.open{right:0}
+/* ---- symbol drill-down ---- */
+.cv-detail{color:var(--cvtx)}
+.cv-d-head{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--cvline)}
+.cv-d-sym{font:700 26px/1 'JetBrains Mono',monospace}
+.cv-d-px{font:700 24px/1 'JetBrains Mono',monospace}
+.cv-d-chg{font:600 14px/1 monospace}
+.cv-d-live{margin-left:6px;font:600 11px/1 monospace;color:var(--cvmut)}
+.cv-d-toggle{margin-left:auto;display:flex;gap:0;border:1px solid var(--cvline);border-radius:7px;overflow:hidden}
+.cv-d-toggle span{font:600 11px/1 monospace;padding:8px 14px;cursor:pointer;color:var(--cvmut)}
+.cv-d-toggle span.sel{background:var(--cvline);color:var(--cvtx)}
+.cv-d-close{width:34px;height:34px;border:1px solid var(--cvline);border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--cvmut);font-size:16px}
+.cv-d-close:hover{border-color:var(--cvred);color:var(--cvred)}
+.cv-d-grid{display:grid;grid-template-columns:230px 1fr 250px 340px;gap:0;height:calc(100vh - 66px)}
+.cv-d-col{padding:16px;overflow-y:auto;border-right:1px solid var(--cvline)}
+.cv-d-col-h{font:700 10px/1 monospace;letter-spacing:1px;color:var(--cvmut);margin-bottom:12px}
+.cv-sdial{background:var(--cvpanel);border:1px solid var(--cvline);border-radius:10px;padding:12px;margin-bottom:12px}
+.cv-sdial-top{display:flex;align-items:center;gap:6px;font:700 12px/1.2 'JetBrains Mono',monospace}
+.cv-sdial-re{margin-left:auto;font:600 10px/1 monospace;color:var(--cvamber);text-align:right}
+.cv-sdial-agent{font:600 10px/1 monospace;color:var(--cvblue);text-align:center;margin-top:4px}
+.cv-chart-wrap{position:relative;padding:16px}
+.cv-chart-h{display:flex;gap:14px;font:600 10px/1 monospace;color:var(--cvmut);margin-bottom:8px}
+.cv-sig{background:var(--cvpanel);border:1px solid var(--cvline);border-radius:10px;padding:12px;margin-bottom:12px}
+.cv-sig-h{display:flex;justify-content:space-between;align-items:center;font:700 11px/1 monospace;color:var(--cvtx);margin-bottom:4px}
+.cv-sig-read{font:700 11px/1 monospace}
+.cv-sig-lbl{display:flex;justify-content:space-between;font:600 9px/1 monospace;color:var(--cvmut);margin-top:2px}
 .btn:disabled{opacity:.35;cursor:not-allowed}
 input[type=text],input[type=number],textarea,select.inp{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono);padding:9px 10px;border-radius:6px;font-size:13px;width:100%}
 textarea{font-family:var(--sans);resize:vertical;min-height:60px}
@@ -395,7 +420,7 @@ label.fl b{color:var(--red)}
     <section class="screen active" id="s-console">
       <div id="cvHud" class="cv-hud"></div>
       <div class="cv-scope" id="cvScope"></div>
-      <div class="cv-body">
+      <div class="cv-body" id="cvGridView">
         <div class="cv-gauges" id="cvGauges"></div>
         <div class="cv-rail">
           <div class="cv-panel">
@@ -414,6 +439,7 @@ label.fl b{color:var(--red)}
           </div>
         </div>
       </div>
+      <div class="cv-detail" id="cvDetailView" style="display:none"></div>
       <div id="cvStratPanel" class="cv-slideover"></div>
     </section>
 
@@ -2363,7 +2389,7 @@ const UI = {
   },
 
   /* ================= CONVICTION CONSOLE (default) ================= */
-  _cv:{data:null, anim:{}, scope:'ALL', raf:null, poll:null, threshold:0.60},
+  _cv:{data:null, anim:{}, scope:'ALL', sort:'pnl', raf:null, poll:null, threshold:0.60},
   async renderConsole(){
     await this._cvFetch();
     this._cvScope();
@@ -2371,6 +2397,8 @@ const UI = {
     this._cvGauges();
     this._cvTape();
     if(!this._cv.raf) this._cvLoop();
+    const dsym=(location.hash.match(/#\/console\/(\w+)/)||[])[1];
+    if(dsym && !this._cvDetailSym) this.cvOpenSymbol(dsym.toUpperCase());
     clearInterval(this._cv.poll);
     this._cv.poll=setInterval(()=>{ if(document.getElementById('s-console').classList.contains('active')) this._cvFetch().then(()=>{this._cvHud();this._cvTape();this._cvSyncTargets();}); },5000);
   },
@@ -2399,14 +2427,20 @@ const UI = {
     const d=this._cv.data;
     const chip=(sym,conv)=>{ const col=conv==null?'var(--cvmut)':conv>=0?'var(--cvgreen)':'var(--cvred)';
       return `<span class="cv-chip2 ${this._cv.scope===sym?'sel':''}" onclick="UI._cv.scope='${sym}';UI._cvScope();UI._cvGauges()">${sym==='ALL'?'':`<span class="dot" style="background:${col}"></span>`}${sym}</span>`; };
+    const sortBtn=(k,l)=>`<span class="cv-chip2 ${this._cv.sort===k?'sel':''}" style="padding:5px 10px" onclick="UI._cv.sort='${k}';UI._cvScope();UI._cvGauges()">${l}</span>`;
     document.getElementById('cvScope').innerHTML=`<span class="sl">SCOPE</span>`+chip('ALL',null)+
       d.symbols.map(x=>chip(x.sym,x.conviction)).join('')+
-      `<span style="margin-left:auto" class="sl">SORT P&L</span>`;
+      `<span style="margin-left:auto" class="sl">SORT</span>${sortBtn('pnl','P&L')}${sortBtn('conv','CONV')}${sortBtn('fires','FIRES')}`+
+      `<span class="cv-chip2 sel" style="padding:5px 10px;margin-left:8px">DIALS</span>`+
+      `<span class="cv-chip2" style="padding:5px 10px" onclick="document.querySelector('[data-s=board]').click()">LEADERBOARD</span>`+
+      `<span class="sl" style="margin-left:8px"><span style="color:var(--cvgreen)">●</span> ${d.symbols.length} symbols · tick feed live</span>`;
   },
   _cvGauges(){
     const d=this._cv.data;
-    let syms=d.symbols;
+    let syms=d.symbols.slice();
     if(this._cv.scope!=='ALL') syms=syms.filter(x=>x.sym===this._cv.scope);
+    const sk={pnl:x=>-x.sym_pnl,conv:x=>-Math.abs(x.conviction),fires:x=>-x.sig}[this._cv.sort];
+    if(sk) syms.sort((a,b)=>sk(a)-sk(b));
     document.getElementById('cvGauges').innerHTML=syms.map(x=>this._cvGaugeHTML(x)).join('')||'<p style="color:var(--cvmut);font-family:monospace;padding:20px">No symbols tracked. Admin can reseed sample data from the Admin panel.</p>';
     // init animation state
     syms.forEach(x=>{ if(!this._cv.anim[x.sym]) this._cv.anim[x.sym]={cur:x.conviction,target:x.conviction,fired:0}; else this._cv.anim[x.sym].target=x.conviction; });
@@ -2422,7 +2456,7 @@ const UI = {
       return `<line x1="${xi.toFixed(1)}" y1="${yi.toFixed(1)}" x2="${xo.toFixed(1)}" y2="${yo.toFixed(1)}" stroke="var(--cvtx)" stroke-width="2" opacity=".5"/>`; };
     const pnlCol=x.sym_pnl>=0?'var(--cvgreen)':'var(--cvred)';
     const netCol=x.conviction>=0?'var(--cvgreen)':'var(--cvred)';
-    return `<div class="cv-gauge" id="cvg-${x.sym}" onclick="UI._cvStrat('${x.strategy}',${x.strategy_id})">
+    return `<div class="cv-gauge" id="cvg-${x.sym}" onclick="UI.cvOpenSymbol('${x.sym}')">
       <div class="cv-g-top"><div><span class="cv-g-sym">${x.sym}</span><span class="cv-g-ac">${x.ac.toUpperCase()}</span></div>
         <span class="cv-g-px" id="cvpx-${x.sym}">${x.price.toLocaleString()}</span></div>
       <div class="cv-g-body">
@@ -2506,6 +2540,120 @@ const UI = {
       const mn=Math.min(...d.equity),mx=Math.max(...d.equity),rg=mx-mn||1;
       ctx.beginPath(); d.equity.forEach((v,i)=>{const px=i/(d.equity.length-1)*W,py=H-6-(v-mn)/rg*(H-12); i?ctx.lineTo(px,py):ctx.moveTo(px,py);});
       ctx.strokeStyle=d.equity[d.equity.length-1]>=0?'#2FD576':'#FF5C5C';ctx.lineWidth=2;ctx.stroke(); }
+  },
+  _cvDetailSym:null, _cvDetailData:null, _cvDetailPoll:null,
+  async cvOpenSymbol(sym){
+    this._cvDetailSym=sym;
+    document.getElementById('cvGridView').style.display='none';
+    document.getElementById('cvDetailView').style.display='block';
+    await this._cvDetailFetch();
+    this._cvDetailRender();
+    clearInterval(this._cvDetailPoll);
+    this._cvDetailPoll=setInterval(async()=>{ if(this._cvDetailSym && document.getElementById('s-console').classList.contains('active')){ await this._cvDetailFetch(); this._cvDetailRender(); } },5000);
+  },
+  cvCloseSymbol(){
+    clearInterval(this._cvDetailPoll); this._cvDetailSym=null;
+    document.getElementById('cvDetailView').style.display='none';
+    document.getElementById('cvGridView').style.display='grid';
+  },
+  async _cvDetailFetch(){
+    if(!QD.on){ this._cvDetailData=null; return; }
+    try{ this._cvDetailData=await(await fetch('/api/console/symbol?sym='+this._cvDetailSym+'&threshold='+this._cv.threshold)).json(); }
+    catch(e){ this._cvDetailData=null; }
+  },
+  _cvDetailRender(){
+    const d=this._cvDetailData; if(!d){ document.getElementById('cvDetailView').innerHTML='<p style="color:var(--cvmut);padding:30px;font-family:monospace">connect backend to load '+esc(this._cvDetailSym)+'</p>'; return; }
+    const armed=d.strategy_dials.filter(x=>x.armed).length;
+    document.getElementById('cvDetailView').innerHTML=`
+      <div class="cv-d-head">
+        <span class="cv-d-sym">${d.sym}</span><span class="cv-g-ac">${d.ac.toUpperCase()}</span>
+        <span class="cv-d-px">${d.price.toLocaleString()}</span>
+        <span class="cv-d-chg" style="color:${d.change_pct>=0?'var(--cvgreen)':'var(--cvred)'}">${d.change_pct>=0?'+':''}${d.change_pct}%</span>
+        <span class="cv-d-live">● LIVE · ${d.clock.slice(0,5)}</span>
+        ${d.src==='sample'?'<span class="cv-g-ac" style="color:var(--cvamber);border-color:var(--cvamber)">SAMPLE</span>':''}
+        <div class="cv-d-toggle"><span class="sel">● LIVE</span><span>24H REPLAY</span></div>
+        <div class="cv-d-close" onclick="UI.cvCloseSymbol()">✕</div>
+      </div>
+      <div class="cv-d-grid">
+        <div class="cv-d-col">
+          <div class="cv-d-col-h">STRATEGY DIALS · ${armed}/${d.strategy_dials.length} ARMED</div>
+          ${d.strategy_dials.map(x=>this._cvMiniDial(x)).join('')}
+        </div>
+        <div class="cv-d-col" style="padding:0">
+          <div class="cv-chart-wrap">
+            <div class="cv-chart-h"><span>PRICE · VOLUME · FILL MARKERS</span><span style="color:var(--cvgreen)">▲ LONG FILL</span><span style="color:var(--cvred)">▼ SHORT FILL</span><span style="margin-left:auto">LIVE · 24H WINDOW</span></div>
+            <canvas id="cvDChart" style="width:100%;height:340px;display:block"></canvas>
+            <canvas id="cvDVol" style="width:100%;height:90px;display:block;margin-top:6px"></canvas>
+            <div style="display:flex;justify-content:space-between;font:600 9px/1 monospace;color:var(--cvmut);margin-top:6px">
+              ${[0,Math.floor(d.times.length/4),Math.floor(d.times.length/2),Math.floor(d.times.length*3/4),d.times.length-1].map(i=>`<span>${d.times[i]}</span>`).join('')}</div>
+          </div>
+        </div>
+        <div class="cv-d-col">
+          ${d.signals.map(s=>this._cvSigDial(s)).join('')}
+        </div>
+        <div class="cv-d-col" style="border-right:none">
+          <div class="cv-panel-h"><span>EXECUTION TAPE · ${d.sym}</span><span class="cv-pnl">${d.tape_pnl>=0?'+':'−'}$${Math.abs(d.tape_pnl).toLocaleString()}</span></div>
+          <div class="cv-tabs"><span class="cv-tab sel">● LIVE</span><span class="cv-tab">24H RECORDED</span></div>
+          ${d.open_positions.map(p=>{ const rng=Math.max(1,Math.abs(p.pt-p.sl)); const pos=Math.max(0,Math.min(100,(p.last-Math.min(p.sl,p.pt))/rng*100));
+            return `<div class="cv-pos"><div class="cv-pos-top"><span class="cv-side ${p.side.toLowerCase()}">${p.side}</span> ${p.sym}<span style="margin-left:auto;color:${p.pnl>=0?'var(--cvgreen)':'var(--cvred)'}">${p.pnl>=0?'+':'−'}$${Math.abs(p.pnl)}</span></div>
+            <div class="cv-pos-str"><span class="cv-str-chip">${p.strategy}</span> · fired @ ${Math.round(p.fired_at*100)}%<span style="margin-left:auto">${p.opened}</span></div>
+            <div class="cv-track"><div class="cv-track-fill" style="width:100%"></div><div class="cv-track-diamond" style="left:${pos}%"></div></div>
+            <div class="cv-track-lbl"><span style="color:var(--cvred)">SL ${p.sl.toLocaleString()}</span><span>IN ${p.entry.toLocaleString()}</span><span style="color:var(--cvgreen)">PT ${p.pt.toLocaleString()}</span></div></div>`;}).join('')}
+          <div class="cv-panel-h" style="margin-top:14px"><span>CLOSED</span><span class="cv-count">${d.closed.length}</span></div>
+          ${d.closed.map(c=>`<div class="cv-closed-row ${c.result==='LOSS'?'loss':''}"><span class="cv-side ${c.side.toLowerCase()}">${c.side}</span><span class="rs">${c.sym} <span style="color:var(--cvamber)">${c.strategy}</span></span><span style="color:${c.pnl>=0?'var(--cvgreen)':'var(--cvred)'}">${c.pnl>=0?'+':'−'}$${Math.abs(c.pnl)}</span></div>`).join('')||'<p style="color:var(--cvmut);font-family:monospace;font-size:11px">no closed fires for '+d.sym+'</p>'}
+        </div>
+      </div>`;
+    this._cvDrawChart(d);
+  },
+  _cvMiniDial(x){
+    const cx=95,cy=78,R=58; const th=this._cv.threshold*100;
+    const arc=(c0,c1,col,w)=>{ const a0=(90-c0/100*90)*Math.PI/180,a1=(90-c1/100*90)*Math.PI/180;
+      const x0=cx+R*Math.cos(a0),y0=cy-R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy-R*Math.sin(a1);
+      return `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 ${Math.abs(c1-c0)>100?1:0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`; };
+    return `<div class="cv-sdial" onclick="UI._cvStrat('${x.strategy}',${x.strategy_id})" style="cursor:pointer">
+      <div class="cv-sdial-top"><span style="color:var(--cvtx)">${x.strategy}</span>
+        <span class="cv-sdial-re">re-arm<br>${x.re_arm_s}s</span></div>
+      <svg width="190" height="86" viewBox="0 0 190 86" style="display:block;margin:2px auto 0">
+        ${arc(-100,100,'var(--cvline)',9)}${arc(-100,-th,'var(--cvred)',9)}${arc(th,100,'var(--cvgreen)',9)}
+        <g transform="rotate(${(x.conviction/100*90).toFixed(1)} ${cx} ${cy})"><line x1="${cx}" y1="${cy+8}" x2="${cx}" y2="${cy-R+6}" stroke="var(--cvtx)" stroke-width="2.5" stroke-linecap="round"/><circle cx="${cx}" cy="${cy-R+6}" r="3.5" fill="var(--cvtx)"/></g>
+        <circle cx="${cx}" cy="${cy}" r="7" fill="#0D1526" stroke="var(--cvmut)" stroke-width="2.5"/></svg>
+      <div style="display:flex;justify-content:space-between;font:600 9px/1 monospace;color:var(--cvmut);margin-top:2px"><span>SHORT</span><span>LONG</span></div>
+      <div class="cv-sdial-agent">${x.agent}${x.firing?' · <span style="color:var(--cvamber)">firing</span>':''}</div></div>`;
+  },
+  _cvSigDial(s){
+    const cx=105,cy=78,R=56; const a=(90-((s.value-50)/50)*90)*Math.PI/180;
+    const val=s.value/100; const a0=Math.PI, a1=Math.PI-val*Math.PI;
+    const arcPath=(from,to,col,w)=>{ const x0=cx+R*Math.cos(from),y0=cy-R*Math.sin(from),x1=cx+R*Math.cos(to),y1=cy-R*Math.sin(to);
+      return `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`; };
+    const na=Math.PI-val*Math.PI;
+    const readCol=s.reading==='HOT'||s.reading==='BULL'||s.reading==='BUY'||s.reading==='UP'?'var(--cvgreen)':(s.reading==='COLD'||s.reading==='BEAR'||s.reading==='SELL'||s.reading==='DOWN'?'var(--cvred)':'var(--cvmut)');
+    return `<div class="cv-sig">
+      <div class="cv-sig-h"><span><span style="color:${s.color}">■</span> ${s.label}</span><span class="cv-sig-read" style="color:${readCol}">${s.value} ${s.reading}</span></div>
+      <svg width="210" height="86" viewBox="0 0 210 86" style="display:block;margin:0 auto">
+        ${arcPath(Math.PI,0,'var(--cvline)',9)}${arcPath(Math.PI,na,s.color,9)}
+        <g transform="rotate(${((val-0.5)*180).toFixed(1)} ${cx} ${cy})"><line x1="${cx}" y1="${cy+6}" x2="${cx}" y2="${cy-R+6}" stroke="${s.color}" stroke-width="2.5" stroke-linecap="round"/></g>
+        <circle cx="${cx}" cy="${cy}" r="6" fill="#0D1526" stroke="var(--cvmut)" stroke-width="2.5"/></svg>
+      <div class="cv-sig-lbl"><span>${s.lo}</span><span>${s.hi}</span></div></div>`;
+  },
+  _cvDrawChart(d){
+    const c=document.getElementById('cvDChart'); if(!c)return;
+    const W=c.clientWidth||700,H=340; c.width=W*2;c.height=H*2; const x=c.getContext('2d');x.scale(2,2);
+    const s=d.series, mn=Math.min(...s),mx=Math.max(...s),rg=(mx-mn)||1;
+    const px=i=>i/(s.length-1)*W, py=v=>H-14-(v-mn)/rg*(H-28);
+    // area fill
+    x.beginPath();x.moveTo(0,H);s.forEach((v,i)=>x.lineTo(px(i),py(v)));x.lineTo(W,H);x.closePath();
+    const grad=x.createLinearGradient(0,0,0,H);grad.addColorStop(0,'rgba(77,141,255,.28)');grad.addColorStop(1,'rgba(77,141,255,0)');x.fillStyle=grad;x.fill();
+    x.beginPath();s.forEach((v,i)=>i?x.lineTo(px(i),py(v)):x.moveTo(px(i),py(v)));x.strokeStyle='#4D8DFF';x.lineWidth=2;x.stroke();
+    // fill markers
+    (d.fills||[]).forEach(f=>{ const mx2=px(f.i),my=py(f.price); x.beginPath(); const up=f.side==='LONG';
+      x.fillStyle=up?'#2FD576':'#FF5C5C'; if(up){x.moveTo(mx2,my-9);x.lineTo(mx2-6,my+1);x.lineTo(mx2+6,my+1);}else{x.moveTo(mx2,my+9);x.lineTo(mx2-6,my-1);x.lineTo(mx2+6,my-1);} x.closePath();x.fill(); });
+    // price axis labels
+    x.fillStyle='#5B7099';x.font='10px monospace';x.textAlign='right';
+    [mx,(mx+mn)/2,mn].forEach((v,i)=>x.fillText(v.toFixed(2),W-2,14+i*(H-28)/2));
+    // volume
+    const cv=document.getElementById('cvDVol'); if(cv){const W2=cv.clientWidth||700,H2=90;cv.width=W2*2;cv.height=H2*2;const vx=cv.getContext('2d');vx.scale(2,2);
+      const vol=d.volume,vmx=Math.max(...vol)||1,bw=W2/vol.length;
+      vol.forEach((v,i)=>{const bh=v/vmx*(H2-6);vx.fillStyle='rgba(77,141,255,.35)';vx.fillRect(i*bw,H2-bh,bw*0.7,bh);});}
   },
   async _cvStrat(name,id){
     const panel=document.getElementById('cvStratPanel');

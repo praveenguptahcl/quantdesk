@@ -36,6 +36,28 @@ CONSOLE_SYMBOLS = [
 SAMPLE_PX = {"QQQ": 459.89, "AAPL": 254.80, "MES": 6412.25,
              "BTCUSDT": 67230.0, "ETHUSDT": 4183.0, "SPCX": 188.40}
 
+# two competing strategies (with agent codenames) per tracked symbol — the
+# "strategy dials" in the drill-down view
+SYMBOL_STRATEGIES = {
+    "SPY": [("momo-etf-v3", "Cobalt-5"), ("gap-fade-v1", "Nimbus-7")],
+    "QQQ": [("fast-momo-v1", "Vega-2"), ("vol-premium-v1", "Theta-4")],
+    "AAPL": [("fast-momo-v1", "Vanta-2"), ("gap-fade-v1", "Cobalt-5")],
+    "XLK": [("momo-etf-v3", "Cobalt-5"), ("flow-imbalance", "Delta-6")],
+    "MES": [("fut-carry-v1", "Basis-9"), ("momo-etf-v3", "Cobalt-5")],
+    "BTCUSDT": [("crypto-mr-v2", "Orbit-3"), ("flow-imbalance", "Delta-6")],
+    "ETHUSDT": [("crypto-mr-v2", "Orbit-3"), ("fast-momo-v1", "Vega-2")],
+    "SPCX": [("vol-premium-v1", "Theta-4"), ("gap-fade-v1", "Nimbus-7")],
+}
+
+# the alpha-signal dials shown down the right of the chart
+SIGNAL_DIALS = [
+    ("news", "NEWS", "COLD", "HOT", "#F5A623"),
+    ("sentiment", "SENTIMENT", "BEAR", "BULL", "#2FD576"),
+    ("order_flow", "ORDER FLOW", "SELL", "BUY", "#4D8DFF"),
+    ("volatility", "VOLATILITY", "CALM", "TURB", "#9B7BE0"),
+    ("momentum", "MOMENTUM", "DOWN", "UP", "#FF5CA8"),
+]
+
 
 # ---------- real conviction ----------
 def _catalog_conviction(sym):
@@ -179,6 +201,114 @@ def snapshot(store, threshold=0.60):
         "equity": equity,
         "seeded": store.get_kv("console:seeded") == "1",
         "clock": datetime.datetime.now().strftime("%H:%M:%S"),
+    }
+
+
+def _real_vol_pct(sym):
+    """Annualized realized vol (20d) for a catalog symbol, else None."""
+    bars = backtest.load_bars(sym)
+    if not bars or len(bars) < 25:
+        return None
+    c = [b[1] for b in bars[-21:]]
+    rets = [c[i] / c[i - 1] - 1 for i in range(1, len(c))]
+    mu = sum(rets) / len(rets)
+    return math.sqrt(sum((r - mu) ** 2 for r in rets) / len(rets)) * math.sqrt(252) * 100
+
+
+def symbol_detail(store, sym, threshold=0.60):
+    """Drill-down for one symbol: strategy dials, price/volume/fill series, the
+    five alpha-signal dials, and the symbol's own execution tape. Real where the
+    catalog has data (price, momentum, volatility), sample otherwise (labelled)."""
+    cfg = next((c for c in CONSOLE_SYMBOLS if c[0] == sym), None)
+    if not cfg:
+        return None
+    _, ac, _, _ = cfg
+    rng = random.Random(hash(sym) & 0xFFFF)
+    real = _catalog_conviction(sym)
+    conv, price = (real if real else (round(rng.uniform(-72, 72), 1), SAMPLE_PX.get(sym, 100.0)))
+    src = "real" if real else "sample"
+
+    # ---- price + volume series (24h window, sample intraday walk) ----
+    ohlcv = backtest.load_bars(sym)
+    n_pts = 48
+    series, vols, times = [], [], []
+    now = datetime.datetime.now()
+    if ohlcv and len(ohlcv) >= n_pts:
+        # shape from recent real daily closes, ending at the true last price
+        closes = [b[1] for b in ohlcv[-n_pts:]]
+        base = closes[-1]
+        # rebase so the last point == real price, keep the real shape
+        series = [round(price * (v / base), 2) for v in closes]
+        src_series = "real-shape"
+    else:
+        p = price * 0.985
+        for _ in range(n_pts):
+            p *= 1 + rng.uniform(-0.006, 0.0065)
+            series.append(round(p, 2))
+        series[-1] = price
+        src_series = "sample"
+    for i in range(n_pts):
+        vols.append(round(rng.uniform(0.3, 1.0), 2))
+        times.append((now - datetime.timedelta(minutes=30 * (n_pts - 1 - i))).strftime("%H:%M"))
+    change_pct = round((series[-1] / series[0] - 1) * 100, 2) if series[0] else 0.0
+
+    # ---- fill markers (from the symbol's tape) placed along the series ----
+    tape_open = [r for r in (store.get_doc("console_open", "state") or {}).get("rows", [])
+                 if r["sym"] == sym]
+    tape_closed = [r for r in (store.get_doc("console_closed", "state") or {}).get("rows", [])
+                   if r["sym"] == sym]
+    fills = []
+    for k, r in enumerate(tape_closed + tape_open):
+        idx = int(n_pts * (0.2 + 0.6 * ((k + 1) / (len(tape_closed) + len(tape_open) + 1))))
+        fills.append({"i": min(idx, n_pts - 1), "side": r["side"],
+                      "price": series[min(idx, n_pts - 1)]})
+
+    # ---- strategy dials ----
+    dials = []
+    for strat, agent in SYMBOL_STRATEGIES.get(sym, []):
+        # each strategy reads a variation of the symbol conviction
+        c = max(-100, min(100, conv + rng.uniform(-35, 35)))
+        dials.append({"strategy": strat, "strategy_id": _strategy_id(store, strat),
+                      "agent": agent, "conviction": round(c, 1),
+                      "armed": True,  # both competing strategies enabled on this symbol
+                      "firing": abs(c) >= threshold * 100,
+                      "re_arm_s": rng.randint(1, 12)})
+
+    # ---- alpha-signal dials (0-100) ----
+    def _lbl(key, val):
+        if key == "momentum":
+            return "UP" if val >= 60 else "DOWN" if val <= 40 else "FLAT"
+        if key == "volatility":
+            return "TURB" if val >= 66 else "MILD" if val >= 33 else "CALM"
+        if key == "news":
+            return "HOT" if val >= 55 else "COLD"
+        if key == "sentiment":
+            return "BULL" if val >= 50 else "BEAR"
+        if key == "order_flow":
+            return "BUY" if val >= 50 else "SELL"
+        return ""
+    real_mom = round(min(100, max(0, (conv + 100) / 2)), 0)   # conviction → 0-100
+    rvol = _real_vol_pct(sym)
+    real_vold = round(min(100, (rvol / 40 * 100))) if rvol else None
+    signals = []
+    for key, label, lo, hi, col in SIGNAL_DIALS:
+        if key == "momentum":
+            val, s = int(real_mom), src
+        elif key == "volatility" and real_vold is not None:
+            val, s = int(real_vold), "real"
+        else:
+            val, s = rng.randint(15, 88), "sample"
+        signals.append({"key": key, "label": label, "lo": lo, "hi": hi, "color": col,
+                        "value": val, "reading": _lbl(key, val), "src": s})
+
+    return {
+        "sym": sym, "ac": ac, "price": price, "change_pct": change_pct,
+        "conviction": conv, "src": src, "clock": now.strftime("%H:%M:%S"),
+        "series": series, "volume": vols, "times": times, "series_src": src_series,
+        "fills": fills, "strategy_dials": dials, "signals": signals,
+        "open_positions": tape_open, "closed": tape_closed,
+        "tape_pnl": sum(r["pnl"] for r in tape_open + tape_closed),
+        "threshold": threshold,
     }
 
 
