@@ -22,7 +22,8 @@ The parity gate is a built-in review protocol. When a member claims a strategy w
 1. They share the spec + both implementations + their parity screenshot.
 2. YOU run both backtests on YOUR machine (`▶ Run dual backtest`) — same code, same data → results must reproduce. If they don't, the data provenance differs (check the window header) or the code was tuned after freezing.
 3. Review checklist: Does the spec have a kill criterion? Are parameters on a plateau (Optimize screen) or a lucky peak? Is the warm-up ≥ the longest lookback? Does OOS/walk-forward exist, or only in-sample? What's the capacity claim based on?
-Pull-request reviews on GitHub work well for this — the YAML diff IS the strategy diff. PR guide: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests
+Pull-request reviews on GitHub work well for this —
+ the YAML diff IS the strategy diff. PR guide: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests
 
 ## Competition mode (optional, fun)
 Same repo, same strategy rules, everyone runs their own paper account for a month: compare `/api/drift` and P&L calendars at the end. Differences reveal execution skill (slippage, discipline overrides in the journal) rather than signal luck — a lesson no backtest teaches. QuantConnect also runs public competitions if you want a bigger arena: https://www.quantconnect.com/league
