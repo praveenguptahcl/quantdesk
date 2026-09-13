@@ -1,0 +1,641 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>nqq — honest quant</title>
+<style>
+:root{--bg:#070D19;--panel:#0C1424;--panel2:#0F1A2E;--line:#16223A;--tx:#E6EDF7;--mut:#5B7099;
+--red:#FF5C5C;--green:#2FD576;--blue:#4D8DFF;--amber:#F5A623;--purple:#9B7BE0;--pink:#FF5CA8;
+--mono:'JetBrains Mono',ui-monospace,Menlo,monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font:14px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden}
+#app{display:grid;grid-template-columns:212px 1fr;height:100vh}
+#side{background:var(--panel);border-right:1px solid var(--line);padding:16px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.brand{font:800 20px/1 var(--mono);letter-spacing:1px;padding:4px 8px 14px}.brand b{color:var(--blue)}
+.brand .t{font:600 9px/1.4 var(--mono);color:var(--mut);letter-spacing:.5px;display:block;margin-top:4px}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:var(--mut);cursor:pointer;font-size:13px;font-weight:500}
+.nav:hover{background:var(--panel2);color:var(--tx)}.nav.on{background:var(--panel2);color:var(--tx);box-shadow:inset 2px 0 0 var(--blue)}
+.nav .ic{width:16px;text-align:center}
+.nav:focus-visible,.btn:focus-visible,[role=button]:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+main{overflow-y:auto;padding:22px 26px 60px}
+h1{font:700 20px/1.2 var(--mono)}.sub{color:var(--mut);font-size:12px;margin:4px 0 18px;max-width:900px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.mut{color:var(--mut)}.mono{font-family:var(--mono)}.up{color:var(--green)}.down{color:var(--red)}
+.tag{font:600 10px/1 var(--mono);padding:3px 7px;border-radius:4px;border:1px solid var(--line);color:var(--mut)}
+.tag.ok{border-color:var(--green);color:var(--green)}.tag.warn{border-color:var(--amber);color:var(--amber)}
+.tag.off{border-color:var(--mut);color:var(--mut);opacity:.7}
+.tag.bad{border-color:var(--red);color:var(--red)}.tag.blue{border-color:var(--blue);color:var(--blue)}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);padding:8px 14px;border-radius:7px;cursor:pointer;font:600 12px/1 var(--mono)}
+.btn:hover{border-color:var(--blue)}.btn.pri{background:var(--blue);border-color:var(--blue);color:#04122e}
+.btn.danger{border-color:var(--red);color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th{text-align:left;color:var(--mut);font:600 10px/1 var(--mono);padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:9px 6px;border-bottom:1px solid var(--line)}
+.banner{background:#1a1206;border:1px solid var(--amber);color:var(--amber);border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:14px}
+input,select{background:var(--bg);border:1px solid var(--line);color:var(--tx);border-radius:6px;padding:8px 10px;font:13px var(--mono);width:100%}
+label{font:600 10px/1 var(--mono);color:var(--mut);display:block;margin:10px 0 4px}
+.kpi .l{font:600 9px var(--mono);color:var(--mut);letter-spacing:.5px}.kpi .v{font:700 22px var(--mono)}
+.cibar{position:relative;height:6px;background:var(--bg);border-radius:3px;margin-top:4px}
+.cifill{position:absolute;height:100%;border-radius:3px;background:var(--blue);opacity:.5}
+.cimark{position:absolute;width:2px;height:10px;top:-2px;background:var(--tx)}
+/* console gauges */
+.gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:1350px){.gauges{grid-template-columns:repeat(2,1fr)}}
+.gauge{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;position:relative;min-height:290px;cursor:pointer}
+.gauge:hover{border-color:var(--blue)}
+.gtop{display:flex;justify-content:space-between;align-items:baseline;position:relative;z-index:3}
+.gsym{font:700 16px var(--mono)}.gac{font:600 9px var(--mono);color:var(--mut);border:1px solid var(--line);border-radius:3px;padding:2px 5px;margin-left:6px}
+.gspark{position:absolute;left:0;right:0;bottom:0;height:64px;opacity:.5;z-index:1}
+.gbody{position:relative;height:196px}
+.gcenter{position:absolute;left:0;right:0;top:134px;text-align:center;z-index:3}
+.gpnl{font:700 21px var(--mono)}.gnet{font:600 11px var(--mono);margin-top:5px}
+.gcert{font:700 11px var(--mono);margin-top:6px}.gmeta{font:500 10px var(--mono);color:var(--mut);margin-top:3px}
+.axis{display:flex;justify-content:space-between;font:600 10px var(--mono);padding:5px 0;border-bottom:1px solid var(--line)}
+.axisbar{height:5px;background:var(--bg);border-radius:3px;margin-top:3px;overflow:hidden}
+.hidden{display:none!important}
+.admin-only{display:none}
+body.admin .admin-only{display:revert}
+[data-tip]{position:relative;cursor:help;border-bottom:1px dotted var(--mut)}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;left:0;top:130%;z-index:300;width:260px;background:var(--panel2);border:1px solid var(--blue);border-radius:8px;padding:9px 12px;font:400 11px/1.5 -apple-system,sans-serif;color:var(--tx);box-shadow:0 6px 24px rgba(0,0,0,.5);white-space:normal}
+.kbd{font:600 10px var(--mono);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--mut)}
+.palrow:hover{background:var(--panel2)}
+.voice{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px}
+.stance{font:700 9px var(--mono);padding:2px 6px;border-radius:4px}
+.login{position:fixed;inset:0;background:rgba(4,6,10,.94);display:flex;align-items:center;justify-content:center;z-index:100}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--panel2);border:1px solid var(--line);padding:11px 20px;border-radius:8px;font-size:13px;transition:.25s;z-index:200}
+#toast.show{transform:translateX(-50%) translateY(0)}#toast.ok{border-color:var(--green)}#toast.err{border-color:var(--red)}
+</style></head><body>
+<div id="app">
+  <nav id="side">
+    <div class="brand">n<b>qq</b><span class="t">HONEST QUANT · PAPER</span>
+      <div style="margin-top:6px"><span class="kbd" style="cursor:pointer" onclick="palOpen()">⌘K</span> <span class="mut" style="font-size:9px">jump anywhere</span></div></div>
+    <div class="nav" data-s="brief"><span class="ic">☀</span>Morning Brief</div>
+    <div class="nav on" data-s="console"><span class="ic">◎</span>Conviction Console</div>
+    <div class="nav" data-s="research"><span class="ic">✦</span>Research Journal</div>
+    <div class="nav" data-s="ai"><span class="ic">✧</span>AI Builder</div>
+    <div class="nav" data-s="arena"><span class="ic">🏆</span>Arena</div>
+    <div class="nav" data-s="lab"><span class="ic">◈</span>Signal Lab</div>
+    <div class="nav" data-s="library"><span class="ic">⚡</span>Template Library</div>
+    <div class="nav" data-s="discovery"><span class="ic">🔬</span>Discovery</div>
+    <div class="nav" data-s="micro"><span class="ic">≣</span>Microstructure</div>
+    <div class="nav" data-s="compare"><span class="ic">⇄</span>Compare</div>
+    <div class="nav" data-s="strategy"><span class="ic">⚗</span>Strategy</div>
+    <div class="nav" data-s="portfolio"><span class="ic">📊</span>Portfolio</div>
+    <div class="nav" data-s="exec"><span class="ic">⇅</span>Execution &amp; Risk</div>
+    <div class="nav" data-s="council"><span class="ic">⚖</span>Council</div>
+    <div class="nav" data-s="rooms"><span class="ic">💬</span>Rooms</div>
+    <div class="nav" data-s="data"><span class="ic">🗄</span>Data &amp; Artifacts</div>
+    <div class="nav" data-s="evidence"><span class="ic">🔏</span>Evidence</div>
+    <div class="nav" data-s="journey"><span class="ic">🧭</span>Journey</div>
+    <div class="nav" data-s="learn"><span class="ic">🎓</span>Learn</div>
+    <div class="nav" data-s="admin" id="navAdmin"><span class="ic">🛠</span>Admin</div>
+    <div style="margin-top:auto;font:600 9px var(--mono);color:var(--mut);padding:12px 8px" id="foot">connecting…</div>
+  </nav>
+  <main id="main"></main>
+</div>
+<div id="palette" class="hidden" style="position:fixed;inset:0;background:rgba(4,6,10,.7);z-index:150;display:flex;align-items:flex-start;justify-content:center;padding-top:12vh">
+  <div class="card" style="width:560px;padding:0;overflow:hidden">
+    <input id="palQ" placeholder="Jump to a screen, symbol, or action…  (↑↓ Enter, Esc)" style="border:none;border-bottom:1px solid var(--line);border-radius:0;padding:14px 16px;font-size:15px" oninput="palRender()" onkeydown="palKey(event)">
+    <div id="palList" style="max-height:52vh;overflow-y:auto"></div></div></div>
+<div id="login" class="login hidden"><div class="card" style="width:340px">
+  <div style="font:800 18px var(--mono);margin-bottom:4px">n<b style="color:var(--blue)">qq</b> — sign in</div>
+  <div class="mut" style="font-size:11px;margin-bottom:10px">First run: <b>admin / changeme</b>. Multi-user mode is on.</div>
+  <label>Username</label><input id="liU" value="admin">
+  <label>Password</label><input id="liP" type="password" onkeydown="if(event.key==='Enter')doLogin()">
+  <div id="liErr" class="down" style="font-size:11px;margin-top:8px"></div>
+  <button class="btn pri" style="width:100%;margin-top:12px" onclick="doLogin()">Sign in</button></div></div>
+<div id="modal" class="hidden" style="position:fixed;inset:0;background:rgba(4,6,10,.7);z-index:200;display:flex;align-items:center;justify-content:center" role="dialog" aria-modal="true" aria-labelledby="modTitle">
+  <div class="card" style="width:400px">
+    <div id="modTitle" style="font:700 14px var(--mono);margin-bottom:4px"></div>
+    <div id="modMsg" class="mut" style="font-size:12px;margin-bottom:10px"></div>
+    <input id="modInput" style="width:100%;display:none" onkeydown="if(event.key==='Enter')modOK();if(event.key==='Escape')modCancel()">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button id="modCancelBtn" class="btn" onclick="modCancel()">Cancel</button>
+      <button class="btn pri" onclick="modOK()">OK</button></div></div></div>
+<div id="toast"></div>
+<script>
+/* ---------- in-app modal (replaces blocking prompt/alert/confirm) ---------- */
+let _modResolve=null;
+function _modOpen(title,msg,{input=false,value='',placeholder='',okText='OK',cancel=true}={}){
+  $('modTitle').textContent=title;$('modMsg').textContent=msg||'';$('modMsg').style.display=msg?'':'none';
+  const inp=$('modInput');inp.style.display=input?'':'none';inp.value=value;inp.placeholder=placeholder;
+  $('modCancelBtn').style.display=cancel?'':'none';
+  document.querySelector('#modal .btn.pri').textContent=okText;
+  $('modal').classList.remove('hidden');
+  if(input)setTimeout(()=>{inp.focus();inp.select();},30);else setTimeout(()=>document.querySelector('#modal .btn.pri').focus(),30);
+  return new Promise(res=>{_modResolve=res;});}
+function modOK(){const inp=$('modInput');const v=inp.style.display==='none'?true:inp.value;$('modal').classList.add('hidden');if(_modResolve){_modResolve(v);_modResolve=null;}}
+function modCancel(){$('modal').classList.add('hidden');if(_modResolve){_modResolve(null);_modResolve=null;}}
+/* promise-based helpers: askModal → text|null, infoModal → void, confirmModal → bool */
+const askModal=(title,{msg='',value='',placeholder='',okText='OK'}={})=>_modOpen(title,msg,{input:true,value,placeholder,okText});
+const infoModal=(title,msg='')=>_modOpen(title,msg,{cancel:false});
+const confirmModal=(title,msg='',okText='Confirm')=>_modOpen(title,msg,{okText}).then(v=>v!==null);
+async function doLogin(){const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({u:$('liU').value.trim(),pw:$('liP').value})});const d=await r.json().catch(()=>({}));if(!r.ok){$('liErr').textContent='⛔ '+(d.error||'login failed');return;}location.reload();}
+async function logout(){await fetch('/api/auth/logout',{method:'POST'});location.reload();}
+async function changePw(){const old_pw=await askModal('Change password (1/2)',{msg:'Enter your CURRENT password.',placeholder:'current password',okText:'Next'});if(!old_pw)return;const pw=await askModal('Change password (2/2)',{msg:'Enter your NEW password (≥8 characters, must differ).',placeholder:'new password',okText:'Change'});if(!pw)return;const r=await fetch('/api/auth/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({old_pw,pw})});const d=await r.json().catch(()=>({}));if(r.ok){infoModal('Password changed','Your password has been updated.');}else{infoModal('⛔ Failed',d.error||'failed');}}
+const $=id=>document.getElementById(id);
+const api=async(p,m,b)=>{try{const r=await fetch(p,m?{method:m,headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}:undefined);const d=await r.json().catch(()=>({}));if(!r.ok)return{err:d.error||r.status};return d;}catch(e){return{err:'offline'};}};
+const esc=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const jss=x=>String(x==null?'':x).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+const money=v=>(v<0?'−':'')+'$'+Math.abs(Math.round(v)).toLocaleString();
+const vcol=v=>v==='Strong edge'?'var(--green)':v==='Probable edge'?'var(--blue)':v==='Weak-positive'?'var(--amber)':v==='Inconclusive'?'var(--purple)':'var(--red)';
+function toast(m,t){const e=$('toast');e.textContent=m;e.className='show '+(t||'');setTimeout(()=>e.className='',3200);}
+let ME=null,POLL=null;
+/* ---------- ⌘K command palette ---------- */
+const NAVLABELS={brief:'Morning Brief',console:'Conviction Console',research:'Research Journal',ai:'AI Builder',arena:'Arena',lab:'Signal Lab',library:'Template Library',discovery:'Discovery',micro:'Microstructure',compare:'Compare',strategy:'Strategy',portfolio:'Portfolio',exec:'Execution & Risk',council:'Council',rooms:'Rooms',data:'Data & Artifacts',evidence:'Evidence',journey:'Journey',learn:'Learn',admin:'Admin & Governance'};
+let PAL=[],PALI=0;
+function palItems(){const it=Object.entries(NAVLABELS).map(([s,l])=>({t:l,sub:'screen',go:()=>go(s)}));
+  ['SPY','QQQ','AAPL','XLK','MES','BTCUSDT','ETHUSDT','SPCX'].forEach(sy=>it.push({t:sy,sub:'open symbol drill-down',go:()=>{go('console');openSym(sy);}}));
+  it.push({t:'Run alpha discovery',sub:'action',go:()=>go('discovery')},{t:'Convene the council',sub:'action',go:()=>go('council')},{t:'Finalize the week (sign winner)',sub:'action',go:()=>go('admin')});
+  return it;}
+function palOpen(){$('palette').classList.remove('hidden');$('palQ').value='';PALI=0;palRender();setTimeout(()=>$('palQ').focus(),30);}
+function palClose(){$('palette').classList.add('hidden');}
+function palRender(){const q=($('palQ').value||'').toLowerCase();PAL=palItems().filter(x=>x.t.toLowerCase().includes(q)||x.sub.includes(q)).slice(0,40);if(PALI>=PAL.length)PALI=0;
+  $('palList').innerHTML=PAL.map((x,i)=>`<div class="palrow" style="padding:10px 16px;cursor:pointer;display:flex;gap:10px;align-items:center;${i===PALI?'background:var(--panel2)':''}" onmouseover="PALI=${i};palHi()" onclick="PAL[${i}].go();palClose()"><span>${esc(x.t)}</span><span class="mut" style="font-size:10px;margin-left:auto">${x.sub}</span></div>`).join('')||'<div class="mut" style="padding:14px 16px">no matches</div>';}
+function palHi(){document.querySelectorAll('.palrow').forEach((r,i)=>r.style.background=i===PALI?'var(--panel2)':'');}
+function palKey(e){if(e.key==='Escape')palClose();else if(e.key==='ArrowDown'){e.preventDefault();PALI=Math.min(PALI+1,PAL.length-1);palHi();}else if(e.key==='ArrowUp'){e.preventDefault();PALI=Math.max(PALI-1,0);palHi();}else if(e.key==='Enter'&&PAL[PALI]){PAL[PALI].go();palClose();}}
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();$('palette').classList.contains('hidden')?palOpen():palClose();}else if(e.key==='Escape'&&!$('palette').classList.contains('hidden'))palClose();
+  else if(e.key==='Escape'&&!$('modal').classList.contains('hidden'))modCancel();});
+
+/* ---------- router ---------- */
+const SCREENS={};
+function go(s){document.querySelectorAll('.nav').forEach(n=>{const on=n.dataset.s===s;n.classList.toggle('on',on);n.setAttribute('aria-current',on?'page':'false');});
+  clearInterval(POLL);POLL=null;(SCREENS[s]||(()=>{$('main').innerHTML='<h1>'+s+'</h1>';}))();
+  history.replaceState(null,'','#/'+s);}
+document.querySelectorAll('.nav').forEach(n=>{
+  n.setAttribute('role','button');n.setAttribute('tabindex','0');
+  n.setAttribute('aria-label',n.textContent.trim());
+  n.onclick=()=>go(n.dataset.s);
+  n.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go(n.dataset.s);}};});
+
+/* ---------- gauge svg ---------- */
+function gaugeSVG(conv,th){const cx=170,cy=150,R=118;
+  const arc=(c0,c1,col,w)=>{const a0=(90-c0/100*90)*Math.PI/180,a1=(90-c1/100*90)*Math.PI/180;
+    const x0=cx+R*Math.cos(a0),y0=cy-R*Math.sin(a0),x1=cx+R*Math.cos(a1),y1=cy-R*Math.sin(a1);
+    return `<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${R} ${R} 0 ${Math.abs(c1-c0)>100?1:0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;};
+  return `<svg width="340" height="150" viewBox="0 0 340 150" style="position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:2">
+    ${arc(-100,100,'var(--line)',18)}${arc(-100,-th,'var(--red)',18)}${arc(th,100,'var(--green)',18)}
+    <g transform="rotate(${(conv/100*90).toFixed(1)} ${cx} ${cy})"><line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy-R+8}" stroke="var(--tx)" stroke-width="4" stroke-linecap="round"/><circle cx="${cx}" cy="${cy-R+8}" r="5" fill="var(--tx)"/></g>
+    <circle cx="${cx}" cy="${cy}" r="12" fill="#0D1526" stroke="var(--mut)" stroke-width="4"/></svg>`;}
+function drawSpark(cid,s){const c=$(cid);if(!c||!s||s.length<2)return;const W=c.clientWidth||300,Hh=64;c.width=W*2;c.height=Hh*2;const g=c.getContext('2d');g.scale(2,2);
+  const mn=Math.min(...s),mx=Math.max(...s),rg=(mx-mn)||1;g.beginPath();s.forEach((v,i)=>{const x=i/(s.length-1)*W,y=Hh-8-(v-mn)/rg*(Hh-14);i?g.lineTo(x,y):g.moveTo(x,y);});g.strokeStyle=s[s.length-1]>=s[0]?'rgba(47,213,118,.5)':'rgba(255,92,92,.5)';g.lineWidth=1.3;g.stroke();}
+
+/* ---------- Console ---------- */
+SCREENS.console=async function(){
+  const d=await api('/api/console');if(d.err){$('main').innerHTML='<div class="banner">backend offline</div>';return;}
+  const s=d.session;
+  $('main').innerHTML=`
+   <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:16px">
+     <div><h1>ALPHA<b style="color:var(--blue)">PULSE</b> · Conviction Console ${d.demo?'<span class="tag warn" style="vertical-align:middle" data-tip="Session P&L, hit-rate, fires and equity below come from a SEEDED demo tape — not real fills. An admin can clear it from the Admin screen. Real numbers appear once real paper fills exist.">SAMPLE SESSION ⓘ</span>':''}</h1>
+       <div class="sub" style="margin:2px 0 0">Needle = live conviction (sample). Badge = <b>earned EdgeCertainty</b> — real for catalog symbols, capped 0.50 for sample. A fire opens the Council, it doesn't blindly execute.${d.demo?' <b class="down">The P&L/hit-rate/equity are demo data, not live performance.</b>':''}</div></div>
+     <div class="kpi"><div class="l">SESSION P&L${d.demo?' ·SAMPLE':''}</div><div class="v ${s.pnl>=0?'up':'down'}">${money(s.pnl)}</div></div>
+     <div class="kpi"><div class="l">HIT RATE${d.demo?' ·SAMPLE':''}</div><div class="v">${Math.round(s.hit_rate*100)}%</div></div>
+     <div class="kpi"><div class="l">FIRES${d.demo?' ·SAMPLE':''}</div><div class="v">${s.fires}</div></div>
+     <div class="kpi"><div class="l">OPEN RISK${d.demo?' ·SAMPLE':''}</div><div class="v">${money(s.open_risk)}</div></div>
+     <span class="mono mut" style="margin-left:auto">${d.clock}</span></div>
+   <div style="display:grid;grid-template-columns:1fr 360px;gap:16px">
+     <div class="gauges" id="gauges"></div>
+     <div>
+       <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">EXECUTION TAPE</div>
+         <div style="font:600 10px var(--mono);color:var(--mut);margin-bottom:6px">OPEN ${d.open_positions.length}</div>
+         ${d.open_positions.map(p=>tapeOpen(p)).join('')||'<div class="mut" style="font-size:11px">no open fires</div>'}
+         <div style="font:600 10px var(--mono);color:var(--mut);margin:12px 0 6px">CLOSED ${d.closed.length}</div>
+         ${d.closed.map(c=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font:600 11px var(--mono)"><span class="stance" style="background:${c.side==='LONG'?'#0d2b1c':'#2b0d10'};color:${c.side==='LONG'?'var(--green)':'var(--red)'}">${c.side}</span><span style="flex:1">${c.sym} <span class="mut">${c.strategy}</span></span><span style="color:${c.pnl>=0?'var(--green)':'var(--red)'}">${money(c.pnl)}</span></div>`).join('')}
+       </div></div></div>`;
+  $('gauges').innerHTML=d.symbols.map(gaugeCard).join('');
+  d.symbols.forEach(x=>drawSpark('spk-'+x.sym,x.spark));
+  POLL=setInterval(async()=>{const el=$('gauges');if(!el){clearInterval(POLL);POLL=null;return;}const dd=await api('/api/console');const e2=$('gauges');if(!dd.err&&e2){e2.innerHTML=dd.symbols.map(gaugeCard).join('');dd.symbols.forEach(x=>drawSpark('spk-'+x.sym,x.spark));}},6000);
+};
+function gaugeCard(x){const th=60;const pc=x.sym_pnl>=0?'var(--green)':'var(--red)';
+  return `<div class="gauge" onclick="openSym('${x.sym}')">
+   <canvas class="gspark" id="spk-${x.sym}"></canvas>
+   <div class="gtop"><div><span class="gsym">${x.sym}</span><span class="gac">${x.ac.toUpperCase()}</span></div><span class="mono mut">${x.price.toLocaleString()}</span></div>
+   <div class="gbody">${gaugeSVG(x.conviction,th)}
+     <div class="gcenter">
+       <div class="gpnl" style="color:${pc}">${money(x.sym_pnl)} <span style="font-size:10px;color:var(--mut)">SYM P&L</span></div>
+       <div class="gnet" style="color:${x.conviction>=0?'var(--green)':'var(--red)'}">NET ${Math.abs(Math.round(x.net_pct))}% ${x.side}</div>
+       <div class="gcert" style="color:${vcol(x.verdict)}">◆ ${Math.round(x.certainty*100)}% certainty · ${x.verdict}</div>
+       <div class="gmeta">${x.agent} · ${x.family}${x.real_pit?'':' · <span style="color:var(--amber)">sample</span>'}</div>
+     </div></div></div>`;}
+function tapeOpen(p){const rng=Math.max(1,Math.abs(p.pt-p.sl)),pos=Math.max(0,Math.min(100,(p.last-Math.min(p.sl,p.pt))/rng*100));
+  return `<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px">
+   <div style="display:flex;gap:8px;align-items:center;font:700 12px var(--mono)"><span class="stance" style="background:${p.side==='LONG'?'#0d2b1c':'#2b0d10'};color:${p.side==='LONG'?'var(--green)':'var(--red)'}">${p.side}</span>${p.sym}<span style="margin-left:auto;color:${p.pnl>=0?'var(--green)':'var(--red)'}">${money(p.pnl)}</span></div>
+   <div style="font:500 10px var(--mono);color:var(--mut);margin:6px 0">${p.strategy} · fired @ ${Math.round(p.fired_at*100)}%</div>
+   <div style="position:relative;height:5px;background:linear-gradient(90deg,var(--red),var(--mut),var(--green));border-radius:3px"><div style="position:absolute;top:-3px;left:${pos}%;width:10px;height:10px;background:var(--tx);transform:translateX(-50%) rotate(45deg)"></div></div>
+   <div style="display:flex;justify-content:space-between;font:600 9px var(--mono);color:var(--mut);margin-top:4px"><span style="color:var(--red)">SL ${p.sl}</span><span>IN ${p.entry}</span><span style="color:var(--green)">PT ${p.pt}</span></div></div>`;}
+
+/* ---------- Symbol drill / council-lite ---------- */
+window.openSym=async function(sym){clearInterval(POLL);POLL=null;/* stop the console poll — this drill-down replaces #main outside go(), else the 6s interval hits a null #gauges */const d=await api('/api/console/symbol?sym='+sym);if(d.err)return;
+  const c=d.certainty,ax=c.axes||{};
+  $('main').innerHTML=`<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+     <h1>${sym}</h1><span class="gac">${(d.symbol||{}).ac?.toUpperCase()||''}</span>
+     <span class="mono" style="font-size:20px">${(d.series[d.series.length-1]||0).toLocaleString()}</span>
+     ${d.symbol&&!d.symbol.real_pit?'<span class="tag warn">SAMPLE</span>':'<span class="tag ok">REAL PIT</span>'}
+     <button class="btn" style="margin-left:auto" onclick="go('console')">✕ back</button></div>
+   <div class="grid g2">
+     <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:10px">EDGE CERTAINTY · ${sym}/${d.family}</div>
+       <div style="font:700 30px var(--mono);color:${vcol(c.verdict)}">${Math.round(c.certainty*100)}%</div>
+       <div class="tag" style="border-color:${vcol(c.verdict)};color:${vcol(c.verdict)};display:inline-block;margin:8px 0">${c.verdict}</div>
+       <canvas id="symeq" style="width:100%;height:70px;margin:8px 0"></canvas>
+       ${Object.entries(ax).map(([k,v])=>`<div class="axis"><span>${k.replace(/_/g,' ')}</span><span class="mono">${Math.round(v*100)}%</span></div><div class="axisbar"><div style="height:100%;width:${v*100}%;background:${v>=.6?'var(--green)':v>=.4?'var(--amber)':'var(--red)'}"></div></div>`).join('')}
+     </div>
+     <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:10px">COUNCIL — voices on ${sym}</div>
+       ${d.council.map(v=>voiceRow(v)).join('')}
+       <div class="mut" style="font-size:11px;margin-top:8px">Each voice testifies with a track record and an evidence link (ruling 73: no testimony without a link).</div></div>
+   </div>`;
+  const eq=d.series;drawSparkBig('symeq',eq);
+};
+function voiceRow(v){const sc=v.stance==='FOR'?'var(--green)':v.stance==='AGAINST'?'var(--red)':'var(--mut)';
+  return `<div class="voice"><div style="display:flex;align-items:center;gap:8px"><span class="stance" style="background:var(--panel2);color:${sc};border:1px solid ${sc}">${v.stance}</span><b style="font-size:12px">${v.label}</b>
+   <span class="tag ${v.record.rated?'ok':'warn'}" style="margin-left:auto">${v.record.rated?'rated':'unrated'}</span></div>
+   <div class="mut" style="font-size:11px;margin:5px 0">${esc(v.reason)}</div>
+   <div style="font:600 10px var(--mono);color:var(--mut)">IC₁ ${v.record.ic1} · hit ${Math.round(v.record.hit_rate*100)}% · p=${v.record.pvalue} · <a href="${v.evidence}" target="_blank" style="color:var(--blue)">evidence ↗</a></div></div>`;}
+function drawSparkBig(cid,s){const c=$(cid);if(!c||!s||s.length<2)return;const W=c.clientWidth||400,Hh=70;c.width=W*2;c.height=Hh*2;const g=c.getContext('2d');g.scale(2,2);const mn=Math.min(...s),mx=Math.max(...s),rg=(mx-mn)||1;g.beginPath();s.forEach((v,i)=>{const x=i/(s.length-1)*W,y=Hh-8-(v-mn)/rg*(Hh-16);i?g.lineTo(x,y):g.moveTo(x,y);});g.strokeStyle='var(--blue)';g.lineWidth=2;g.stroke();}
+
+/* ---------- AI Builder ---------- */
+SCREENS.ai=function(){$('main').innerHTML=`<h1>AI Strategy Builder</h1><div class="sub">Describe an idea in plain English → a testable signal spec. Keyless parser (no dependencies). <b>Parse ≠ edge</b>: the spec earns nothing until it clears the honest gates in the Journal.</div>
+   <div class="grid g2"><div class="card"><label>Describe your idea</label>
+     <textarea id="aiText" style="width:100%;min-height:90px;background:var(--bg);border:1px solid var(--line);color:var(--tx);border-radius:6px;padding:10px;font:13px var(--mono)">buy SPY when RSI over 14 days drops below 30</textarea>
+     <button class="btn pri" style="margin-top:10px" onclick="aiParse()">✧ Parse to spec</button></div>
+   <div id="aiOut" class="card"><div class="mut">the parsed spec appears here — then log it to the Journal.</div></div></div>`;
+};
+window.aiParse=async function(){const d=await api('/api/ai/parse','POST',{text:$('aiText').value});if(d.err){toast(d.err,'err');return;}const s=d.spec;
+  $('aiOut').innerHTML=`<div style="font:700 11px var(--mono);color:var(--mut)">PARSED SPEC</div>
+   <div class="axis"><span>family</span><span class="mono">${s.family} (${s.label})</span></div>
+   <div class="axis"><span>params</span><span class="mono">${esc(JSON.stringify(s.params))}</span></div>
+   <div class="axis"><span>symbol</span><span class="mono">${s.sym}</span></div>
+   <div class="axis"><span>suggested name</span><span class="mono">${s.suggested_name}</span></div>
+   ${(d.warnings||[]).map(w=>`<div class="mut" style="font-size:11px;margin-top:6px">⚠ ${esc(w)}</div>`).join('')}
+   <div class="banner" style="margin:10px 0">${esc(s.note)}</div>
+   <button class="btn pri" onclick="aiLog('${jss(s.suggested_name)}','${jss(s.family)}')">+ Log to Research Journal</button>`;
+};
+window.aiLog=async function(name,family){const r=await api('/api/journal/create','POST',{name,family,hyp:'from AI Builder: '+$('aiText').value.trim().slice(0,120)});if(r.err){toast(r.err,'err');return;}toast('logged to Journal as '+name,'ok');go('research');};
+
+/* ---------- Research Journal ---------- */
+SCREENS.research=async function(){const d=await api('/api/journal');const fam=await api('/api/signal/families');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Research Journal</h1><div class="sub">Ideas advance <b>Idea → Research → Backtest → Parity → Paper → Live</b> only by earning each gate — a deflated-Sharpe floor, capacity floor, a dual-recompute <b>parity</b> match, a forward paper record, and a typed Live confirmation. Nothing promotes on vibes; the reason is always shown.</div>
+   <div class="card" style="margin-bottom:14px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+     <div style="flex:1;min-width:160px"><label>New idea name</label><input id="jName" placeholder="my-momentum-v1"></div>
+     <div><label>Family</label><select id="jFam">${Object.entries(fam.families||{}).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
+     <div style="flex:2;min-width:200px"><label>Hypothesis</label><input id="jHyp" placeholder="why should this have an edge?"></div>
+     <button class="btn pri" onclick="jCreate()">+ Log idea</button></div></div>
+   <div id="jList">${d.ideas.map(jRow).join('')||'<div class="mut">no ideas yet</div>'}</div>`;
+};
+function jRow(i){const g=i.next_gate,ev=g.evidence||{};const stages=['Idea','Research','Backtest','Parity','Paper','Live'];
+  const pipe=stages.map((s,k)=>`<div style="flex:1;text-align:center"><div style="height:4px;background:${k<=i.stage?'var(--blue)':'var(--line)'};border-radius:2px"></div><div style="font:600 9px var(--mono);color:${k<=i.stage?'var(--tx)':'var(--mut)'};margin-top:3px">${s}</div></div>`).join('');
+  const live=i.stage===4;
+  return `<div class="card" style="margin-bottom:12px">
+   <div style="display:flex;align-items:center;gap:10px"><b>${esc(i.name)}</b><span class="tag">${i.family}</span><span class="tag blue">${i.stage_name}</span>${i.public?'<span class="tag ok">public</span>':''}
+     <span class="mut" style="font-size:11px;margin-left:auto">${esc(i.hyp||'')}</span>
+     <span class="tag" style="cursor:pointer" onclick="jPublish(${i.id},${!i.public})">${i.public?'unpublish':'publish'}</span></div>
+   <div style="display:flex;gap:6px;margin:12px 0">${pipe}</div>
+   ${Object.keys(ev).length?`<div class="mono mut" style="font-size:11px;margin-bottom:8px">${Object.entries(ev).map(([k,v])=>k.replace(/_/g,' ')+' '+(typeof v==='number'?v:esc(v))).join(' · ')}</div>`:''}
+   <div style="display:flex;align-items:center;gap:10px">
+     <span class="tag ${g.can?'ok':'bad'}">${g.can?'gate open':'gate blocked'}</span>
+     <span class="mut" style="font-size:12px">${esc(g.note)}</span>
+     ${i.stage<5?`<button class="btn ${g.can?'pri':''}" style="margin-left:auto${g.can?'':';opacity:.5'}" onclick="jPromote(${i.id},'${jss(i.name)}',${live})">Promote → ${stages[i.stage+1]}</button>`:'<span class="tag ok" style="margin-left:auto">LIVE</span>'}</div></div>`;
+}
+window.jPublish=async function(id,pub){const r=await api('/api/journal/publish','POST',{id,public:pub});if(r.err){toast(r.err,'err');return;}toast(pub?'published':'unpublished','ok');SCREENS.research();};
+window.jCreate=async function(){const r=await api('/api/journal/create','POST',{name:$('jName').value.trim(),family:$('jFam').value,hyp:$('jHyp').value.trim()});if(r.err){toast(r.err,'err');return;}toast('idea logged','ok');SCREENS.research();};
+window.jPromote=async function(id,name,live){let confirm;if(live){confirm=await askModal('Go Live',{msg:'Live promotion requires a typed confirmation. Type exactly the phrase below.',value:name+' GO LIVE',okText:'Promote to Live'});if(!confirm)return;}const r=await api('/api/journal/promote','POST',{id,confirm});if(r.err){toast(r.err,'err');return;}toast('promoted → '+['Idea','Research','Backtest','Parity','Paper','Live'][r.stage],'ok');SCREENS.research();};
+
+/* ---------- Arena ---------- */
+SCREENS.arena=async function(){const d=await api('/api/leaderboard');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  const maxAbs=Math.max(1,...d.rows.map(r=>Math.abs(r.ci.hi)));
+  $('main').innerHTML=`<h1>Arena</h1><div class="sub">The durable ranking is the <b>deflated Sharpe</b> — multiplicity-adjusted for how many times each operator tried, net of costs, with a bootstrap CI. Raw Sharpe is spectacle.</div>
+   <div class="banner">⚠ ${esc(d.banner)}</div>
+   <div class="card"><table><thead><tr><th>#</th><th>Agent / operator</th><th>Family</th><th>Raw SR</th><th data-tip="NOT a Sharpe ratio — it is the deflated Probabilistic Sharpe: P(the true Sharpe beats what luck would produce across this operator's trial count). Range 0–1; higher is better. The durable, multiplicity-adjusted ranking.">P(edge) ⓘ</th><th>90% Sharpe CI</th><th>Trials</th><th>Capacity</th><th>Certainty</th><th>Verdict</th></tr></thead><tbody>
+   ${d.rows.map(r=>`<tr style="${r.below_fold?'opacity:.5':''}"><td class="mono">${r.rank}</td>
+     <td><b>${esc(r.display)}</b><div class="mut" style="font-size:10px">${r.operator}${r.real_pit?'':' · <span style="color:var(--amber)">sample</span>'}</div>${r.llm_reason?`<div class="mut" style="font-size:10px;color:var(--purple);max-width:220px">🤖 ${esc(r.llm_reason.slice(0,90))}</div>`:''}</td>
+     <td class="mut">${r.family}</td><td class="mono">${r.raw_sharpe.toFixed(2)}</td>
+     <td class="mono" style="color:${r.deflated_sharpe>=.6?'var(--green)':r.deflated_sharpe>=.4?'var(--amber)':'var(--red)'}">${r.deflated_sharpe.toFixed(2)}</td>
+     <td style="min-width:120px"><span class="mono" style="font-size:11px">${r.ci.lo}…${r.ci.hi}</span>${ciBar(r.ci,maxAbs)}</td>
+     <td class="mono">${r.n_trials}</td><td class="mono">${r.capacity_aum>=1e6?'$'+(r.capacity_aum/1e6).toFixed(1)+'M':money(r.capacity_aum)}</td>
+     <td class="mono">${Math.round(r.certainty*100)}%</td>
+     <td><span class="tag" style="border-color:${vcol(r.verdict)};color:${vcol(r.verdict)}">${r.verdict}</span></td></tr>`).join('')}
+   </tbody></table>
+   <div class="mut" style="font-size:11px;margin-top:10px">Rows below the fold (dimmed) are short-sample or low-confidence — <b>they cannot win</b>. A winner is frozen as a signed, replayable bundle (see Evidence).</div></div>`;
+};
+function ciBar(ci,maxAbs){const w=v=>Math.max(0,Math.min(100,(v+maxAbs)/(2*maxAbs)*100));
+  return `<div class="cibar"><div class="cifill" style="left:${w(ci.lo)}%;width:${w(ci.hi)-w(ci.lo)}%"></div><div class="cimark" style="left:${w(ci.median)}%"></div><div class="cimark" style="left:50%;background:var(--mut);opacity:.4"></div></div>`;}
+
+/* ---------- Signal Lab ---------- */
+SCREENS.lab=async function(sym){const d=await api('/api/signal/lab?sym='+(sym||'SPY'));if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Signal Lab</h1><div class="sub">Every family's information coefficient, with an out-of-sample split and <b>FDR control across families</b> (Benjamini-Hochberg, α=${d.fdr_alpha}). An IC that doesn't survive multiplicity is noise dressed as edge.</div>
+   <div style="margin-bottom:12px"><span class="mut" style="font-size:11px">symbol:</span> ${(d.symbols||['SPY']).map(s=>`<span class="tag ${s===d.sym?'blue':''}" style="cursor:pointer;margin-right:4px" onclick="SCREENS.lab('${s}')">${s}</span>`).join('')}</div>
+   <div class="card"><table><thead><tr><th>Family</th><th>IC₁</th><th>IC₅</th><th>IC₂₁</th><th>IS→OOS</th><th>hit</th><th>turnover</th><th>decay ½-life</th><th>p-value</th><th>q-value</th><th>FDR</th><th>PIT</th></tr></thead><tbody>
+   ${d.rows.map(r=>`<tr><td><b>${r.family}</b></td>
+     <td class="mono" style="color:${r.ic[1]>=.02?'var(--green)':r.ic[1]<=-.02?'var(--red)':''}">${r.ic[1]}</td>
+     <td class="mono">${r.ic[5]}</td><td class="mono">${r.ic[21]}</td>
+     <td class="mono">${r.ic_is}→${r.ic_oos}</td><td class="mono">${Math.round(r.hit_rate*100)}%</td>
+     <td class="mono">${r.turnover}</td><td class="mono">${r.decay_half_life_d}d</td>
+     <td class="mono">${r.ic_pvalue[1]}</td><td class="mono">${r.qvalue}</td>
+     <td><span class="tag ${r.fdr_survived?'ok':'bad'}">${r.fdr_survived?'survives':'rejected'}</span></td>
+     <td>${r.real_pit?'<span class="tag ok">real</span>':'<span class="tag warn">sample</span>'}</td></tr>`).join('')}
+   </tbody></table></div>`;
+};
+
+/* ---------- Template Library ---------- */
+SCREENS.library=async function(){const d=await api('/api/library');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Template Library</h1><div class="sub">${esc(d.note)}</div>
+   <div class="grid g2">${d.library.map(x=>`<div class="card"><div style="display:flex;align-items:center;gap:8px"><b>${esc(x.name)}</b><span class="tag">${x.family}</span><span class="tag blue">${x.class}</span><span class="mut" style="font-size:10px;margin-left:auto">${x.horizon}</span></div>
+     <div style="font-size:12.5px;margin:8px 0"><b class="up">edge:</b> ${esc(x.edge)}</div>
+     <div style="font-size:12px" class="mut"><b class="down">fails when:</b> ${esc(x.fails)}</div>
+     <button class="btn pri" style="margin-top:10px" onclick="libAdopt(${x.id})">+ Adopt to Journal</button></div>`).join('')}</div>`;
+};
+window.libAdopt=async function(id){const r=await api('/api/library/adopt','POST',{id});if(r.err){toast(r.err,'err');return;}toast('adopted as '+r.name+' → Research Journal (Idea stage)','ok');go('research');};
+
+/* ---------- Microstructure ---------- */
+SCREENS.micro=async function(sym){const d=await api('/api/micro?sym='+(sym||'BTCUSDT'));if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  const syms=['BTCUSDT','ETHUSDT','SPY','XLK'];const m=d.metrics;
+  $('main').innerHTML=`<h1>Microstructure <span class="mut" style="font-size:13px">${d.sym} · ${d.mid}</span> <span class="tag warn">SYNTHETIC DEPTH</span>${d.mid_live?' <span class="tag ok">live mid</span>':''}</h1>
+   <div class="sub">${esc(d.note)}</div>
+   <div style="margin-bottom:12px">${syms.map(s=>`<span class="tag ${s===d.sym?'blue':''}" style="cursor:pointer;margin-right:4px" onclick="SCREENS.micro('${s}')">${s}</span>`).join('')}</div>
+   <div class="grid g2"><div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">ORDER BOOK</div>
+     <table><thead><tr><th>Bid sz</th><th>Bid</th><th>Ask</th><th>Ask sz</th></tr></thead><tbody>
+     ${d.bids.map((b,i)=>`<tr><td class="mono up">${b.sz}</td><td class="mono up">${b.px}</td><td class="mono down">${d.asks[i].px}</td><td class="mono down">${d.asks[i].sz}</td></tr>`).join('')}</tbody></table></div>
+   <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">METRICS</div>
+     <div class="axis"><span>spread</span><span class="mono">${m.spread_bps} bp</span></div>
+     <div class="axis"><span>book imbalance</span><span class="mono" style="color:${m.imbalance>0?'var(--green)':m.imbalance<0?'var(--red)':''}">${m.imbalance} · ${m.imbalance_signal}</span></div>
+     <div class="axis"><span>microprice</span><span class="mono">${m.microprice}</span></div>
+     <div class="axis"><span>top-of-book depth</span><span class="mono">$${m.top_depth_usd.toLocaleString()}</span></div></div></div>`;
+};
+
+/* ---------- Compare ---------- */
+SCREENS.compare=async function(){const fam=await api('/api/signal/families');const opts=Object.entries(fam.families||{});
+  $('main').innerHTML=`<h1>Compare strategies</h1><div class="sub">Two strong strategies can be a bad pair — highly correlated (doubling one bet), fighting for capacity, or opposed. Compare shows the honest scorecards side by side and flags conflicts.</div>
+   <div class="card" style="margin-bottom:14px"><div style="display:flex;gap:10px;align-items:flex-end">
+     <div><label>Strategy A</label><select id="cmpA">${opts.map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div>
+     <div><label>Strategy B</label><select id="cmpB">${opts.map(([k,v],i)=>`<option value="${k}" ${i===1?'selected':''}>${v.label}</option>`).join('')}</select></div>
+     <button class="btn pri" onclick="runCmp()">⇄ Compare</button></div></div>
+   <div id="cmpOut"></div>`;
+};
+window.runCmp=async function(){$('cmpOut').innerHTML='<div class="mut">running…</div>';const d=await api('/api/compare?a='+$('cmpA').value+'&b='+$('cmpB').value);if(d.err){$('cmpOut').innerHTML='<div class="banner">'+d.err+'</div>';return;}
+  const col=x=>`<div class="card"><div style="font:700 13px var(--mono)">${x.family}</div>
+     <div class="axis"><span data-tip="Deflated Probabilistic Sharpe — P(true Sharpe beats the multiplicity benchmark). A probability 0–1, NOT a Sharpe ratio.">P(edge) ⓘ</span><span class="mono">${x.deflated_sharpe}</span></div>
+     <div class="axis"><span>certainty</span><span class="mono" style="color:${vcol(x.verdict)}">${Math.round(x.certainty*100)}% ${x.verdict}</span></div>
+     <div class="axis"><span>capacity</span><span class="mono">${x.capacity_aum>=1e6?'$'+(x.capacity_aum/1e6).toFixed(1)+'M':money(x.capacity_aum)}</span></div>
+     <div class="axis"><span>max DD</span><span class="mono down">${x.max_dd_pct}%</span></div>
+     <div class="axis"><span>Sharpe CI</span><span class="mono">${x.ci.lo}…${x.ci.hi}</span></div></div>`;
+  $('cmpOut').innerHTML=`<div class="grid g2">${col(d.a)}${col(d.b)}</div>
+   <div class="card" style="margin-top:14px"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">CORRELATION ${d.correlation} · CONFLICTS</div>
+   ${d.conflicts.map(c=>`<div class="banner" style="margin:6px 0">${esc(c)}</div>`).join('')}</div>`;
+};
+
+/* ---------- Discovery ---------- */
+SCREENS.discovery=async function(){
+  $('main').innerHTML=`<h1>Alpha Discovery</h1><div class="sub">Search a grid of family × params × symbol, then apply <b>FDR control across the entire search</b>. The more hypotheses you test, the higher the bar — most candidates are correctly rejected as noise. The whole search counts toward your multiplicity (trial ledger).</div>
+   <button class="btn pri" onclick="runDisc()">🔬 Run the search</button><div id="discOut" style="margin-top:14px"><div class="mut">runs ~60 candidate signals with honest FDR — a few seconds.</div></div>`;
+  runDisc();
+};
+window.runDisc=async function(){$('discOut').innerHTML='<div class="mut">searching…</div>';const d=await api('/api/discovery');if(d.err){$('discOut').innerHTML='<div class="banner">'+d.err+'</div>';return;}
+  $('discOut').innerHTML=`<div class="banner">${esc(d.note)}</div>
+   <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">${d.n_survived} / ${d.n_tested} SURVIVE FDR (α=${d.alpha})</div>
+   <table><thead><tr><th>Family</th><th>Params</th><th>Symbol</th><th>IC₁</th><th>IC₅</th><th>hit</th><th>OOS</th><th>p-value</th><th>q-value</th><th>FDR</th></tr></thead><tbody>
+   ${d.candidates.slice(0,40).map(c=>`<tr style="${c.fdr_survived?'':'opacity:.5'}"><td><b>${c.family}</b></td><td class="mono" style="font-size:10px">${esc(JSON.stringify(c.params))}</td><td>${c.sym}</td>
+     <td class="mono" style="color:${c.ic1>=.02?'var(--green)':c.ic1<=-.02?'var(--red)':''}">${c.ic1}</td><td class="mono">${c.ic5}</td><td class="mono">${Math.round(c.hit*100)}%</td><td class="mono">${c.oos}</td>
+     <td class="mono">${c.pvalue}</td><td class="mono">${c.qvalue}</td><td><span class="tag ${c.fdr_survived?'ok':'bad'}">${c.fdr_survived?'survives':'rejected'}</span></td></tr>`).join('')}
+   </tbody></table></div>`;
+};
+
+/* ---------- Portfolio ---------- */
+SCREENS.portfolio=async function(){const fam=await api('/api/signal/families');const opts=Object.entries(fam.families||{});
+  $('main').innerHTML=`<h1>Portfolio construction</h1><div class="sub">Combining strategies only helps if they aren't the same trade in a costume. nqq weights by inverse-vol shrunk by correlation, and reports the <b>diversification benefit</b> and a crowding-aware <b>portfolio capacity</b>. Highly correlated legs show near-zero benefit — honestly.</div>
+   <div class="card" style="margin-bottom:14px"><label>Legs (pick 2–4 families to combine)</label>
+     <div id="pfLegs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">${opts.map(([k,v])=>`<span class="tag" style="cursor:pointer" data-f="${k}" onclick="this.classList.toggle('blue')">${v.label}</span>`).join('')}</div>
+     <button class="btn pri" style="margin-top:12px" onclick="buildPf()">📊 Build portfolio</button></div>
+   <div id="pfOut"></div>`;
+};
+window.buildPf=async function(){const legs=[...document.querySelectorAll('#pfLegs .tag.blue')].map(t=>({family:t.dataset.f,params:{}}));if(legs.length<1){toast('pick at least one family','err');return;}
+  $('pfOut').innerHTML='<div class="mut">running…</div>';const d=await api('/api/portfolio','POST',{legs});if(d.err){$('pfOut').innerHTML='<div class="banner">'+d.err+'</div>';return;}
+  $('pfOut').innerHTML=`<div class="grid g2"><div class="card">
+     <div class="grid g2" style="gap:10px"><div class="kpi"><div class="l">PORTFOLIO SHARPE</div><div class="v">${d.portfolio_sharpe.toFixed(2)}</div></div>
+       <div class="kpi"><div class="l">DEFLATED</div><div class="v">${d.portfolio_deflated}</div></div>
+       <div class="kpi"><div class="l">DIVERSIFICATION</div><div class="v" style="color:${d.diversification>=.15?'var(--green)':'var(--amber)'}">${Math.round(d.diversification*100)}%</div></div>
+       <div class="kpi"><div class="l">PORTFOLIO CAPACITY</div><div class="v" style="font-size:15px">${d.portfolio_capacity_aum>=1e6?'$'+(d.portfolio_capacity_aum/1e6).toFixed(1)+'M':money(d.portfolio_capacity_aum)}</div></div></div>
+     <canvas id="pfEq" style="width:100%;height:70px;margin-top:10px"></canvas>
+     <div class="mut" style="font-size:11px;margin-top:6px">mean pairwise correlation ${d.mean_correlation} · CI ${d.portfolio_ci.lo}…${d.portfolio_ci.hi}</div></div>
+   <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">LEG WEIGHTS</div>
+     ${d.legs.map(l=>`<div class="axis"><span>${l.family} <span class="mut">(corr ${l.avg_corr})</span></span><span class="mono">${Math.round(l.weight*100)}%</span></div><div class="axisbar"><div style="height:100%;width:${l.weight*100}%;background:var(--blue)"></div></div>`).join('')}</div></div>`;
+  drawSparkBig('pfEq',d.equity);
+};
+
+/* ---------- Strategy scorecard ---------- */
+SCREENS.strategy=async function(){
+  const fams=await api('/api/signal/families');
+  $('main').innerHTML=`<h1>Strategy — EdgeCertainty scorecard</h1><div class="sub">Backtest a signal family into a top-3 cross-sectional strategy over the sector-ETF universe (real costs, execution delay, regime gate). The verdict is <b>veto-gated</b>: a strong average can't hide a fatal weakness.</div>
+   <div class="card" style="margin-bottom:14px"><label>Signal family</label><select id="scFam" style="max-width:280px">${Object.entries(fams.families||{}).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select>
+   <button class="btn pri" style="margin-top:10px" onclick="runScore()">⚡ Backtest + score</button></div>
+   <div id="scOut"><div class="mut">running honest backtest…</div></div>`;
+  runScore();
+};
+window.runScore=async function(){$('scOut').innerHTML='<div class="mut">running honest backtest…</div>';
+  const fam=$('scFam').value;const c=await api('/api/scorecard?family='+fam);if(c.err){$('scOut').innerHTML='<div class="banner">'+c.err+'</div>';return;}
+  const cert=c.certainty,ax=cert.axes;
+  $('scOut').innerHTML=`<div class="grid g2">
+    <div class="card"><div class="grid g2" style="gap:10px">
+      <div class="kpi"><div class="l">RAW SHARPE</div><div class="v">${c.sharpe.toFixed(2)}</div></div>
+      <div class="kpi"><div class="l" data-tip="Deflated Probabilistic Sharpe — P(true Sharpe beats the multiplicity benchmark). A probability 0–1, NOT a Sharpe ratio.">P(EDGE) ⓘ</div><div class="v" style="color:${vcol(cert.verdict)}">${c.deflated_sharpe}</div></div>
+      <div class="kpi"><div class="l">TRIALS (multiplicity)</div><div class="v">${c.n_trials}</div></div>
+      <div class="kpi"><div class="l">CAPACITY</div><div class="v" style="font-size:16px">${c.capacity_aum>=1e6?'$'+(c.capacity_aum/1e6).toFixed(1)+'M':money(c.capacity_aum)}</div></div>
+      <div class="kpi"><div class="l">MAX DD</div><div class="v down" style="font-size:16px">${c.max_dd_pct}%</div></div>
+      <div class="kpi"><div class="l">SHARPE 90% CI</div><div class="v" style="font-size:14px">${c.bootstrap.lo}…${c.bootstrap.hi}</div></div>
+    </div><canvas id="scEq" style="width:100%;height:70px;margin-top:10px"></canvas>
+    <div class="mut" style="font-size:11px;margin-top:8px">${c.real_pit?'Real point-in-time data.':'Synthetic/sample data — certainty is hard-capped at 50%.'} n=${c.n_obs} bars.</div></div>
+    <div class="card"><div style="font:700 26px var(--mono);color:${vcol(cert.verdict)}">${Math.round(cert.certainty*100)}% · ${cert.verdict}</div>
+      <div style="margin:12px 0">${Object.entries(ax).map(([k,v])=>`<div class="axis"><span>${k.replace(/_/g,' ')}</span><span class="mono">${Math.round(v*100)}%</span></div><div class="axisbar"><div style="height:100%;width:${v*100}%;background:${v>=.6?'var(--green)':v>=.4?'var(--amber)':'var(--red)'}"></div></div>`).join('')}</div>
+      ${cert.reasons.length?'<div class="banner" style="margin:0">'+cert.reasons.map(esc).join('<br>')+'</div>':''}</div></div>
+    <div class="card" style="margin-top:14px" id="wfCard"><div class="mut">running walk-forward + permutation test…</div></div>`;
+  drawSparkBig('scEq',c.equity);
+  const wf=await api('/api/walkforward?family='+fam);if(!wf.err&&wf.walk_forward&&wf.permutation){const w=wf.walk_forward,p=wf.permutation;
+    $('wfCard').innerHTML=`<div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">WALK-FORWARD · ${w.positive_segments}/${w.total_segments} segments positive <span class="tag ${w.stable?'ok':'bad'}">${w.stable?'stable':'unstable'}</span> &nbsp;·&nbsp; PERMUTATION p=${p.p_value} <span class="tag ${p.p_value<0.1?'ok':'warn'}">${p.p_value<0.1?'edge, not luck':'could be luck'}</span></div>
+     <div style="display:flex;gap:8px">${(w.segments||[]).map(s=>`<div style="flex:1;text-align:center" class="card" style2><div class="mono" style="color:${s.sharpe>=0?'var(--green)':'var(--red)'}">${s.sharpe.toFixed(2)}</div><div class="mut" style="font:600 9px var(--mono)">seg ${s.segment} · n${s.n}</div></div>`).join('')}</div>
+     <div class="mut" style="font-size:11px;margin-top:6px">${esc(p.note||'')}</div>`;}
+  const m=await api('/api/monitor?family='+fam);if(!m.err){const dr=m.drift||{},rg=m.regime||{};
+    $('scOut').insertAdjacentHTML('beforeend',`<div class="grid g2" style="margin-top:14px">
+      <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px" data-tip="Compares the most-recent in-sample window of the backtest to the full period. This is NOT forward/live data — there is no live feed.">DRIFT · RECENT WINDOW vs FULL BACKTEST ⓘ</div>
+        <div style="display:flex;gap:20px;align-items:baseline"><div class="kpi"><div class="l">BACKTEST SR</div><div class="v">${dr.full_sharpe??'—'}</div></div><div class="kpi"><div class="l">RECENT SR</div><div class="v">${dr.recent_sharpe??'—'}</div></div><span class="tag ${dr.verdict==='IN LINE'||dr.verdict==='OUTPERFORMING'?'ok':dr.verdict==='DECAYED'?'bad':'warn'}">${dr.verdict||'n/a'}</span></div>
+        <div class="mut" style="font-size:11px;margin-top:6px">${esc(dr.action||'')}</div></div>
+      <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">PER-REGIME (worst deflated ${rg.worst_regime_deflated??'—'})</div>
+        ${Object.entries(rg.regimes||{}).map(([k,v])=>`<div class="axis"><span>${k.replace(/_/g,' ')} <span class="mut">(n${v.n})</span></span><span class="mono">SR ${v.sharpe} · dSR ${v.deflated}</span></div>`).join('')}</div></div>
+      <div class="card" style="margin-top:14px"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">📄 NARRATIVE REPORT</div>
+        <div style="font-size:13px;line-height:1.7">${esc(m.narrative||'').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<em>$1</em>')}</div></div>`);}
+};
+
+/* ---------- Execution & Risk ---------- */
+SCREENS.exec=async function(){const d=await api('/api/orders');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  const t=d.tca,rk=d.risk;
+  $('main').innerHTML=`<h1>Execution &amp; Risk</h1><div class="sub">Paper orders fill at the <b>next bar</b> (no same-bar clairvoyance) at mid + half-spread + <b>square-root impact</b>. The tape records realized slippage; the TCA proves fills are modelled, not wished.</div>
+   ${rk.halted?'<div class="banner">⛔ RISK ENVELOPE HALTED — '+esc(rk.halt_reason)+'. New orders blocked until re-armed.</div>':''}
+   <div class="grid g2"><div class="card">
+     <div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">PLACE PAPER ORDER</div>
+     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1;min-width:90px"><label>Symbol</label><input id="oSym" value="SPY"></div>
+       <div><label>Side</label><select id="oSide"><option>BUY</option><option>SELL</option></select></div>
+       <div><label>Type</label><select id="oType" onchange="oTypeChange()"><option value="market">Market</option><option value="limit">Limit</option><option value="stop">Stop</option></select></div>
+       <div id="oPxWrap" style="display:none"><label id="oPxLbl">Limit px</label><input id="oPx" type="number" step="0.01" style="width:90px"></div>
+       <div><label>Qty</label><input id="oQty" type="number" value="100" style="width:80px"></div>
+       <button class="btn pri" onclick="placeOrder()">Submit</button></div>
+     <div class="mut" style="font-size:10px;margin-top:6px">Limit/stop evaluate against the <b>next bar's high/low</b>; if the trigger isn't reached the order is recorded as <b>working</b>, not filled. Limits earn the maker fee; stops pay taker.</div>
+     <div style="font:700 11px var(--mono);color:var(--mut);margin:16px 0 8px">TCA · FILL HONESTY CERTIFICATE</div>
+     ${t.n?`<div class="grid g4" style="gap:8px"><div class="kpi"><div class="l">FILLS</div><div class="v" style="font-size:16px">${t.n}</div></div>
+       <div class="kpi"><div class="l">AVG SLIP</div><div class="v" style="font-size:16px">${t.avg_slippage_bps}bp</div></div>
+       <div class="kpi"><div class="l">AVG IMPACT</div><div class="v" style="font-size:16px">${t.avg_impact_bps}bp</div></div>
+       <div class="kpi"><div class="l">WORST SLIP</div><div class="v" style="font-size:16px">${t.worst_slippage_bps}bp</div></div></div>`:'<div class="mut">no fills yet</div>'}
+     <div class="mut" style="font-size:11px;margin-top:8px">${esc(t.certificate)} ${t.honest?'<span class="tag ok">honest</span>':''}</div></div>
+   <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">RISK ENVELOPE</div>
+     ${Object.entries(rk.limits).filter(([k])=>k!=='per_asset').map(([k,v])=>`<div class="axis"><span>${k.replace(/_/g,' ')}</span><span class="mono">${typeof v==='number'?v.toLocaleString():esc(v)}</span></div>`).join('')}
+     <div class="axis"><span>per-asset caps</span><span class="mono">${Object.entries(rk.limits.per_asset).map(([a,c])=>a+' $'+c.toLocaleString()).join(' · ')}</span></div>
+     <div style="display:flex;gap:8px;margin-top:12px" class="admin-only"><button class="btn" onclick="riskAct('breach')">⚡ Simulate breach</button><button class="btn" onclick="riskAct('rearm')">🔄 Re-arm</button><button class="btn danger" onclick="killSwitch()">⏻ Kill switch</button></div></div></div>
+   ${(()=>{const p=d.positions||{positions:[]};const pnlc=v=>v>=0?'up':'down';return `<div class="card" style="margin-top:14px"><div style="display:flex;align-items:baseline;gap:14px;margin-bottom:8px"><div style="font:700 11px var(--mono);color:var(--mut)">POSITIONS &amp; P&amp;L</div>
+     <span class="mono" style="font-size:11px">realized <b class="${pnlc(p.realized_pnl)}">${money(p.realized_pnl||0)}</b></span>
+     <span class="mono" style="font-size:11px">unrealized <b class="${pnlc(p.unrealized_pnl)}">${money(p.unrealized_pnl||0)}</b></span>
+     <span class="mono" style="font-size:11px">total <b class="${pnlc(p.total_pnl)}">${money(p.total_pnl||0)}</b></span></div>
+     <table><thead><tr><th>Sym</th><th>Qty</th><th>Avg cost</th><th>Mark</th><th>Unrealized</th><th>Realized</th></tr></thead><tbody>
+     ${p.positions.map(r=>`<tr><td>${r.sym}</td><td class="mono">${r.qty}</td><td class="mono">${r.avg_cost||'—'}</td><td class="mono">${r.mark!=null?r.mark+(r.mark_live?' <span class="tag ok">live</span>':''):'—'}</td><td class="mono ${pnlc(r.unrealized)}">${money(r.unrealized)}</td><td class="mono ${pnlc(r.realized)}">${money(r.realized)}</td></tr>`).join('')||'<tr><td colspan="6" class="mut">no positions — place a paper order</td></tr>'}</tbody></table>
+     <div class="mut" style="font-size:10px;margin-top:6px">${esc(p.note||'')}</div></div>`;})()}
+   <div class="card" style="margin-top:14px"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">ORDER TAPE</div>
+     <table><thead><tr><th>Time</th><th>Side</th><th>Type</th><th>Sym</th><th>Qty</th><th>Decide px</th><th>Fill px</th><th>Slippage</th><th>Impact</th><th>Notional</th></tr></thead><tbody>
+     ${d.tape.map(o=>`<tr style="${o.status==='working'?'opacity:.6':''}"><td class="mono">${o.at}</td><td><span class="stance" style="background:${o.side==='BUY'?'#0d2b1c':'#2b0d10'};color:${o.side==='BUY'?'var(--green)':'var(--red)'}">${o.side}</span></td><td class="mono">${o.type||'market'}${o.status==='working'?' <span class="tag">working</span>':''}</td><td>${o.sym}</td><td class="mono">${o.qty}</td><td class="mono">${o.decide_px}</td><td class="mono">${o.fill_px!=null?o.fill_px:'—'}</td><td class="mono ${o.slippage_bps>=0?'down':'up'}">${o.fill_px!=null?(o.slippage_bps>=0?'+':'')+o.slippage_bps+'bp':'—'}</td><td class="mono">${o.impact_bps}bp</td><td class="mono">$${(o.notional||0).toLocaleString()}</td></tr>`).join('')||'<tr><td colspan="10" class="mut">no orders yet</td></tr>'}</tbody></table></div>`;
+};
+window.oTypeChange=function(){const t=$('oType').value;$('oPxWrap').style.display=t==='market'?'none':'';$('oPxLbl').textContent=t==='limit'?'Limit px':'Stop px';};
+window.placeOrder=async function(){const t=$('oType').value;const body={sym:$('oSym').value.toUpperCase(),side:$('oSide').value,qty:+$('oQty').value,order_type:t};if(t==='limit')body.limit_px=+$('oPx').value;if(t==='stop')body.stop_px=+$('oPx').value;const r=await api('/api/orders/place','POST',body);if(r.err){toast(r.err,'err');return;}if(r.status==='working'){toast(`working — ${r.side} ${r.qty} ${r.sym} ${r.type} not triggered`,'');}else{toast(`filled ${r.side} ${r.qty} ${r.sym} @ ${r.fill_px} (slip ${r.slippage_bps}bp)`,'ok');}SCREENS.exec();};
+window.riskAct=async function(a){const r=await api('/api/risk/'+a,'POST');if(r.err){toast(r.err,'err');return;}toast(a==='rearm'?'re-armed':'halted','ok');SCREENS.exec();};
+window.killSwitch=async function(){const v=await askModal('Kill switch',{msg:'Type FLATTEN to halt all new orders.',placeholder:'FLATTEN',okText:'Halt trading'});if(v!=='FLATTEN')return;const r=await api('/api/risk/kill','POST',{confirm:'FLATTEN'});if(r.err){toast(r.err,'err');return;}toast('KILL SWITCH engaged','err');SCREENS.exec();};
+
+/* ---------- Council ---------- */
+SCREENS.council=async function(){
+  $('main').innerHTML=`<h1>Council — humans + AIs decide together</h1><div class="sub">Declare a trade plan. It gets hygiene checks that teach, a council of signal voices (FOR/AGAINST/NEUTRAL with record + evidence), and an honest bottom line that refuses a combined probability while voices are unrated.</div>
+   <div class="grid g2"><div class="card">
+     <div class="grid g2" style="gap:0 12px"><div><label>Symbol</label><input id="cpSym" value="SPY"></div><div><label>Side</label><select id="cpSide"><option>LONG</option><option>SHORT</option></select></div>
+     <div><label>Size % of book</label><input id="cpSize" type="number" value="8"></div><div><label>Stop %</label><input id="cpStop" type="number" value="2"></div>
+     <div><label>Reward : risk</label><input id="cpRR" type="number" value="1.8" step="0.1"></div></div>
+     <button class="btn pri" style="margin-top:12px" onclick="convene()">⚖ Convene the council</button>
+     <button class="btn" style="margin-top:12px" onclick="convene(true)">Convene + journal to ledger</button></div>
+   <div id="cpOut" class="card"><div class="mut">The decision sheet appears here.</div></div></div>`;
+};
+window.convene=async function(save){const plan={sym:$('cpSym').value.toUpperCase(),side:$('cpSide').value,size_pct:+$('cpSize').value,stop_pct:+$('cpStop').value,reward_risk:+$('cpRR').value};
+  const d=await api(save?'/api/council/journal':'/api/council/review','POST',plan);const sheet=d.sheet||d;if(sheet.err){$('cpOut').innerHTML='<div class="banner">'+sheet.err+'</div>';return;}
+  $('cpOut').innerHTML=`<div style="font:700 11px var(--mono);color:var(--mut)">HYGIENE</div>
+   ${sheet.hygiene.map(h=>`<div class="axis"><span>${h.pass?'✅':'⛔'} ${h.id} ${h.name}</span></div><div class="mut" style="font-size:11px;margin:0 0 6px">${esc(h.teach)}</div>`).join('')}
+   <div style="font:700 11px var(--mono);color:var(--mut);margin-top:10px">VOICES (${sheet.rated_count} rated)</div>
+   ${sheet.voices.map(v=>voiceRow(v)).join('')}
+   <div class="banner" style="margin-top:10px">${esc(sheet.bottom_line)}</div>
+   ${save?'<div class="tag ok" style="margin-top:8px">journaled to the append-only ledger</div>':''}`;
+  if(save)toast('Decision frozen to the ledger','ok');
+};
+
+/* ---------- Evidence ---------- */
+SCREENS.evidence=async function(){const d=await api('/api/evidence');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Evidence & reproducibility</h1><div class="sub">Every finalized week is a <b>signed bundle</b> anyone can verify — recompute the digest, re-check the HMAC. A tampered bundle fails. The append-only ledger is hash-chained.</div>
+   <div class="card" style="margin-bottom:14px">Ledger integrity: ${d.ledger_ok?'<span class="tag ok">verified (hash chain intact)</span>':'<span class="tag bad">BROKEN</span>'}</div>
+   <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:10px">FROZEN WEEKS (signed, replayable)</div>
+   ${(d.weeks||[]).map(w=>`<div class="axis"><span><b>${w.week}</b> — ${esc(w.verdict)}</span><button class="btn" style="padding:4px 10px" onclick="verifyB('${w.week}')">🔏 verify</button></div><div class="mut mono" style="font-size:10px" id="vb-${w.week}">sig ${w.bundle_sig} · stamp ${w.stamp}</div>`).join('')||'<div class="mut">no frozen weeks yet — finalize one in Admin</div>'}</div>`;
+};
+window.verifyB=async function(week){const d=await api('/api/bundle/verify?week='+week);const e=$('vb-'+week);
+  e.innerHTML=d.err?'<span class="down">'+d.err+'</span>':(d.verified?`<span class="up">✔ VERIFIED · sig ${d.sig} · sha256 ${d.manifest.sha256.slice(0,16)}…</span>`:`<span class="down">✗ ${d.reason}</span>`);};
+
+/* ---------- Morning Brief ---------- */
+SCREENS.brief=async function(){const d=await api('/api/brief');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Morning Brief · ${esc(d.date)}</h1><div class="sub">The honest daily digest — what the arena says, where your ideas stand, and any signal decay you should act on.</div>
+   <div class="grid g2"><div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">ARENA — TOP BY DEFLATED SHARPE</div>
+     ${d.arena_top.map((r,i)=>`<div class="axis"><span>${i+1}. ${esc(r.agent)} <span class="mut">${r.operator}</span></span><span class="mono">P(edge) ${r.deflated_sharpe} <span class="tag" style="border-color:${vcol(r.verdict)};color:${vcol(r.verdict)}">${r.verdict}</span></span></div>`).join('')}
+     <div class="mut" style="font-size:10px;margin-top:6px">${esc(d.banner)}</div></div>
+   <div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">DRIFT ALERTS</div>
+     ${d.drift_alerts.map(a=>`<div class="axis"><span>${esc(a)}</span></div>`).join('')}
+     <div style="font:700 11px var(--mono);color:var(--mut);margin:12px 0 8px">JOURNAL BY STAGE</div>
+     ${Object.entries(d.journal_by_stage).map(([k,v])=>`<div class="axis"><span>${k}</span><span class="mono">${v}</span></div>`).join('')||'<div class="mut">no ideas yet</div>'}</div></div>
+   <div class="card" style="margin-top:14px"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">ACTIVITY</div>
+     ${d.feed.map(f=>`<div class="mono" style="font-size:11px;padding:3px 0"><span class="mut">${f[0]}</span> <span class="${f[1]==='err'?'down':f[1]==='warn'?'':'mut'}">${esc(f[2])}</span></div>`).join('')}</div>`;
+};
+/* ---------- Rooms ---------- */
+SCREENS.rooms=async function(){const d=await api('/api/rooms');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Rooms</h1><div class="sub">Shared workspaces to discuss ideas. Every post is stamped to the append-only ledger — a room's history is auditable.</div>
+   <div class="card" style="margin-bottom:14px"><div style="display:flex;gap:8px"><input id="rmName" placeholder="new room name" style="flex:1"><button class="btn pri" onclick="rmCreate()">+ Create room</button></div></div>
+   ${(d.rooms||[]).map(r=>`<div class="card" style="margin-bottom:12px"><div style="display:flex;gap:8px;align-items:center"><b>${esc(r.name)}</b><span class="mut" style="font-size:11px">${(r.members||[]).length} member(s) · ${r.posts.length} posts</span></div>
+     <div style="margin:10px 0">${r.posts.slice(0,6).map(p=>`<div style="border-left:2px solid var(--line);padding:2px 0 2px 8px;margin:4px 0"><span class="mono" style="font-size:10px;color:var(--blue)">${esc(p.author)}</span> <span class="mut" style="font-size:9px">${p.at}</span><div style="font-size:12.5px">${esc(p.text)}</div></div>`).join('')||'<div class="mut">no posts yet</div>'}</div>
+     <div style="display:flex;gap:8px"><input id="rmMsg-${r.id}" placeholder="say something…" style="flex:1"><button class="btn" onclick="rmPost(${r.id})">Post</button></div></div>`).join('')||'<div class="mut">no rooms yet — create one, or join a discoverable room below</div>'}
+   ${(d.discoverable&&d.discoverable.length)?`<div style="font:700 11px var(--mono);color:var(--mut);margin:16px 0 8px">DISCOVERABLE ROOMS <span class="mut" style="font-weight:400">— join to read and post (posts are private to members)</span></div>
+     ${d.discoverable.map(r=>`<div class="card" style="margin-bottom:10px;display:flex;gap:8px;align-items:center"><b>${esc(r.name)}</b><span class="mut" style="font-size:11px">${r.members} member(s) · owner ${esc(r.owner||'?')}</span><button class="btn" style="margin-left:auto" onclick="rmJoin(${r.id})">Join</button></div>`).join('')}`:''}`;
+};
+window.rmJoin=async function(id){const r=await api('/api/rooms/join','POST',{id});if(r.err){toast(r.err,'err');return;}toast('joined','ok');SCREENS.rooms();};
+window.rmCreate=async function(){const r=await api('/api/rooms/create','POST',{name:$('rmName').value.trim()});if(r.err){toast(r.err,'err');return;}SCREENS.rooms();};
+window.rmPost=async function(id){const el=$('rmMsg-'+id);if(!el.value.trim())return;const r=await api('/api/rooms/post','POST',{id,text:el.value.trim()});if(r.err){toast(r.err,'err');return;}SCREENS.rooms();};
+/* ---------- Data & Artifacts ---------- */
+SCREENS.data=async function(){const d=await api('/api/data');const pv=await api('/api/providers');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Data &amp; Artifacts</h1><div class="sub">${esc(d.note)}</div>
+   ${pv.err?'':`<div class="card" style="margin-bottom:14px"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">DATA PROVIDERS <span class="mut" style="font-weight:400">— reused read-only from your existing keys; missing → synthetic fallback</span></div>
+   ${(pv.providers||[]).map(p=>`<div class="axis"><span>${esc(p.name)} ${p.keyless?'<span class="tag" style="font-size:9px">keyless</span>':(p.note?'<span class="mut" style="font-size:10px">'+esc(p.note)+'</span>':'')}</span><span class="tag ${p.live?'ok':'off'}">${p.live?'live':'not configured'}</span></div>`).join('')}
+   <div class="mut" style="font-size:11px;margin-top:8px">${esc(pv.note)}</div></div>`}
+   <div class="card" style="margin-bottom:14px"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">PORTABILITY — <span data-tip="Your whole workspace (ideas, arena field, rooms, proposals, tape, honesty ledger) exported as one HMAC-signed bundle. Import verifies the signature first; a tampered bundle is refused.">signed workspace export/import</span></div>
+     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn" onclick="wsExport()">⬇ Export workspace (signed)</button>
+       <button class="btn" onclick="$('wsFile').click()">⬆ Import workspace</button><input id="wsFile" type="file" accept="application/json" style="display:none" onchange="wsImport(this)">
+       <span class="mut" id="wsMsg" style="font-size:11px"></span></div></div>
+   <div class="card"><table><thead><tr><th>Symbol</th><th>Bars</th><th>From</th><th>To</th><th>Last</th><th>Source</th></tr></thead><tbody>
+   ${d.catalog.map(b=>`<tr><td><b>${b.sym}</b></td><td class="mono">${b.bars}</td><td class="mono">${b.from}</td><td class="mono">${b.to}</td><td class="mono">${b.last}</td><td>${b.real?'<span class="tag ok">real PIT</span>':'<span class="tag warn">synthetic</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+};
+window.wsExport=async function(){const d=await api('/api/workspace/export');if(d.err){toast(d.err,'err');return;}const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='nqq-workspace.json';a.click();toast('workspace exported (signed)','ok');};
+window.wsImport=async function(inp){const f=inp.files[0];if(!f)return;const txt=await f.text();let b;try{b=JSON.parse(txt);}catch(e){toast('invalid file','err');return;}const r=await api('/api/workspace/import','POST',b);if(r.err){$('wsMsg').innerHTML='<span class="down">⛔ '+esc(r.err)+'</span>';return;}$('wsMsg').innerHTML='<span class="up">✔ restored '+r.restored+' documents (signature verified)</span>';toast('workspace imported','ok');};
+/* ---------- Journey ---------- */
+SCREENS.journey=async function(){const d=await api('/api/journey');if(d.err){$('main').innerHTML='<div class="banner">offline</div>';return;}
+  $('main').innerHTML=`<h1>Journey <span class="mut" style="font-size:13px">${d.done}/${d.total} complete</span></h1><div class="sub">A guided path through nqq's honest workflow — each step teaches one idea and unlocks the next.</div>
+   ${d.steps.map((s,i)=>`<div class="card" style="margin-bottom:10px;display:flex;align-items:center;gap:12px"><span style="font-size:20px">${s.done?'✅':'⬜'}</span><div><b>${i+1}. ${esc(s.name)}</b><div class="mut" style="font-size:12px">${esc(s.why)}</div></div></div>`).join('')}`;
+};
+/* ---------- Learn ---------- */
+SCREENS.learn=function(){$('main').innerHTML=`<h1>Learn — why these numbers are honest</h1><div class="sub">nqq refuses naked numbers. Here's what each honest metric means and why it matters.</div>
+  <div class="grid g2">${[
+   ['Deflated Sharpe','A raw Sharpe of 2 across 100 tries is probably luck. The deflated Sharpe is the probability the true Sharpe beats the best you would expect from that many trials, given sample size, skew and fat tails. It is always ≤ the raw Sharpe and falls as you try more.'],
+   ['Multiplicity / trial ledger','Every backtest you run is a lottery ticket. We count them per operator; the more you try, the more your best result is deflated. This is the defence against variance-farming and Sybil fleets.'],
+   ['EdgeCertainty','You cannot set certainty, you earn it — by stacking independent evidence: worst-regime deflated Sharpe, bootstrap robustness, luck gap, FDR survival, out-of-sample consistency, and a live-paper track record. Synthetic data caps it at 50%; no forward record caps it at 70%.'],
+   ['Veto verdict','A strong average must never hide a fatal weakness. If the worst-regime edge is fragile, or capacity is tiny, or the signal decays too fast, the verdict is capped at Inconclusive no matter how good the headline looks.'],
+   ['Capacity','Sharpe without capacity is vanity. Every edge has an AUM beyond which its own square-root market impact eats it. We show that ceiling next to every result.'],
+   ['FDR (false discovery rate)','Test six signals and one will look great by chance. Benjamini-Hochberg controls the fraction of your "discoveries" that are false — an IC that does not survive it is noise dressed as edge.'],
+   ['Point-in-time','A feature at bar t may never read bar t+1. The lookahead guard turns that silent optimism into a loud error.'],
+   ['Signed bundles','A result you cannot replay is a claim, not evidence. Each frozen week is an HMAC-signed bundle; recompute and re-verify to prove the number.'],
+  ].map(([t,b])=>`<div class="card"><b style="color:var(--blue)">${t}</b><div class="mut" style="font-size:12.5px;margin-top:6px">${b}</div></div>`).join('')}</div>`;
+};
+
+/* ---------- Admin ---------- */
+SCREENS.admin=async function(){const led=await api('/api/ledger');
+  $('main').innerHTML=`<h1>Admin & Governance</h1><div class="sub">Seed/reset sample data, finalize a week (freezes a signed winner bundle), and inspect the append-only stamp ledger.</div>
+   <div class="card" style="margin-bottom:14px"><div style="display:flex;gap:10px;flex-wrap:wrap">
+     <button class="btn" onclick="adm('/api/admin/seed')">🎭 Seed sample data</button>
+     <button class="btn danger" onclick="adm('/api/admin/reset')">🗑 Reset sample data</button>
+     <button class="btn pri" onclick="adm('/api/arena/finalize')">🏆 Finalize week (sign winner)</button></div></div>
+   <div class="grid g2"><div class="card"><div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:8px">STAMP LEDGER ${led.ledger_ok?'<span class="tag ok">chain ok</span>':'<span class="tag bad">broken</span>'}</div>
+   ${(led.stamps||[]).slice(0,16).map(s=>`<div class="axis"><span class="mono" style="font-size:11px">${s.kind} · ${s.subject}</span><span class="mono mut" style="font-size:10px">${s.hash.slice(0,12)}…</span></div>`).join('')||'<div class="mut">empty</div>'}</div>
+   <div class="card" id="govCard"><div class="mut">loading governance…</div></div></div>`;
+  renderGov();
+};
+async function renderGov(){const g=await api('/api/evolve');if(g.err){$('govCard').innerHTML='<div class="mut">offline</div>';return;}
+  $('govCard').innerHTML=`<div style="font:700 11px var(--mono);color:var(--mut);margin-bottom:6px">EVOLVE — proposals ledger <span class="mut" style="font-weight:400">(agents propose · humans dispose)</span></div>
+   <div style="display:flex;gap:6px;margin-bottom:10px"><input id="gvT" placeholder="proposal title" style="flex:1"><input id="gvM" placeholder="falsifiable metric claim" style="flex:1"><button class="btn" onclick="govPropose()">+ propose</button></div>
+   ${(g.proposals||[]).map(p=>`<div class="voice"><div style="display:flex;gap:6px;align-items:center"><b style="font-size:12px">${esc(p.title)}</b>${p.protected?'<span class="tag warn">honesty-core</span>':''}<span class="tag" style="margin-left:auto">${p.status}</span></div>
+     <div class="mut" style="font-size:11px;margin:4px 0">claim: ${esc(p.metric_claim)} · by ${esc(p.author)}${p.target?' · '+esc(p.target):''}</div>
+     ${p.protected&&p.status==='test_soaked'&&p.signatures.length<2?`<button class="btn" style="padding:3px 9px;font-size:10px;margin-right:4px;border-color:var(--amber);color:var(--amber)" onclick="govSign(${p.id})">✍ sign (${p.signatures.length}/2)</button>`:''}
+     ${nextStates(p).filter(ns=>!(ns==='signed'&&p.protected&&p.signatures.length<2)).map(ns=>`<button class="btn" style="padding:3px 9px;font-size:10px;margin-right:4px" onclick="govTrans(${p.id},'${ns}',${p.protected})">${ns}</button>`).join('')}
+     ${p.protected?`<span class="mut" style="font-size:10px">signatures ${p.signatures.length}/2 ${p.signatures.length?'('+p.signatures.map(esc).join(', ')+')':''}</span>`:''}</div>`).join('')||'<div class="mut">no proposals</div>'}`;
+}
+window.govPropose=async function(){const r=await api('/api/evolve/propose','POST',{title:$('gvT').value.trim(),metric_claim:$('gvM').value.trim()});if(r.err){toast(r.err,'err');return;}toast('proposal filed','ok');renderGov();};
+window.govSign=async function(id){const signer=await askModal('Sign proposal',{msg:'Distinct human signer name (honesty-core changes need 2 distinct signatures).',placeholder:'your name',okText:'Sign'});if(!signer)return;const r=await api('/api/evolve/sign','POST',{id,signer});if(r.err){toast(r.err,'err');return;}toast('signed ('+r.signatures.length+'/2)','ok');renderGov();};
+function nextStates(p){const flow={proposed:['accepted','rejected'],accepted:['test_soaked','rejected'],test_soaked:['signed','rejected'],signed:['shipped'],shipped:['measured'],measured:['entrenched','revert'],revert:['reverted']};return flow[p.status]||[];}
+window.govTrans=async function(id,status,protectedP){const sig=protectedP&&status==='signed';const r=await api('/api/evolve/transition','POST',{id,status,signature:sig});if(r.err){toast(r.err,'err');return;}toast('→ '+status,'ok');renderGov();};
+window.adm=async function(p){const d=await api(p,'POST');if(d.err){toast(d.err,'err');return;}toast('done — '+(d.winner?('winner '+d.winner.operator+'/'+d.winner.agent):'ok'),'ok');go('admin');};
+
+/* ---------- boot ---------- */
+(async function(){ME=await api('/api/me');
+  if(ME.multiuser&&ME.anon){$('login').classList.remove('hidden');return;}
+  if(ME.multiuser){$('foot').innerHTML=`signed in: <b>${esc(ME.u||'?')}</b> (${ME.role})<br><span style="cursor:pointer;color:var(--blue)" onclick="changePw()">change password</span> · <span style="cursor:pointer;color:var(--mut)" onclick="logout()">sign out</span>`;
+    if(ME.must_change)toast('Please change your temporary password (foot ↙)','err');}
+  else $('foot').textContent='solo mode';
+  const isAdmin=!!(ME&&(ME.role==='admin'||!ME.multiuser));
+  document.body.classList.toggle('admin',isAdmin);
+  $('navAdmin').style.display=isAdmin?'flex':'none';
+  try{const pv=await api('/api/providers');if(pv&&!pv.err){const live=(pv.providers||[]).filter(p=>p.live).length;
+    $('foot').innerHTML+=`<div style="margin-top:6px"><span style="color:var(--green)">●</span> ${live} live data provider(s)</div>`;}}catch(e){}
+  const raw=(location.hash||'').replace(/^#\/?/,'');
+  const symM=raw.match(/^sym\/(\w+)/);
+  if(symM){go('console');openSym(symM[1].toUpperCase());return;}
+  const h=raw||'console';go(SCREENS[h]?h:'console');
+})();
+/* route on manual URL edits / browser back-forward (go() uses replaceState, which does
+   not fire hashchange, so this only reacts to user-driven hash changes — no loop) */
+window.addEventListener('hashchange',()=>{const r=(location.hash||'').replace(/^#\/?/,'');
+  const sm=r.match(/^sym\/(\w+)/);
+  if(sm){openSym(sm[1].toUpperCase());}else if(SCREENS[r])go(r);});
+</script></body></html>
